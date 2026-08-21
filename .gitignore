@@ -1,0 +1,15 @@
+# Personal financial data — never upload
+profiles/
+data.json
+data.json.bak
+
+# Dependencies
+node_modules/
+
+# Local tooling / logs
+.superpowers/
+*.log
+
+# OS junk
+Thumbs.db
+.DS_Store
