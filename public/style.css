@@ -908,6 +908,50 @@ input[type="checkbox"]:checked::after {
 .debt-badge-out { color: var(--expense); border-color: var(--expense); }
 .debt-badge-settled { color: #000; background: var(--income); border-color: var(--income); }
 
+/* Bulk edit */
+.tx-bulk {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 13px;
+  height: 13px;
+  border: 1px solid var(--border);
+  background: #161616;
+  cursor: pointer;
+  flex-shrink: 0;
+  position: relative;
+}
+.tx-bulk:checked {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+.tx-bulk:checked::after {
+  content: '';
+  position: absolute;
+  left: 3.5px;
+  top: 0.5px;
+  width: 3px;
+  height: 7px;
+  border: solid #000;
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+}
+.tx-row.bulk-selected { background: rgba(249, 165, 92, 0.10); }
+.bulk-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+  padding: 8px 12px;
+  border: 1px solid var(--accent);
+  background: var(--surface-raised);
+}
+.bulk-count {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-bright);
+  margin-right: auto;
+}
+
 .tx-actions {
   display: none;
   gap: 4px;
