@@ -31,6 +31,7 @@ window.BlackBook = {
     if (!this.data.budgets) this.data.budgets = [];
     if (!this.data.installments) this.data.installments = [];
     if (!this.data.debts) this.data.debts = [];
+    if (!this.data.invoices) this.data.invoices = [];
     if (this.migrateCreditCards()) await this.save();
     this.applyThemeColors();
 
@@ -103,10 +104,13 @@ window.BlackBook = {
         }
         if (e.key === 'Enter') {
           e.preventDefault();
-          if (this._cmdPaletteIndex >= 0 && this._cmdPaletteItems[this._cmdPaletteIndex]) {
-            this._cmdPaletteItems[this._cmdPaletteIndex].execute();
-          }
+          if (!this._cmdPaletteItems.length) return;
+          const pick = this._cmdPaletteIndex >= 0 ? this._cmdPaletteIndex : 0;
+          if (this._cmdPaletteItems[pick]) this._cmdPaletteItems[pick].execute();
         }
+        const emptyQuery = !e.target.value.trim();
+        if (emptyQuery && (e.key === 'n' || e.key === 'N')) { e.preventDefault(); this.closeCommandPalette(); this.openNewTransaction(); }
+        if (emptyQuery && (e.key === 't' || e.key === 'T')) { e.preventDefault(); this.closeCommandPalette(); this.openTransferModal(); }
       });
     }
 
@@ -174,7 +178,7 @@ window.BlackBook = {
       if (e.key === '/') { e.preventDefault(); document.getElementById('header-command-input').focus(); }
       if (e.key === 'e' || e.key === 'E') { e.preventDefault(); this.editHoveredTransaction(); }
       if (e.key === 'Tab') { e.preventDefault(); if (this.currentPage === 'overview') this.cycleAccount(); return; }
-      const pages = ['overview', 'budget', 'bills', 'cards', 'savings', 'debts', 'settings'];
+      const pages = ['overview', 'budget', 'bills', 'cards', 'savings', 'debts', 'invoices', 'settings'];
       if (/^[1-9]$/.test(e.key)) {
         const idx = parseInt(e.key, 10) - 1;
         if (idx < pages.length) { e.preventDefault(); this.navigateTo(pages[idx]); }
@@ -209,7 +213,7 @@ window.BlackBook = {
   },
 
   navigateTo(page) {
-    const known = ['overview', 'budget', 'bills', 'cards', 'savings', 'debts', 'settings'];
+    const known = ['overview', 'budget', 'bills', 'cards', 'savings', 'debts', 'invoices', 'settings'];
     if (!known.includes(page)) page = 'overview';
     if (this.overviewPieChart) { this.overviewPieChart.destroy(); this.overviewPieChart = null; }
     if (this.overviewLineChart) { this.overviewLineChart.destroy(); this.overviewLineChart = null; }
@@ -236,6 +240,7 @@ window.BlackBook = {
       else if (page === 'cards') this.renderCards();
       else if (page === 'savings') this.renderSavings();
       else if (page === 'debts') this.renderDebts();
+      else if (page === 'invoices') this.renderInvoices();
       else if (page === 'settings') this.renderSettings();
     } catch (err) {
       console.error('renderPage failed:', err);
@@ -340,7 +345,7 @@ window.BlackBook = {
     this._cmdPaletteIndex = -1;
 
     if (!query) {
-      let html = '<div class="command-section"><div style="padding:4px 12px;font-size:10px;font-weight:700;text-transform:uppercase;color:var(--text-muted);">ACTIONS</div>';
+      let html = '<div class="command-section"><div style="padding:4px 12px;font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text-muted);">ACTIONS</div>';
       html += this._paletteItemHtml('New Transaction', 'N');
       this._cmdPaletteItems.push({ execute: () => { this.closeCommandPalette(); this.openNewTransaction(); } });
       html += this._paletteItemHtml('New Transfer', 'T');
@@ -349,15 +354,25 @@ window.BlackBook = {
       this._cmdPaletteItems.push({ execute: () => { this.closeCommandPalette(); this.openNewBill(); } });
       html += this._paletteItemHtml('New Savings Goal', '');
       this._cmdPaletteItems.push({ execute: () => { this.closeCommandPalette(); this.openNewSavingsGoal(); } });
+      html += this._paletteItemHtml('New Invoice', '');
+      this._cmdPaletteItems.push({ execute: () => { this.closeCommandPalette(); this.openNewInvoice(); } });
+      html += this._paletteItemHtml('New Debt', '');
+      this._cmdPaletteItems.push({ execute: () => { this.closeCommandPalette(); this.openNewDebt(); } });
+      html += this._paletteItemHtml('New Account', '');
+      this._cmdPaletteItems.push({ execute: () => { this.closeCommandPalette(); this.openNewAccount(); } });
+      html += this._paletteItemHtml('New Category', '');
+      this._cmdPaletteItems.push({ execute: () => { this.closeCommandPalette(); this.openNewCategory(); } });
+      html += this._paletteItemHtml('Export CSV', '');
+      this._cmdPaletteItems.push({ execute: () => { this.closeCommandPalette(); this.exportCsv(); } });
       html += '</div>';
-      html += '<div class="command-section"><div style="padding:4px 12px;font-size:10px;font-weight:700;text-transform:uppercase;color:var(--text-muted);">PAGES</div>';
-      const pages = ['overview', 'budget', 'bills', 'cards', 'savings', 'debts', 'settings'];
+      html += '<div class="command-section"><div style="padding:4px 12px;font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text-muted);">PAGES</div>';
+      const pages = ['overview', 'budget', 'bills', 'cards', 'savings', 'debts', 'invoices', 'settings'];
       for (const p of pages) {
         html += this._paletteItemHtml(p.toUpperCase(), '');
         this._cmdPaletteItems.push({ execute: (_p => () => { this.closeCommandPalette(); this.navigateTo(_p); })(p) });
       }
       html += '</div>';
-      html += '<div class="command-section"><div style="padding:4px 12px;font-size:10px;font-weight:700;text-transform:uppercase;color:var(--text-muted);">SYNTAX</div>' +
+      html += '<div class="command-section"><div style="padding:4px 12px;font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text-muted);">SYNTAX</div>' +
         '<div class="command-syntax">1500 -shop groceries for the week &nbsp;&middot;&nbsp; expense (negative = expense)</div>' +
         '<div class="command-syntax">95000 paycheck 25/8 salary &nbsp;&middot;&nbsp; income on Aug 25</div>' +
         '<div class="command-syntax">t 5000 cash card &nbsp;&middot;&nbsp; transfer between accounts</div>' +
@@ -393,7 +408,7 @@ window.BlackBook = {
 
     try {
       const parsedT = this.parseTransferCommand(query);
-      results.innerHTML = '<div class="command-section"><div style="padding:4px 12px;font-size:10px;font-weight:700;text-transform:uppercase;color:var(--text-muted);">COMMAND</div>' +
+      results.innerHTML = '<div class="command-section"><div style="padding:4px 12px;font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text-muted);">COMMAND</div>' +
         this._paletteItemHtml(parsedT.label, 'Enter') + '</div>';
       this._cmdPaletteItems.push({ execute: parsedT.execute });
       return;
@@ -424,7 +439,7 @@ window.BlackBook = {
       const parsed = this.parseCommand(query);
       const typeLabel = parsed.amount < 0 ? 'Expense' : 'Income';
       const detail = typeLabel + ': ' + Math.abs(parsed.amount) + ' RSD' + (parsed.category ? ' / ' + parsed.category.name : '') + (parsed.date ? ' / ' + parsed.date : '') + (parsed.note ? ' / ' + parsed.note : '');
-      let cmdHtml = '<div class="command-section"><div style="padding:4px 12px;font-size:10px;font-weight:700;text-transform:uppercase;color:var(--text-muted);">COMMAND</div>';
+      let cmdHtml = '<div class="command-section"><div style="padding:4px 12px;font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text-muted);">COMMAND</div>';
       cmdHtml += this._paletteItemHtml('Create: ' + detail, 'Enter');
       this._cmdPaletteItems.push({
         execute: async () => {
@@ -445,7 +460,7 @@ window.BlackBook = {
     let searchHtml = '';
     const txResults = this.data.transactions.filter(tx => (tx.note || '').toLowerCase().includes(lq) || String(tx.amount).includes(lq)).slice(0, 10);
     if (txResults.length) {
-      searchHtml += '<div class="command-section"><div style="padding:4px 12px;font-size:10px;font-weight:700;text-transform:uppercase;color:var(--text-muted);">TRANSACTIONS</div>';
+      searchHtml += '<div class="command-section"><div style="padding:4px 12px;font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text-muted);">TRANSACTIONS</div>';
       for (const tx of txResults) {
         const cat = this.data.categories.find(c => c.id === tx.categoryId);
         const sign = tx.type === 'income' ? '+' : '-';
@@ -455,10 +470,10 @@ window.BlackBook = {
       }
       searchHtml += '</div>';
     }
-    const allPages = ['overview', 'budget', 'bills', 'cards', 'savings', 'debts', 'settings'];
+    const allPages = ['overview', 'budget', 'bills', 'cards', 'savings', 'debts', 'invoices', 'settings'];
     const matchingPages = allPages.filter(p => p.includes(lq));
     if (matchingPages.length) {
-      searchHtml += '<div class="command-section"><div style="padding:4px 12px;font-size:10px;font-weight:700;text-transform:uppercase;color:var(--text-muted);">PAGES</div>';
+      searchHtml += '<div class="command-section"><div style="padding:4px 12px;font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text-muted);">PAGES</div>';
       for (const mp of matchingPages) {
         searchHtml += this._paletteItemHtml(mp.toUpperCase(), '');
         this._cmdPaletteItems.push({ execute: (_mp => () => { this.closeCommandPalette(); this.navigateTo(_mp); })(mp) });

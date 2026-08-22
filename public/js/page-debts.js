@@ -4,7 +4,7 @@ Object.assign(window.BlackBook, {
     const el = document.getElementById('page-debts');
     if (!el) return;
     if (!this.data.debts) this.data.debts = [];
-    let html = '<div style="display:flex;justify-content:flex-end;margin-bottom:8px;"><button class="btn btn-primary" onclick="BlackBook.openNewDebt()">+ NEW DEBT</button></div>';
+    let html = '<div class="month-picker" style="justify-content:flex-end;"><button class="btn btn-primary" onclick="BlackBook.openNewDebt()">+ NEW DEBT</button></div>';
     html += this.debtsSummaryHtml();
     html += '<div class="list-sep"></div>';
     html += '<div class="page-scroll-wrap">' + this.debtsListHtml() + '</div>';

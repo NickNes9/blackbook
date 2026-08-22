@@ -37,7 +37,8 @@ Object.assign(window.BlackBook, {
       if (y === year && m === month) { catSpent[tx.categoryId] = (catSpent[tx.categoryId] || 0) + this.toRsd(tx.amount, tx.currency); }
     }
     let html = '';
-    for (const cat of this.data.categories) {
+    const cats = this.data.categories.slice().sort((a, b) => a.name.localeCompare(b.name));
+    for (const cat of cats) {
       const budget = budgetMap[cat.id];
       const spent = catSpent[cat.id] || 0;
       const amount = budget ? budget.amount : 0;
@@ -49,7 +50,7 @@ Object.assign(window.BlackBook, {
       html += '<div class="budget-card" style="cursor:pointer;" onclick="BlackBook.openBudgetModal(\x27' + cat.id + '\x27)">' +
         '<div class="budget-header"><span style="color:' + cat.color + ';">' + this.escapeHtml(cat.name) + '</span>' +
         '<span style="display:flex;align-items:center;gap:8px;">' +
-        '<span style="font-size:11px;color:' + (budget ? 'var(--text-dim)' : 'var(--text-muted)') + ';">' + (budget ? this.fmtRsd(amount) + ' / mo' : 'NO LIMIT') + '</span>' +
+        '<span style="font-size:12px;color:' + (budget ? 'var(--text-dim)' : 'var(--text-muted)') + ';">' + (budget ? this.fmtRsd(amount) + ' / mo' : 'NO LIMIT') + '</span>' +
         '<button class="btn btn-sm ' + (budget ? 'btn-secondary' : 'btn-primary') + '" onclick="event.stopPropagation();BlackBook.openBudgetModal(\x27' + cat.id + '\x27)">' + (budget ? 'EDIT' : 'SET') + '</button></span>' +
         '</div>' +
         (budget ? '<div class="budget-progress-text"><span>' + this.fmtRsd(spentAbs) + ' spent</span><span>' + (remaining >= 0 ? this.fmtRsd(remaining) + ' left' : this.fmtRsd(Math.abs(remaining)) + ' over') + '</span></div>' +

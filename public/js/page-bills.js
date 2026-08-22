@@ -87,6 +87,8 @@ Object.assign(window.BlackBook, {
     document.getElementById('bill-autopay').checked = false;
     const catSelect = document.getElementById('bill-category');
     catSelect.innerHTML = this.data.categories.map(c => '<option value="' + c.id + '">' + this.escapeHtml(c.name) + '</option>').join('');
+    const billCat = this.data.categories.find(c => /^bill/i.test(String(c.name).trim()));
+    if (billCat) catSelect.value = billCat.id;
     document.getElementById('bill-modal-title').textContent = 'New Bill';
     this.openModal('bill-modal');
   },
