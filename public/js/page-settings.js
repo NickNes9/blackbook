@@ -235,6 +235,10 @@ Object.assign(window.BlackBook, {
 
   async generateDemoData() {
     if (!confirm('This will REPLACE all transactions and budgets, reset categories to the default set and regenerate colors. Continue?')) return;
+    const today = new Date();
+    const Y = today.getFullYear(), curM = today.getMonth(), curD = today.getDate();
+    const rint = (min, max) => Math.round(min + Math.random() * (max - min));
+    const chance = (p) => Math.random() < p;
     const DEMO_CATS = [
       'Transfer', 'Salary', 'Side Income', 'Rent', 'Utilities', 'Internet & Phone',
       'Insurance', 'Subscriptions', 'Groceries', 'Dining Out', 'Cafe & Drinks',
@@ -320,10 +324,6 @@ Object.assign(window.BlackBook, {
     }
     const accIds = this.data.accounts.map(a => a.id);
     const pickAcc = () => accIds[Math.floor(Math.random() * accIds.length)];
-    const rint = (min, max) => Math.round(min + Math.random() * (max - min));
-    const chance = (p) => Math.random() < p;
-    const today = new Date();
-    const Y = today.getFullYear(), curM = today.getMonth(), curD = today.getDate();
 
     const NOTES = {
       'Rent': ['Apartment rent', 'Monthly rent'],
