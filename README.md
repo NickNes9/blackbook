@@ -43,3 +43,10 @@ All data lives in `profiles/*.json` next to `server.js` (`profiles/data.json` = 
 ## Hosting notes
 
 Any Node-capable machine can host it: clone, `npm install`, `node server.js`, expose port 3000. There is no built-in authentication — if you expose it beyond localhost, put it behind a reverse proxy/Tailscale/Cloudflare Tunnel.
+
+---
+
+**BLACK BOOK v0.1.0**
+
+Created by Nikola Nešić
+
