@@ -40,7 +40,8 @@ Object.assign(window.BlackBook, {
     const el = document.getElementById('page-cards');
     if (!el) return;
     if (!this.data.creditCards) this.data.creditCards = [];
-    let html = this.cardsSummaryHtml();
+    let html = '<div class="month-picker"></div>';
+    html += this.cardsSummaryHtml();
     html += '<div class="list-sep"></div>';
     html += '<div class="page-scroll-wrap">' + this.cardsListHtml() + '</div>';
     el.innerHTML = html;

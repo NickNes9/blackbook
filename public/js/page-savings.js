@@ -215,7 +215,7 @@ Object.assign(window.BlackBook, {
 
   // ==================== DEBTS ====================
   savingsEntriesHtml(goal) {
-    if (!goal.entries || !goal.entries.length) return '<div class="savings-entries"><div style="padding:6px 8px;color:var(--text-muted);font-size:12px;">No entries yet.</div></div>';
+    if (!goal.entries || !goal.entries.length) return '<div class="savings-entries"><div style="padding:6px 8px;color:var(--text-muted);font-size:13px;">No entries yet.</div></div>';
     let rows = '';
     const sorted = goal.entries.slice().sort((a, b) => b.date.localeCompare(a.date));
     for (const e of sorted) {

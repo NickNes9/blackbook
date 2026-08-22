@@ -3,14 +3,14 @@ Object.assign(window.BlackBook, {
   renderSettings() {
     const el = document.getElementById('page-settings');
     if (!el) return;
-    el.innerHTML = '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;"><h1 style="font-size:14px;">SETTINGS</h1></div>' + this.settingsHtml();
+    el.innerHTML = this.settingsHtml();
     this.bindSettingsEvents(el);
     this.bindSettingsModals();
     this.refreshProfilesList();
   },
 
   profilesListHtml() {
-    return '<div style="padding:8px;color:var(--text-muted);font-size:12px;">Loading profiles&hellip;</div>';
+    return '<div style="padding:8px;color:var(--text-muted);font-size:13px;">Loading profiles&hellip;</div>';
   },
 
   async refreshProfilesList() {
@@ -23,7 +23,7 @@ Object.assign(window.BlackBook, {
     } catch (e) {}
     let html = '<div class="settings-row"><span class="row-swatch" style="background:var(--accent);"></span><span class="settings-row-name">DEFAULT' + (!this.profile ? ' &#10003;' : '') + '</span><span class="settings-row-meta">' + (this.profile ? 'switch to default data set' : 'active') + '</span>' +
       (!this.profile ? '<button class="btn btn-sm btn-secondary" onclick="BlackBook.renameProfile(\'\')">RENAME</button>' : '<button class="btn btn-sm btn-secondary" onclick="BlackBook.switchProfile(\'\')">OPEN</button>') + '</div>';
-    if (!profiles.length) html += '<div style="padding:8px;color:var(--text-muted);font-size:12px;">No extra profiles yet.</div>';
+    if (!profiles.length) html += '<div style="padding:8px;color:var(--text-muted);font-size:13px;">No extra profiles yet.</div>';
     for (const p of profiles) {
       const active = p.name === this.profile;
       html += '<div class="settings-row">' +
@@ -142,6 +142,7 @@ Object.assign(window.BlackBook, {
     document.getElementById('csv-col-desc').innerHTML = colOpts;
     document.getElementById('csv-col-type').innerHTML = '<option value="-">-- none --</option>' + colOpts;
     document.getElementById('csv-col-currency').innerHTML = '<option value="-">-- fixed RSD --</option>' + colOpts;
+    document.getElementById('csv-col-category').innerHTML = '<option value="-">-- none --</option>' + colOpts;
     const guess = (re) => { const i = this._csvRows[0].findIndex(c => re.test(String(c || '').toLowerCase())); return i >= 0 ? String(i) : '0'; };
     document.getElementById('csv-col-date').value = guess(/date|datum|valuta/);
     document.getElementById('csv-col-desc').value = guess(/desc|note|opis|naziv|purpose|payer|recipient|details/);
@@ -150,11 +151,10 @@ Object.assign(window.BlackBook, {
     if (tIdx !== '0' || /type|tip/i.test(String(this._csvRows[0][0]))) document.getElementById('csv-col-type').value = tIdx;
     const cIdx = guess(/currency|valuta/);
     if (cIdx !== '0' || /currency|valuta/i.test(String(this._csvRows[0][0]))) document.getElementById('csv-col-currency').value = cIdx;
+    document.getElementById('csv-col-category').value = guess(/categor|kategor/);
     const accSel = document.getElementById('csv-account');
     const defAcc = this.data.settings.defaultAccountId;
     accSel.innerHTML = this.visibleAccounts().map(a => '<option value="' + a.id + '"' + (a.id === defAcc ? ' selected' : '') + '>' + this.escapeHtml(a.name) + '</option>').join('');
-    const catSel = document.getElementById('csv-category');
-    catSel.innerHTML = '<option value="">-- uncategorized --</option>' + this.data.categories.slice().sort((a, b) => a.name.localeCompare(b.name)).map(c => '<option value="' + c.id + '">' + this.escapeHtml(c.name) + '</option>').join('');
     document.getElementById('csv-skip-header').checked = true;
     document.getElementById('csv-sign').value = 'neg';
     document.getElementById('csv-datefmt').value = 'auto';
@@ -181,12 +181,23 @@ Object.assign(window.BlackBook, {
     const descCol = document.getElementById('csv-col-desc').value;
     const typeCol = document.getElementById('csv-col-type').value;
     const curCol = document.getElementById('csv-col-currency').value;
+    const catCol = document.getElementById('csv-col-category').value;
     const signMode = document.getElementById('csv-sign').value;
     const dateFmt = document.getElementById('csv-datefmt').value;
     const accountId = document.getElementById('csv-account').value;
-    const categoryId = document.getElementById('csv-category').value || null;
     const skipHeader = document.getElementById('csv-skip-header').checked;
     if (!accountId) { alert('Choose a target account.'); return; }
+    const catMap = {};
+    for (const c of this.data.categories) catMap[String(c.name).trim().toLowerCase()] = c.id;
+    const catByName = (cell) => {
+      if (!cell) return null;
+      const s = cell.toLowerCase();
+      if (catMap[s]) return catMap[s];
+      for (const [name, id] of Object.entries(catMap)) {
+        if (name.length > 3 && (s.includes(name) || name.includes(s))) return id;
+      }
+      return null;
+    };
     let imported = 0, skipped = 0;
     for (let i = skipHeader ? 1 : 0; i < rows.length; i++) {
       const r = rows[i];
@@ -206,7 +217,7 @@ Object.assign(window.BlackBook, {
         id: crypto.randomUUID(), date: date, type: type,
         amount: Math.round((type === 'income' ? Math.abs(amt) : -Math.abs(amt)) * 100) / 100,
         currency: currency, accountId: accountId, cardId: null,
-        categoryId: categoryId, note: g(r, descCol)
+        categoryId: catByName(g(r, catCol)), note: g(r, descCol)
       });
       imported++;
     }
@@ -443,7 +454,7 @@ Object.assign(window.BlackBook, {
     let rows = '<div class="rate-grid-row rate-grid-head"><span>CUR</span><span>RATE</span><span>SOURCE</span><span>UPDATED</span><span>MANUAL OVERRIDE</span><span></span><span></span></div>';
     for (const code of ['EUR', 'USD', 'XAU']) {
       const r = rates[code] || { rate: null, source: null, updated: null };
-      const rateVal = r.rate != null ? r.rate.toLocaleString('en-US', { maximumFractionDigits: 4 }) : '--';
+      const rateVal = r.rate != null ? r.rate.toLocaleString('en-US', { maximumFractionDigits: 4 }) + ' <span class="rate-unit">RSD</span>' : '--';
       const updated = r.updated ? new Date(r.updated).toLocaleString() : '--';
       rows += '<div class="rate-grid-row">' +
         '<span class="rate-code">' + code + '</span>' +
@@ -728,7 +739,7 @@ Object.assign(window.BlackBook, {
         '<button class="btn btn-sm btn-secondary" onclick="BlackBook.openEditAccount(\x27card:' + c.id + '\x27)">EDIT</button>' +
         '<button class="btn btn-sm btn-danger" onclick="BlackBook.deleteCard(\x27' + c.id + '\x27)">DEL</button></div>';
     }
-    if (!visibleAccts.length && !(this.data.creditCards || []).length) accountsList = '<div style="padding:8px;color:var(--text-muted);font-size:12px;">No accounts yet.</div>';
+    if (!visibleAccts.length && !(this.data.creditCards || []).length) accountsList = '<div style="padding:8px;color:var(--text-muted);font-size:13px;">No accounts yet.</div>';
 
     let categoriesList = '';
     const sortedCats = this.data.categories.slice().sort((a, b) => a.name.localeCompare(b.name));
@@ -739,7 +750,7 @@ Object.assign(window.BlackBook, {
         '<button class="btn btn-sm btn-secondary" onclick="BlackBook.openEditCategory(\x27' + c.id + '\x27)">EDIT</button>' +
         '<button class="btn btn-sm btn-danger" onclick="BlackBook.deleteCategory(\x27' + c.id + '\x27)">DEL</button></div>';
     }
-    if (!this.data.categories.length) categoriesList = '<div style="padding:8px;color:var(--text-muted);font-size:12px;">No categories yet.</div>';
+    if (!this.data.categories.length) categoriesList = '<div style="padding:8px;color:var(--text-muted);font-size:13px;">No categories yet.</div>';
 
     const defaultAccountOpts = '<option value="">None</option>' + this.visibleAccounts().map(a => '<option value="' + a.id + '"' + (a.id === defaultAccountId ? ' selected' : '') + '>' + this.escapeHtml(a.name) + '</option>').join('');
     const defaultCategoryOpts = '<option value="">None</option>' + this.data.categories.map(c => '<option value="' + c.id + '"' + (c.id === defaultCategoryId ? ' selected' : '') + '>' + this.escapeHtml(c.name) + '</option>').join('');
@@ -747,9 +758,9 @@ Object.assign(window.BlackBook, {
     return '<div class="settings-section">' +
       '<div class="settings-section-header"><span class="settings-section-title">APPEARANCE</span></div>' +
       '<div class="form-row-2col">' +
-      '<div class="form-group"><label>Highlight Color</label><div style="display:flex;align-items:center;gap:8px;"><input type="color" id="settings-highlight-color" value="' + (this.data.settings.highlightColor || '#f9a05c') + '" style="width:28px;height:28px;border:none;background:none;cursor:pointer;padding:0;"><span style="font-size:12px;color:var(--text-dim);">' + (this.data.settings.highlightColor || '#f9a05c') + '</span></div></div>' +
-      '<div class="form-group"><label>Income Color</label><div style="display:flex;align-items:center;gap:8px;"><input type="color" id="settings-income-color" value="' + (this.data.settings.incomeColor || '#4ade80') + '" style="width:28px;height:28px;border:none;background:none;cursor:pointer;padding:0;"><span style="font-size:12px;color:var(--text-dim);">' + (this.data.settings.incomeColor || '#4ade80') + '</span></div></div>' +
-      '<div class="form-group"><label>Expense Color</label><div style="display:flex;align-items:center;gap:8px;"><input type="color" id="settings-expense-color" value="' + (this.data.settings.expenseColor || '#f87171') + '" style="width:28px;height:28px;border:none;background:none;cursor:pointer;padding:0;"><span style="font-size:12px;color:var(--text-dim);">' + (this.data.settings.expenseColor || '#f87171') + '</span></div></div>' +
+      '<div class="form-group"><label>Highlight Color</label><div style="display:flex;align-items:center;gap:8px;"><input type="color" id="settings-highlight-color" value="' + (this.data.settings.highlightColor || '#f9a05c') + '" style="width:28px;height:28px;border:none;background:none;cursor:pointer;padding:0;"><span style="font-size:13px;color:var(--text-dim);">' + (this.data.settings.highlightColor || '#f9a05c') + '</span></div></div>' +
+      '<div class="form-group"><label>Income Color</label><div style="display:flex;align-items:center;gap:8px;"><input type="color" id="settings-income-color" value="' + (this.data.settings.incomeColor || '#4ade80') + '" style="width:28px;height:28px;border:none;background:none;cursor:pointer;padding:0;"><span style="font-size:13px;color:var(--text-dim);">' + (this.data.settings.incomeColor || '#4ade80') + '</span></div></div>' +
+      '<div class="form-group"><label>Expense Color</label><div style="display:flex;align-items:center;gap:8px;"><input type="color" id="settings-expense-color" value="' + (this.data.settings.expenseColor || '#f87171') + '" style="width:28px;height:28px;border:none;background:none;cursor:pointer;padding:0;"><span style="font-size:13px;color:var(--text-dim);">' + (this.data.settings.expenseColor || '#f87171') + '</span></div></div>' +
       '</div></div>' +
 
       '<div class="settings-section">' +
@@ -769,7 +780,7 @@ Object.assign(window.BlackBook, {
       '</div>' +
 
       '<div class="settings-section">' +
-      '<div class="settings-section-header"><span class="settings-section-title">EXCHANGE RATES (RSD PER UNIT)</span><button class="btn btn-sm btn-secondary" id="settings-refresh-all-rates">REFRESH ALL</button></div>' +
+      '<div class="settings-section-header"><span class="settings-section-title">EXCHANGE RATES &middot; 1 UNIT IN RSD</span><button class="btn btn-sm btn-secondary" id="settings-refresh-all-rates">REFRESH ALL</button></div>' +
       '<div class="settings-rate-card">' + this.ratesTableHtml() + '</div></div>' +
 
       '<div class="settings-section">' +

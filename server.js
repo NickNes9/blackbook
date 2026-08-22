@@ -247,13 +247,15 @@ const server = app.listen(PORT, () => console.log(`Black Book running at http://
 
 const wss = new WebSocketServer({ server });
 let browserConnected = false;
+let shutdownTimer = null;
 
 wss.on('connection', (ws) => {
   browserConnected = true;
+  if (shutdownTimer) { clearTimeout(shutdownTimer); shutdownTimer = null; console.log('Browser reconnected. Shutdown cancelled.'); }
   ws.on('close', () => {
     browserConnected = false;
-    console.log('Browser disconnected. Shutting down...');
-    server.close(() => process.exit(0));
-    setTimeout(() => process.exit(0), 2000);
+    if (shutdownTimer) return;
+    console.log('Browser disconnected. Shutting down in 3s unless it reconnects...');
+    shutdownTimer = setTimeout(() => process.exit(0), 3000);
   });
 });
