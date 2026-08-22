@@ -28,6 +28,7 @@ const DEFAULT_DATA = {
   savingsGoals: [],
   budgets: [],
   installments: [],
+  debts: [],
   settings: { eurToRsdRate: 117.2, eurToRsdRateSource: 'manual', eurToRsdRateUpdated: null, defaultAccountId: null, defaultCategoryId: null }
 };
 
@@ -130,12 +131,14 @@ app.post('/api/profiles', async (req, res) => {
 });
 
 const OZ_TO_GRAM = 31.1034768;
-const RATE_CODES = ['EUR', 'USD', 'CHF', 'XAU'];
+const RATE_CODES = ['EUR', 'USD', 'XAU'];
 
 function loadDB() {
-  return existsSync(DATA_FILE)
+  const db = existsSync(DATA_FILE)
     ? JSON.parse(readFileSync(DATA_FILE, 'utf-8'))
     : JSON.parse(JSON.stringify(DEFAULT_DATA));
+  if (!db.debts) db.debts = [];
+  return db;
 }
 
 function ensureRates(db) {
@@ -158,14 +161,14 @@ async function fetchFiatRates() {
     const resp = await fetch('https://open.er-api.com/v6/latest/EUR');
     const data = await resp.json();
     if (data?.rates?.RSD) {
-      return { rsdPerEur: data.rates.RSD, usdPerEur: data.rates.USD || null, chfPerEur: data.rates.CHF || null, source: 'open.er-api.com' };
+      return { rsdPerEur: data.rates.RSD, usdPerEur: data.rates.USD || null, source: 'open.er-api.com' };
     }
   } catch (e) {}
   try {
     const resp = await fetch('https://cdn.jsdelivr.net/npm/@fawazahmed0/currency-api@latest/v1/currencies/eur.json');
     const data = await resp.json();
     if (data?.eur?.rsd) {
-      return { rsdPerEur: data.eur.rsd, usdPerEur: data.eur.usd || null, chfPerEur: data.eur.chf || null, source: 'jsdelivr currency-api' };
+      return { rsdPerEur: data.eur.rsd, usdPerEur: data.eur.usd || null, source: 'jsdelivr currency-api' };
     }
   } catch (e) {}
   return null;
@@ -189,13 +192,12 @@ async function fetchRates(cur, db, force) {
     if (cur && cur !== code) return false;
     return force || cur === code || rates[code].source !== 'manual';
   };
-  const wantFiat = !cur || ['EUR', 'USD', 'CHF'].includes(cur);
-  if (wantFiat && ['EUR', 'USD', 'CHF'].some(shouldUpdate)) {
+  const wantFiat = !cur || ['EUR', 'USD'].includes(cur);
+  if (wantFiat && ['EUR', 'USD'].some(shouldUpdate)) {
     const fiat = await fetchFiatRates();
     if (fiat) {
       if (shouldUpdate('EUR')) out.EUR = { rate: rnd4(fiat.rsdPerEur), source: fiat.source, updated };
       if (fiat.usdPerEur && shouldUpdate('USD')) out.USD = { rate: rnd4(fiat.rsdPerEur / fiat.usdPerEur), source: fiat.source, updated };
-      if (fiat.chfPerEur && shouldUpdate('CHF')) out.CHF = { rate: rnd4(fiat.rsdPerEur / fiat.chfPerEur), source: fiat.source, updated };
     }
   }
   if (shouldUpdate('XAU')) {

@@ -30,11 +30,12 @@ const BlackBook = {
     if (!this.data.savingsGoals) this.data.savingsGoals = [];
     if (!this.data.budgets) this.data.budgets = [];
     if (!this.data.installments) this.data.installments = [];
+    if (!this.data.debts) this.data.debts = [];
     if (this.migrateCreditCards()) await this.save();
     this.applyThemeColors();
 
     const rates = this.getRates();
-    if (['EUR', 'USD', 'CHF', 'XAU'].some(c => !rates[c].rate)) {
+    if (['EUR', 'USD', 'XAU'].some(c => !rates[c].rate)) {
       fetch('/api/exchange-rate').then(r => r.json()).then(result => {
         if (result.rates) {
           Object.assign(this.getRates(), result.rates);
@@ -45,7 +46,7 @@ const BlackBook = {
 
     this.connectWebSocket();
     const hp = document.getElementById('header-profile');
-    if (hp) { hp.textContent = this.profile ? '\u00b7 ' + this.profile.toUpperCase() : ''; }
+    if (hp) { hp.textContent = '\u00b7 ' + (this.profile ? this.profile.toUpperCase() : 'DEFAULT'); }
     if (window.Chart) {
       Chart.defaults.font.family = "'Hack', 'Courier New', monospace";
       Chart.defaults.font.size = 11;
@@ -70,6 +71,8 @@ const BlackBook = {
     document.querySelector('#settings-category-modal .modal-backdrop').addEventListener('click', () => this.closeModal('settings-category-modal'));
     document.querySelector('#transfer-modal .modal-backdrop').addEventListener('click', () => this.closeModal('transfer-modal'));
     document.querySelector('#card-tx-modal .modal-backdrop').addEventListener('click', () => this.closeModal('card-tx-modal'));
+    document.querySelector('#debt-modal .modal-backdrop').addEventListener('click', () => this.closeModal('debt-modal'));
+    document.querySelector('#debt-pay-modal .modal-backdrop').addEventListener('click', () => this.closeModal('debt-pay-modal'));
     document.querySelector('#bill-pay-modal .modal-backdrop').addEventListener('click', () => this.closeModal('bill-pay-modal'));
 
     const headerInput = document.getElementById('header-command-input');
@@ -168,7 +171,7 @@ const BlackBook = {
       if (e.key === '/') { e.preventDefault(); document.getElementById('header-command-input').focus(); }
       if (e.key === 'e' || e.key === 'E') { e.preventDefault(); this.editHoveredTransaction(); }
       if (e.key === 'Tab') { e.preventDefault(); if (this.currentPage === 'overview') this.cycleAccount(); return; }
-      const pages = ['overview', 'budget', 'bills', 'cards', 'savings', 'settings'];
+      const pages = ['overview', 'budget', 'bills', 'cards', 'savings', 'debts', 'settings'];
       if (/^[1-9]$/.test(e.key)) {
         const idx = parseInt(e.key, 10) - 1;
         if (idx < pages.length) { e.preventDefault(); this.navigateTo(pages[idx]); }
@@ -203,7 +206,7 @@ const BlackBook = {
   },
 
   navigateTo(page) {
-    const known = ['overview', 'budget', 'bills', 'cards', 'savings', 'settings'];
+    const known = ['overview', 'budget', 'bills', 'cards', 'savings', 'debts', 'settings'];
     if (!known.includes(page)) page = 'overview';
     if (this.overviewPieChart) { this.overviewPieChart.destroy(); this.overviewPieChart = null; }
     if (this.overviewLineChart) { this.overviewLineChart.destroy(); this.overviewLineChart = null; }
@@ -229,6 +232,7 @@ const BlackBook = {
       else if (page === 'bills') this.renderBills();
       else if (page === 'cards') this.renderCards();
       else if (page === 'savings') this.renderSavings();
+      else if (page === 'debts') this.renderDebts();
       else if (page === 'settings') this.renderSettings();
     } catch (err) {
       console.error('renderPage failed:', err);
@@ -253,7 +257,7 @@ const BlackBook = {
     const s = this.data.settings;
     if (!s.rates) s.rates = {};
     const legacyEur = s.eurToRsdRate || null;
-    for (const code of ['EUR', 'USD', 'CHF', 'XAU']) {
+    for (const code of ['EUR', 'USD', 'XAU']) {
       if (!s.rates[code]) {
         s.rates[code] = code === 'EUR'
           ? { rate: legacyEur, source: legacyEur ? (s.eurToRsdRateSource || 'manual') : null, updated: s.eurToRsdRateUpdated || null }
@@ -344,7 +348,7 @@ const BlackBook = {
       this._cmdPaletteItems.push({ execute: () => { this.closeCommandPalette(); this.openNewSavingsGoal(); } });
       html += '</div>';
       html += '<div class="command-section"><div style="padding:4px 12px;font-size:10px;font-weight:700;text-transform:uppercase;color:var(--text-muted);">PAGES</div>';
-      const pages = ['overview', 'budget', 'bills', 'cards', 'savings', 'settings'];
+      const pages = ['overview', 'budget', 'bills', 'cards', 'savings', 'debts', 'settings'];
       for (const p of pages) {
         html += this._paletteItemHtml(p.toUpperCase(), '');
         this._cmdPaletteItems.push({ execute: (_p => () => { this.closeCommandPalette(); this.navigateTo(_p); })(p) });
@@ -448,7 +452,7 @@ const BlackBook = {
       }
       searchHtml += '</div>';
     }
-    const allPages = ['overview', 'budget', 'bills', 'cards', 'savings', 'settings'];
+    const allPages = ['overview', 'budget', 'bills', 'cards', 'savings', 'debts', 'settings'];
     const matchingPages = allPages.filter(p => p.includes(lq));
     if (matchingPages.length) {
       searchHtml += '<div class="command-section"><div style="padding:4px 12px;font-size:10px;font-weight:700;text-transform:uppercase;color:var(--text-muted);">PAGES</div>';
@@ -1692,7 +1696,6 @@ const BlackBook = {
     const canvas = document.getElementById('savings-chart');
     if (!canvas) return;
     const goals = this.data.savingsGoals;
-    if (!goals.length) return;
     const MONTHS_S = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
     const yearStr = String(this.vy());
     const datasets = goals.map(goal => {
@@ -1722,6 +1725,175 @@ const BlackBook = {
         }
       }
     });
+  },
+
+  // ==================== DEBTS ====================
+
+  renderDebts() {
+    const el = document.getElementById('page-debts');
+    if (!el) return;
+    if (!this.data.debts) this.data.debts = [];
+    let html = '<div style="display:flex;justify-content:flex-end;margin-bottom:8px;"><button class="btn btn-primary" onclick="BlackBook.openNewDebt()">+ NEW DEBT</button></div>';
+    html += this.debtsSummaryHtml();
+    html += '<div class="list-sep"></div>';
+    html += '<div class="page-scroll-wrap">' + this.debtsListHtml() + '</div>';
+    el.innerHTML = html;
+  },
+
+  debtRsd(d) { return Math.abs(this.toRsd(d.amount, d.currency || 'RSD')); },
+  debtPaidRsd(d) { return Math.min(this.debtRsd(d), Math.abs(this.toRsd(d.amountPaid || 0, d.currency || 'RSD'))); },
+  debtIsSettled(d) { return this.debtPaidRsd(d) >= this.debtRsd(d) - 0.009 && this.debtRsd(d) > 0; },
+
+  debtsSummaryHtml() {
+    let owedToMe = 0, iOwe = 0;
+    for (const d of this.data.debts) {
+      const left = this.debtRsd(d) - this.debtPaidRsd(d);
+      if (d.type === 'in') owedToMe += left; else iOwe += left;
+    }
+    const net = owedToMe - iOwe;
+    return '<div class="month-summary" style="margin-bottom:10px;">' +
+      '<div class="month-summary-item"><span class="month-summary-label">OWED TO ME</span><span class="month-summary-value amount-positive">' + this.fmtRsd(owedToMe) + '</span></div>' +
+      '<div class="month-summary-item"><span class="month-summary-label">I OWE</span><span class="month-summary-value amount-negative">' + this.fmtRsd(iOwe) + '</span></div>' +
+      '<div class="month-summary-item"><span class="month-summary-label">NET</span><span class="month-summary-value ' + (net >= 0 ? 'amount-positive' : 'amount-negative') + '">' + this.fmtRsd(net) + '</span></div></div>';
+  },
+
+  debtsListHtml() {
+    if (!this.data.debts.length) return '<div class="empty-state"><div class="empty-state-text">No debts tracked. Click + NEW DEBT to add one.</div></div>';
+    const sorted = this.data.debts.slice().sort((a, b) => {
+      const sa = this.debtIsSettled(a) ? 1 : 0, sb = this.debtIsSettled(b) ? 1 : 0;
+      if (sa !== sb) return sa - sb;
+      return String(a.dueDate || a.date).localeCompare(String(b.dueDate || b.date));
+    });
+    return sorted.map(d => this.debtCardHtml(d)).join('');
+  },
+
+  debtCardHtml(d) {
+    const settled = this.debtIsSettled(d);
+    const total = this.debtRsd(d), paid = this.debtPaidRsd(d);
+    const pct = total > 0 ? Math.min(Math.round(paid / total * 100), 100) : 0;
+    const overdue = !settled && d.dueDate && d.dueDate < this.today();
+    const fill = d.type === 'in' ? 'var(--income)' : 'var(--accent)';
+    let html = '<div class="savings-card debt-card"' + (settled ? ' style="opacity:0.55;"' : '') + '>';
+    html += '<div class="savings-header">' +
+      '<span class="savings-name"><span class="cat-dot" style="background:' + (d.type === 'in' ? 'var(--income)' : 'var(--expense)') + ';"></span> ' + this.escapeHtml(d.person) + '</span>' +
+      '<span class="savings-actions">' +
+      '<span class="debt-badge ' + (d.type === 'in' ? 'debt-badge-in' : 'debt-badge-out') + '">' + (d.type === 'in' ? 'OWES ME' : 'I OWE') + '</span>' +
+      (settled ? '<span class="debt-badge debt-badge-settled">&#10003; SETTLED</span>' : '<button class="btn btn-sm btn-primary" onclick="BlackBook.openDebtPayModal(\x27' + d.id + '\x27)">+ PAY</button>') +
+      '<button class="btn btn-sm btn-secondary" onclick="BlackBook.openEditDebt(\x27' + d.id + '\x27)">EDIT</button>' +
+      '<button class="btn btn-sm btn-danger" onclick="BlackBook.deleteDebt(\x27' + d.id + '\x27)">DEL</button></span></div>';
+    html += '<div class="savings-progress-text"><span>' + this.fmtRsd(paid) + ' of ' + this.fmtRsd(total) + '</span><span>' + pct + '%</span></div>' +
+      '<div class="savings-progress-bar"><div class="savings-progress-fill" style="width:' + pct + '%;background:' + fill + ';"></div></div>';
+    html += '<div class="bill-meta-line" style="display:block;margin-top:6px;">' +
+      'DATE ' + (d.date || '?') +
+      ' &middot; <span class="' + (overdue ? 'amount-negative" title="Overdue"' : '"') + '>DUE ' + (d.dueDate ? this.ordinalDay(new Date(d.dueDate).getDate()) + ' ' + new Date(d.dueDate).toLocaleString('en', { month: 'short' }).toUpperCase() + ' ' + new Date(d.dueDate).getFullYear() : '-') + '</span>' +
+      (overdue ? ' &middot; <span class="amount-negative">OVERDUE</span>' : '') +
+      (d.note ? ' &middot; ' + this.escapeHtml(d.note) : '') + '</div>';
+    html += '</div>';
+    return html;
+  },
+
+  openNewDebt() {
+    document.getElementById('debt-id').value = '';
+    document.getElementById('debt-person').value = '';
+    document.getElementById('debt-type').value = 'in';
+    document.getElementById('debt-amount').value = '';
+    document.getElementById('debt-currency').value = 'RSD';
+    document.getElementById('debt-date').value = this.today();
+    const in30 = new Date(Date.now() + 30 * 86400000);
+    document.getElementById('debt-due').value = in30.toISOString().slice(0, 10);
+    document.getElementById('debt-paid').value = '';
+    document.getElementById('debt-note').value = '';
+    document.getElementById('debt-modal-title').textContent = 'New Debt';
+    this.bindDebtForm();
+    this.openModal('debt-modal');
+    setTimeout(() => document.getElementById('debt-person').focus(), 50);
+  },
+
+  openEditDebt(id) {
+    const d = this.data.debts.find(x => x.id === id);
+    if (!d) return;
+    document.getElementById('debt-id').value = d.id;
+    document.getElementById('debt-person').value = d.person;
+    document.getElementById('debt-type').value = d.type || 'in';
+    document.getElementById('debt-amount').value = d.amount;
+    document.getElementById('debt-currency').value = d.currency || 'RSD';
+    document.getElementById('debt-date').value = d.date || '';
+    document.getElementById('debt-due').value = d.dueDate || '';
+    document.getElementById('debt-paid').value = d.amountPaid || '';
+    document.getElementById('debt-note').value = d.note || '';
+    document.getElementById('debt-modal-title').textContent = 'Edit Debt';
+    this.bindDebtForm();
+    this.openModal('debt-modal');
+    setTimeout(() => document.getElementById('debt-person').focus(), 50);
+  },
+
+  bindDebtForm() {
+    const f = document.getElementById('debt-form');
+    if (!f || f._bound) return;
+    f._bound = true;
+    f.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const id = document.getElementById('debt-id').value;
+      const person = document.getElementById('debt-person').value.trim();
+      if (!person) return;
+      const parseNum = (v) => Math.round(parseFloat(String(v).trim().replace(/\s+/g, '').replace(',', '.')) * 100) / 100;
+      const amount = parseNum(document.getElementById('debt-amount').value);
+      if (!(amount > 0)) { alert('Enter a valid amount.'); return; }
+      let amountPaid = parseNum(document.getElementById('debt-paid').value) || 0;
+      if (amountPaid > amount) amountPaid = amount;
+      const data = { person: person, type: document.getElementById('debt-type').value, amount: amount, currency: document.getElementById('debt-currency').value, date: document.getElementById('debt-date').value || this.today(), dueDate: document.getElementById('debt-due').value || '', amountPaid: amountPaid, note: document.getElementById('debt-note').value.trim() };
+      if (!this.data.debts) this.data.debts = [];
+      if (id) {
+        const d = this.data.debts.find(x => x.id === id);
+        if (d) Object.assign(d, data);
+      } else {
+        data.id = 'debt-' + Date.now();
+        this.data.debts.push(data);
+      }
+      await this.save();
+      this.closeModal('debt-modal');
+      this.renderPage(this.currentPage === 'debts' ? 'debts' : this.currentPage);
+    });
+  },
+
+  openDebtPayModal(id) {
+    const d = this.data.debts.find(x => x.id === id);
+    if (!d || this.debtIsSettled(d)) return;
+    const remaining = this.debtRsd(d) - this.debtPaidRsd(d);
+    document.getElementById('dpay-id').value = id;
+    document.getElementById('dpay-amount').value = remaining.toFixed(2);
+    document.getElementById('debt-pay-title').textContent = 'Payment \u2014 ' + d.person;
+    this.bindDebtPayForm();
+    this.openModal('debt-pay-modal');
+    setTimeout(() => { const a = document.getElementById('dpay-amount'); a.focus(); a.select(); }, 50);
+  },
+
+  bindDebtPayForm() {
+    const f = document.getElementById('debt-pay-form');
+    if (!f || f._bound) return;
+    f._bound = true;
+    f.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const d = this.data.debts.find(x => x.id === document.getElementById('dpay-id').value);
+      if (!d) return;
+      let amt = Math.round(parseFloat(String(document.getElementById('dpay-amount').value).trim().replace(/\s+/g, '').replace(',', '.')) * 100) / 100;
+      if (!(amt > 0)) { alert('Enter a valid amount.'); return; }
+      const remaining = this.debtRsd(d) - this.debtPaidRsd(d);
+      if (amt > remaining) amt = remaining;
+      d.amountPaid = Math.round(((d.amountPaid || 0) + amt) * 100) / 100;
+      await this.save();
+      this.closeModal('debt-pay-modal');
+      this.renderPage(this.currentPage === 'debts' ? 'debts' : this.currentPage);
+    });
+  },
+
+  async deleteDebt(id) {
+    const d = this.data.debts.find(x => x.id === id);
+    if (!d) return;
+    if (!confirm('Delete debt entry for "' + d.person + '"?')) return;
+    this.data.debts = this.data.debts.filter(x => x.id !== id);
+    await this.save();
+    this.renderPage(this.currentPage === 'debts' ? 'debts' : this.currentPage);
   },
 
   // ==================== SETTINGS ====================
@@ -1812,7 +1984,9 @@ const BlackBook = {
       '<button class="btn btn-secondary" id="settings-import-btn">IMPORT JSON</button>' +
       '<input type="file" id="settings-import-file" accept=".json" style="display:none;">' +
       '<button class="btn btn-secondary" id="settings-generate-demo">GENERATE DEMO DATA</button>' +
-      '<button class="btn btn-secondary" id="settings-export-pdf">EXPORT PDF (coming soon)</button></div></div>';
+      '<button class="btn btn-secondary" id="settings-export-pdf">EXPORT PDF (coming soon)</button></div></div>' +
+
+      '<div class="settings-footer">BLACK BOOK v0.1.0 &middot; Created by Nikola Ne&scaron;i&#263;</div>';
   },
 
   profilesListHtml() {
@@ -1901,14 +2075,81 @@ const BlackBook = {
       'Hobbies', 'Travel', 'Fitness', 'Gifts', 'Family', 'Home', 'Electronics',
       'Personal Care', 'Credit Card', 'Savings', 'Fees'
     ];
-    this.data.categories = DEMO_CATS.map((name, i) => ({ id: 'cat-demo-' + i, name: name, color: this.hslToHex('hsl(' + Math.round((i * 137.508) % 360) + ', 65%, 62%)') }));
+    this.data.categories = DEMO_CATS.map((name, i) => {
+      let sn = name.replace(/[^A-Za-z]/g, '').slice(0, 3).toUpperCase();
+      return { id: 'cat-demo-' + i, name: name, shortName: sn, color: this.hslToHex('hsl(' + Math.round((i * 137.508) % 360) + ', 65%, 62%)') };
+    });
+    const snTaken = new Set();
+    for (const c of this.data.categories) {
+      if (!snTaken.has(c.shortName)) { snTaken.add(c.shortName); continue; }
+      let suffix = 'A';
+      while (snTaken.has(c.shortName.slice(0, 3) + suffix)) suffix = String.fromCharCode(suffix.charCodeAt(0) + 1);
+      c.shortName = c.shortName.slice(0, 3) + suffix;
+      snTaken.add(c.shortName);
+    }
     const cat = {};
     for (const c of this.data.categories) cat[c.name] = c.id;
     for (let i = 0; i < this.data.accounts.length; i++) {
       this.data.accounts[i].color = this.hslToHex('hsl(' + Math.round((i * 137.508 + 47) % 360) + ', 60%, 58%)');
     }
     if (!this.data.accounts.length) {
-      this.data.accounts.push({ id: 'acc-cash', name: 'Cash', type: 'cash', currency: 'RSD', color: '#e0b04c' }, { id: 'acc-card', name: 'Card', type: 'bank', currency: 'RSD', color: '#5c8ae0' });
+      this.data.accounts.push({ id: 'acc-cash', name: 'Cash', shortName: 'CSH', type: 'cash', currency: 'RSD', color: '#e0b04c' }, { id: 'acc-card', name: 'Card', shortName: 'CRD', type: 'bank', currency: 'RSD', color: '#5c8ae0' });
+    }
+    for (const a of this.data.accounts) {
+      if (!a.shortName) a.shortName = String(a.name).replace(/[^A-Za-z]/g, '').slice(0, 3).toUpperCase() || 'ACC';
+    }
+
+    const BUDGET_AMOUNTS = { 'Rent': 40000, 'Utilities': 9000, 'Internet & Phone': 5000, 'Subscriptions': 2500, 'Groceries': 60000, 'Dining Out': 20000, 'Cafe & Drinks': 8000, 'Transport': 6000, 'Car': 15000, 'Entertainment': 10000, 'Hobbies': 8000, 'Clothes': 12000, 'Healthcare': 8000, 'Pharmacy': 4000, 'Fitness': 4000, 'Personal Care': 4000, 'Gifts': 6000, 'Family': 8000, 'Home': 5000, 'Electronics': 8000, 'Travel': 20000 };
+    this.data.budgets = Object.entries(BUDGET_AMOUNTS).filter(([n]) => cat[n]).map(([n, amount]) => ({ id: crypto.randomUUID(), categoryId: cat[n], amount: amount }));
+
+    this.data.bills = [
+      { id: 'bill-demo-ele', name: 'Electricity', amount: 6500, currency: 'RSD', dueDay: 15, categoryId: cat['Utilities'], active: true, autopay: false },
+      { id: 'bill-demo-int', name: 'Internet', amount: 2999, currency: 'RSD', dueDay: 10, categoryId: cat['Internet & Phone'], active: true, autopay: true },
+      { id: 'bill-demo-phone', name: 'Phone', amount: 1450, currency: 'RSD', dueDay: 20, categoryId: cat['Internet & Phone'], active: true, autopay: true },
+      { id: 'bill-demo-sub', name: 'Netflix', amount: 1200, currency: 'RSD', dueDay: 5, categoryId: cat['Subscriptions'], active: true, autopay: true }
+    ];
+    this.data.billPayments = [];
+    for (let m = 0; m <= curM; m++) {
+      const mk = Y + '-' + String(m + 1).padStart(2, '0');
+      if (m === curM) continue;
+      for (const b of this.data.bills) {
+        const entry = { billId: b.id, month: mk, paid: true };
+        if (b.id === 'bill-demo-ele') entry.amount = rint(4500, 9500);
+        this.data.billPayments.push(entry);
+      }
+    }
+
+    this.data.savingsGoals = [
+      { id: crypto.randomUUID(), name: 'New car', targetAmount: 600000, currency: 'RSD', entries: [] },
+      { id: crypto.randomUUID(), name: 'Emergency fund', targetAmount: 300000, currency: 'RSD', entries: [] }
+    ];
+    for (let m = 0; m < curM; m++) {
+      const dstr = Y + '-' + String(m + 1).padStart(2, '0') + '-20';
+      this.data.savingsGoals[0].entries.push({ date: dstr, amount: rint(15000, 30000), note: 'Deposit' });
+      if (chance(0.8)) this.data.savingsGoals[1].entries.push({ date: dstr, amount: rint(8000, 15000), note: 'Deposit' });
+    }
+
+    const cardId = 'card-demo-visa';
+    this.data.creditCards = [{ id: cardId, name: 'Visa Gold', color: '#b45309', ratePct: 5, dueDay: 15 }];
+    let pSy = Y, pSm = curM - 3;
+    if (pSm < 0) { pSm += 12; pSy--; }
+    const planId = 'inst-demo-mac';
+    const planStart = pSy + '-' + String(pSm + 1).padStart(2, '0');
+    this.data.installments = [{ id: planId, cardId: cardId, name: 'MacBook Pro', total: 144000, months: 6, startMonth: planStart, dueDay: 15, ratePct: 5, paid: [], advance: 0 }];
+
+    this.data.debts = [
+      { id: 'debt-demo-1', person: 'Marko', type: 'in', amount: 25000, amountPaid: 10000, currency: 'RSD', date: null, dueDate: null, note: 'Lent for laptop repair', _borrowedAgo: 1, _dueIn: 2 },
+      { id: 'debt-demo-2', person: 'Ana', type: 'out', amount: 40000, amountPaid: 0, currency: 'RSD', date: null, dueDate: null, note: 'Shared vacation costs', _borrowedAgo: 2, _dueIn: -1 },
+      { id: 'debt-demo-3', person: 'Jovana', type: 'in', amount: 12000, amountPaid: 12000, currency: 'RSD', date: null, dueDate: null, note: 'Concert tickets', _borrowedAgo: 5, _dueIn: 4 }
+    ];
+    const monthShift = (back) => {
+      const t = Y * 12 + curM - back;
+      return Math.floor(t / 12) + '-' + String((t % 12) + 1).padStart(2, '0');
+    };
+    for (const d of this.data.debts) {
+      d.date = monthShift(d._borrowedAgo) + '-05';
+      d.dueDate = monthShift(-d._dueIn) + '-01';
+      delete d._borrowedAgo; delete d._dueIn;
     }
     const accIds = this.data.accounts.map(a => a.id);
     const pickAcc = () => accIds[Math.floor(Math.random() * accIds.length)];
@@ -2010,18 +2251,30 @@ const BlackBook = {
         txs.push({ id: 'demo-' + Date.now() + '-' + (seq++), type: 'income', amount: amt, currency: 'RSD', accountId: toId, categoryId: cat['Transfer'], date: dstr, note: 'Account transfer', pairId: pairId });
       }
     }
+    const plan = this.data.installments[0];
+    txs.push({ id: 'demo-' + Date.now() + '-' + (seq++), type: 'expense', amount: -(plan.total), currency: 'RSD', accountId: null, cardId: cardId, categoryId: cat['Electronics'], date: plan.startMonth + '-05', note: 'MacBook Pro' });
+    const fundingId = accIds[0] || null;
+    for (let s = 1; s <= plan.months; s++) {
+      const mkS = this.mkOfSeq(plan, s);
+      const [pyy, pmm] = mkS.split('-').map(Number);
+      if (pyy * 12 + (pmm - 1) < Y * 12 + curM) {
+        plan.paid.push({ seq: s, via: 'tx' });
+        const dueAmt = this.instDueAmount(plan, s);
+        const pairId = 'inst-' + planId + '-s' + s;
+        txs.push({ id: 'demo-' + Date.now() + '-' + (seq++), type: 'expense', amount: -dueAmt, currency: 'RSD', accountId: fundingId, categoryId: cat['Credit Card'], date: mkS + '-' + String(plan.dueDay).padStart(2, '0'), note: 'Installment MacBook Pro ' + s + '/6' + (s === 1 ? ' (incl interest)' : ''), pairId: pairId });
+      }
+    }
     txs.sort((a, b) => (a.date < b.date ? 1 : -1));
     this.data.transactions = txs;
-    this.data.budgets = [];
     await this.save();
     this.renderSettings();
-    alert('Generated ' + txs.length + ' transactions for Jan ' + Y + ' \u2013 today using default categories.');
+    alert('Generated ' + txs.length + ' transactions plus budgets, bills, savings goals, a credit card with installments and sample debts.');
   },
 
   ratesTableHtml() {
     const rates = this.getRates();
     let rows = '<div class="rate-grid-row rate-grid-head"><span>CUR</span><span>RATE</span><span>SOURCE</span><span>UPDATED</span><span>MANUAL OVERRIDE</span><span></span><span></span></div>';
-    for (const code of ['EUR', 'USD', 'CHF', 'XAU']) {
+    for (const code of ['EUR', 'USD', 'XAU']) {
       const r = rates[code] || { rate: null, source: null, updated: null };
       const rateVal = r.rate != null ? r.rate.toLocaleString('en-US', { maximumFractionDigits: 4 }) : '--';
       const updated = r.updated ? new Date(r.updated).toLocaleString() : '--';
@@ -2137,6 +2390,7 @@ const BlackBook = {
             if (!this.data.savingsGoals) this.data.savingsGoals = [];
     if (!this.data.budgets) this.data.budgets = [];
     if (!this.data.installments) this.data.installments = [];
+    if (!this.data.debts) this.data.debts = [];
     this.migrateCreditCards();
     if (this.applyAutopay()) await this.save();
     this.applyThemeColors();
