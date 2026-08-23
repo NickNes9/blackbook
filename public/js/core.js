@@ -33,6 +33,13 @@ window.BlackBook = {
     if (!this.data.debts) this.data.debts = [];
     if (!this.data.invoices) this.data.invoices = [];
     if (this.migrateCreditCards()) await this.save();
+    let signFixed = false;
+    for (const t of (this.data.transactions || [])) {
+      if (!t || typeof t.amount !== 'number') continue;
+      if (t.type === 'expense' && t.amount > 0) { t.amount = -t.amount; signFixed = true; }
+      else if (t.type === 'income' && t.amount < 0) { t.amount = -t.amount; signFixed = true; }
+    }
+    if (signFixed) await this.save();
     if (!this.data.billPayments) this.data.billPayments = [];
     if (this.applyAutopay()) await this.save();
     this.applyTheme();
@@ -382,8 +389,7 @@ window.BlackBook = {
     let currency = 'RSD';
     for (const tx of this.data.transactions) {
       if (tx.accountId !== accountId) continue;
-      const amt = tx.type === 'income' ? tx.amount : -tx.amount;
-      total += amt;
+      total += tx.amount;
       currency = tx.currency;
     }
     return { amount: total, currency: currency };
@@ -504,13 +510,13 @@ window.BlackBook = {
 
     try {
       const parsed = this.parseCommand(query);
-      const typeLabel = parsed.amount < 0 ? 'Expense' : 'Income';
+      const typeLabel = parsed.type === 'expense' ? 'Expense' : 'Income';
       const detail = typeLabel + ': ' + Math.abs(parsed.amount) + ' RSD' + (parsed.category ? ' / ' + parsed.category.name : '') + (parsed.date ? ' / ' + parsed.date : '') + (parsed.note ? ' / ' + parsed.note : '');
       let cmdHtml = '<div class="command-section"><div style="padding:4px 12px;font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text-muted);">COMMAND</div>';
       cmdHtml += this._paletteItemHtml('Create: ' + detail, 'Enter');
       this._cmdPaletteItems.push({
         execute: async () => {
-          const tx = { id: crypto.randomUUID(), date: parsed.date, type: parsed.type, amount: Math.round(Math.abs(parsed.amount) * 100) / 100, currency: 'RSD', accountId: parsed.account.id, categoryId: parsed.category.id, note: parsed.note };
+          const tx = { id: crypto.randomUUID(), date: parsed.date, type: parsed.type, amount: Math.round((parsed.type === 'expense' ? -1 : 1) * Math.abs(parsed.amount) * 100) / 100, currency: 'RSD', accountId: parsed.account.id, categoryId: parsed.category.id, note: parsed.note };
           this.data.transactions.unshift(tx);
           this.syncViewToDate(tx.date);
           await this.save();
