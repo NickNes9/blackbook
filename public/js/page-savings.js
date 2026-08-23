@@ -6,7 +6,7 @@ Object.assign(window.BlackBook, {
     let html = '<div class="cat-filter">';
     for (const g of goals) {
       const color = g.color || this.billColor(g);
-      html += '<div class="cat-filter-chip" style="color:' + color + ';" onclick="BlackBook.toggleSavingsGoal(\x27' + g.id + '\x27)" title="' + this.escapeHtml(g.name) + ' \u00b7 click to show/hide entries">' + this.escapeHtml(g.name) + '</div>';
+      html += '<div class="cat-filter-chip" style="--cc:' + color + ';" onclick="BlackBook.toggleSavingsGoal(\x27' + g.id + '\x27)" title="' + this.escapeHtml(g.name) + ' \u00b7 click to show/hide entries">' + this.escapeHtml(g.name) + '</div>';
     }
     return html + '</div>';
   },
@@ -20,11 +20,8 @@ Object.assign(window.BlackBook, {
       this.savingsSummaryHtml() +
       '<div class="list-sep"></div>' +
       this.savingsChipsHtml() +
-      '<div class="chart-panel chart-panel-full"><canvas id="savings-chart"></canvas></div>' +
-      '<div style="display:flex;justify-content:flex-end;margin:8px 0;"><button class="btn btn-primary" onclick="BlackBook.openNewSavingsGoal()">+ NEW GOAL</button></div>' +
       '<div class="page-scroll-wrap"><div class="cat-label" style="margin-bottom:8px;">GOALS</div>' +
       this.savingsGoalsHtml() + '</div>';
-    setTimeout(() => this.renderSavingsChart(), 50);
   },
 
   goalSaved(goal) { return (goal.entries || []).reduce((s, e) => s + e.amount, 0); },
@@ -45,6 +42,8 @@ Object.assign(window.BlackBook, {
     return '<div class="month-picker">' +
       '<span class="mp-year"><button class="mp-year-btn" onclick="BlackBook.shiftYear(-1)">&#9664;</button><span class="mp-year-label">' + this.vy() + '</span><button class="mp-year-btn" onclick="BlackBook.shiftYear(1)">&#9654;</button></span>' +
       '<button class="mp-today' + (offToday ? ' mp-today-active' : '') + '" onclick="BlackBook.gotoToday()">TODAY</button>' +
+      '<span style="flex:1;"></span>' +
+      '<button class="btn btn-primary" onclick="BlackBook.openNewSavingsGoal()">+ NEW GOAL</button>' +
       '</div>';
   },
 
@@ -115,7 +114,7 @@ Object.assign(window.BlackBook, {
       e.preventDefault();
       const id = document.getElementById('savings-goal-id').value;
       const name = document.getElementById('savings-goal-name').value.trim();
-      const targetAmount = parseFloat(document.getElementById('savings-goal-target').value);
+      const targetAmount = this.evalAmount(document.getElementById('savings-goal-target').value);
       const currency = document.getElementById('savings-goal-currency').value;
       if (!name || isNaN(targetAmount) || targetAmount <= 0) return;
       if (id) {
@@ -166,7 +165,7 @@ Object.assign(window.BlackBook, {
       const goalId = document.getElementById('savings-entry-goal-id').value;
       const date = this.parseDateInput(document.getElementById('savings-entry-date').value);
       if (!date) { alert('Enter a valid date (DD.MM.YYYY).'); return; }
-      const amount = parseFloat(document.getElementById('savings-entry-amount').value);
+      const amount = this.evalAmount(document.getElementById('savings-entry-amount').value);
       const note = document.getElementById('savings-entry-note').value.trim();
       if (!goalId || isNaN(amount) || amount === 0) return;
       const goal = this.data.savingsGoals.find(g => g.id === goalId);
@@ -175,42 +174,6 @@ Object.assign(window.BlackBook, {
       await this.addSavingsEntry(goalId, amount, date, note);
       this.closeModal('savings-entry-modal');
       this.renderSavings();
-    });
-  },
-
-  renderSavingsChart() {
-    if (this.savingsChart) { this.savingsChart.destroy(); this.savingsChart = null; }
-    const canvas = document.getElementById('savings-chart');
-    if (!canvas) return;
-    const goals = this.data.savingsGoals;
-    const MONTHS_S = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
-    const yearStr = String(this.vy());
-    const datasets = goals.map(goal => {
-      let base = 0;
-      for (const e of (goal.entries || [])) { if (e.date.substring(0, 4) < yearStr) base += e.amount; }
-      let run = base;
-      const data = MONTHS_S.map((_, m) => {
-        const mk = yearStr + '-' + String(m + 1).padStart(2, '0');
-        for (const e of (goal.entries || [])) { if (e.date.substring(0, 7) === mk) run += e.amount; }
-        return Math.round(run * 100) / 100;
-      });
-      return { label: goal.name, data: data, borderColor: this.billColor(goal), backgroundColor: this.billColor(goal), tension: 0.3, borderWidth: 2, pointRadius: 3 };
-    });
-    this.savingsChart = new Chart(canvas.getContext('2d'), {
-      type: 'line',
-      data: { labels: MONTHS_S, datasets: datasets },
-      options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        plugins: {
-          legend: { display: false },
-          title: { display: false }
-        },
-        scales: {
-          x: { ticks: { color: '#555555' }, grid: { color: '#141414' } },
-          y: { ticks: { color: '#555555' }, grid: { color: '#141414' } }
-        }
-      }
     });
   },
 

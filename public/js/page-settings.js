@@ -470,6 +470,12 @@ Object.assign(window.BlackBook, {
   },
 
   bindSettingsEvents(el) {
+    el.querySelectorAll('[data-theme-btn]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        this.setTheme(btn.getAttribute('data-theme-btn'));
+        this.renderSettings();
+      });
+    });
     const highlightInput = el.querySelector('#settings-highlight-color');
     if (highlightInput) {
       highlightInput.addEventListener('input', async () => {
@@ -621,6 +627,7 @@ Object.assign(window.BlackBook, {
         await this.save();
         this.closeModal('settings-account-modal');
         this.renderSettings();
+        if (this.currentPage !== 'settings') this.renderPage(this.currentPage);
       });
     }
     const catForm = document.getElementById('settings-category-form');
@@ -756,22 +763,25 @@ Object.assign(window.BlackBook, {
     const defaultCategoryOpts = '<option value="">None</option>' + this.sortedCategories().map(c => '<option value="' + c.id + '"' + (c.id === defaultCategoryId ? ' selected' : '') + '>' + this.escapeHtml(c.name) + '</option>').join('');
 
     let pagesList = '';
-    const PAGE_LABELS = { overview: 'Overview', budget: 'Budget', bills: 'Bills', cards: 'Credit Cards', savings: 'Savings', debts: 'Debts', invoices: 'Invoices' };
+    const PAGE_LABELS = { bills: 'Bills', budget: 'Budget', cards: 'Credit Cards', savings: 'Savings', debts: 'Debts', invoices: 'Invoices' };
     for (const p of Object.keys(PAGE_LABELS)) {
       const on = this.isPageEnabled(p);
       pagesList += '<div class="settings-row">' +
         '<span class="row-swatch" style="visibility:hidden;"></span>' +
         '<span class="settings-row-name">' + PAGE_LABELS[p] + '</span>' +
-        '<span class="settings-row-meta">' + (on ? '' : 'hidden') + '</span>' +
-        '<button class="btn btn-sm ' + (on ? 'btn-paid' : 'btn-muted') + '" onclick="BlackBook.togglePageEnabled(\'' + p + '\')" title="Show/hide this page for the current profile">' + (on ? 'ON' : 'OFF') + '</button></div>';
+        '<button class="btn btn-sm ' + (on ? 'btn-paid' : 'btn-muted') + '" style="width:56px;margin-left:auto;" onclick="BlackBook.togglePageEnabled(\'' + p + '\')" title="Show/hide this page for the current profile">' + (on ? 'ON' : 'OFF') + '</button></div>';
     }
 
     return '<div class="settings-cols">' +
       '<div>' +
       '<div class="settings-section">' +
       '<div class="settings-section-header"><span class="settings-section-title">APPEARANCE</span></div>' +
+      '<div class="form-group" style="margin-bottom:10px;"><label>Theme</label><div style="display:flex;gap:6px;">' +
+      '<button class="btn btn-sm ' + (this.currentTheme() === 'dark' ? 'btn-primary' : 'btn-secondary') + '" data-theme-btn="dark">DARK</button>' +
+      '<button class="btn btn-sm ' + (this.currentTheme() === 'light' ? 'btn-primary' : 'btn-secondary') + '" data-theme-btn="light">LIGHT</button>' +
+      '</div></div>' +
       '<div class="form-row-2col">' +
-      '<div class="form-group"><label>Highlight Color</label><div style="display:flex;align-items:center;gap:8px;"><input type="color" id="settings-highlight-color" value="' + (this.data.settings.highlightColor || '#f9a05c') + '" style="width:28px;height:28px;border:none;background:none;cursor:pointer;padding:0;"><span style="font-size:13px;color:var(--text-dim);">' + (this.data.settings.highlightColor || '#f9a05c') + '</span></div></div>' +
+      '<div class="form-group"><label>Highlight Color</label><div style="display:flex;align-items:center;gap:8px;"><input type="color" id="settings-highlight-color" value="' + (this.data.settings.highlightColor || '#fa8c3c') + '" style="width:28px;height:28px;border:none;background:none;cursor:pointer;padding:0;"><span style="font-size:13px;color:var(--text-dim);">' + (this.data.settings.highlightColor || '#fa8c3c') + '</span></div></div>' +
       '<div class="form-group"><label>Income Color</label><div style="display:flex;align-items:center;gap:8px;"><input type="color" id="settings-income-color" value="' + (this.data.settings.incomeColor || '#4ade80') + '" style="width:28px;height:28px;border:none;background:none;cursor:pointer;padding:0;"><span style="font-size:13px;color:var(--text-dim);">' + (this.data.settings.incomeColor || '#4ade80') + '</span></div></div>' +
       '<div class="form-group"><label>Expense Color</label><div style="display:flex;align-items:center;gap:8px;"><input type="color" id="settings-expense-color" value="' + (this.data.settings.expenseColor || '#f87171') + '" style="width:28px;height:28px;border:none;background:none;cursor:pointer;padding:0;"><span style="font-size:13px;color:var(--text-dim);">' + (this.data.settings.expenseColor || '#f87171') + '</span></div></div>' +
       '</div></div>' +

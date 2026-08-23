@@ -6,14 +6,22 @@ Object.assign(window.BlackBook, {
     if (this.overviewPieChart) { this.overviewPieChart.destroy(); this.overviewPieChart = null; }
     if (this.overviewLineChart) { this.overviewLineChart.destroy(); this.overviewLineChart = null; }
     const hideGraph = !!(this.data.settings && this.data.settings.hideOverviewGraph);
-    const graphHtml = hideGraph
-      ? '<div class="overview-charts" style="justify-content:flex-end;"><button class="btn btn-sm btn-secondary" onclick="BlackBook.toggleOverviewGraph()">SHOW GRAPH</button></div>'
-      : '<div class="overview-charts"><div class="chart-panel overview-line-panel"><canvas id="overview-line-chart"></canvas></div><button class="btn btn-sm btn-secondary overview-hide-btn" onclick="BlackBook.toggleOverviewGraph()" title="Hide income vs expenses graph">HIDE</button></div>';
     el.innerHTML = this.accountCardsHtml() + this.monthPickerHtml() + this.monthSummaryHtml() + this.categoryBreakdownHtml() +
       this.categoryFilterHtml() + '<div class="tx-list-wrap">' + this.recentTransactionsHtml() + '</div>' +
-      graphHtml;
+      (hideGraph
+        ? '<div class="list-sep"></div><div class="graph-show-row"><button class="btn btn-sm btn-secondary" onclick="BlackBook.toggleOverviewGraph()">SHOW GRAPH</button></div>'
+        : '<div class="list-sep"></div><div class="overview-charts"><div class="chart-panel overview-line-panel"><div class="chart-head-row"><span class="chart-title-text">INCOME VS EXPENSES</span><button class="btn btn-sm btn-secondary" onclick="BlackBook.toggleOverviewGraph()" title="Hide graph (H)">HIDE</button></div><canvas id="overview-line-chart"></canvas></div></div>');
     this.bindBarTooltip(el);
     if (!hideGraph) setTimeout(() => { this.renderOverviewLineChart(); }, 50);
+  },
+
+  toggleOvType(t) { if (t === 'income') this._ovInc = !this._ovInc; else this._ovExp = !this._ovExp; this.renderPage('overview'); },
+
+  ovActiveTypes() {
+    if (this._ovInc && this._ovExp) return null;
+    if (this._ovInc) return 'income';
+    if (this._ovExp) return 'expense';
+    return null;
   },
 
   async toggleOverviewGraph() {
@@ -47,7 +55,12 @@ Object.assign(window.BlackBook, {
         if (tx.type === 'income') income += Math.abs(rsd); else expenses += Math.abs(rsd);
       }
     }
-    return '<div class="month-summary"><div class="month-summary-item"><span class="month-summary-label">INCOME</span><span class="month-summary-value amount-positive">' + this.fmtRsd(income) + '</span></div><div class="month-summary-item"><span class="month-summary-label">EXPENSES</span><span class="month-summary-value amount-negative">' + this.fmtRsd(expenses) + '</span></div><div class="month-summary-item"><span class="month-summary-label">NET</span><span class="month-summary-value ' + (income - expenses >= 0 ? 'amount-positive' : 'amount-negative') + '">' + this.fmtRsd(income - expenses) + '</span></div></div>';
+    return '<div class="month-summary"><div class="month-summary-item"><span class="month-summary-label">INCOME</span><span class="month-summary-value amount-positive">' + this.fmtRsd(income) + '</span></div><div class="month-summary-item"><span class="month-summary-label">EXPENSES</span><span class="month-summary-value amount-negative">' + this.fmtRsd(expenses) + '</span></div><div class="month-summary-item"><span class="month-summary-label">NET</span><span class="month-summary-value ' + (income - expenses >= 0 ? 'amount-positive' : 'amount-negative') + '">' + this.fmtRsd(income - expenses) + '</span></div>' +
+      '<span style="flex:1;"></span>' +
+      '<span style="display:flex;gap:6px;align-items:center;">' +
+      '<div class="cat-filter-chip' + (this._ovInc ? ' selected' : '') + '" onclick="BlackBook.toggleOvType(\x27income\x27)" title="Filter the graph and the list to income only">INCOME</div>' +
+      '<div class="cat-filter-chip' + (this._ovExp ? ' selected' : '') + '" onclick="BlackBook.toggleOvType(\x27expense\x27)" title="Filter the graph and the list to expenses only">EXPENSES</div>' +
+      '</span></div>';
   },
 
   categoryBreakdownHtml() {
@@ -151,11 +164,18 @@ Object.assign(window.BlackBook, {
 
   categoryFilterHtml() {
     const allCat = !this.selectedCategory;
+    const y = this.vy(), m = this.vm();
+    const used = new Set();
+    for (const tx of this.data.transactions) {
+      if (this.isTransfer(tx) || !tx.categoryId) continue;
+      const { y: ty, m: tm } = this.ymOf(tx.date);
+      if (ty === y && tm === m) used.add(tx.categoryId);
+    }
     let html = '<div class="cat-filter"><div class="cat-filter-chip' + (allCat ? ' selected' : '') + '" onclick="BlackBook.selectCategory(null)">ALL</div>';
-    const sorted = this.data.categories.slice().sort((a, b) => a.name.localeCompare(b.name));
+    const sorted = this.data.categories.filter(c => used.has(c.id)).sort((a, b) => a.name.localeCompare(b.name));
     for (const c of sorted) {
       const sel = this.selectedCategory === c.id;
-      html += '<div class="cat-filter-chip' + (sel ? ' selected' : '') + '" style="' + (sel ? 'background:' + c.color + ';color:#000;' : 'color:' + c.color + ';') + '" onclick="BlackBook.selectCategory(\x27' + c.id + '\x27)">' + this.escapeHtml(c.name) + '</div>';
+      html += '<div class="cat-filter-chip' + (sel ? ' selected' : '') + '" style="--cc:' + c.color + ';' + (sel ? 'background:' + c.color + ';color:var(--on-fill);' : '') + '" onclick="BlackBook.selectCategory(\x27' + c.id + '\x27)">' + this.escapeHtml(c.name) + '</div>';
     }
     return html + '</div>';
   },
@@ -164,6 +184,8 @@ Object.assign(window.BlackBook, {
     let txs = this.data.transactions.slice().sort((a, b) => b.date.localeCompare(a.date));
     if (this.selectedAccount) txs = txs.filter(t => t.accountId === this.selectedAccount);
     if (this.selectedCategory) txs = txs.filter(t => t.categoryId === this.selectedCategory);
+    const typeFilter = this.ovActiveTypes();
+    if (typeFilter) txs = txs.filter(t => t.type === typeFilter);
     txs = txs.filter(t => { const { y, m } = this.ymOf(t.date); return y === this.vy() && m === this.vm(); });
     if (!txs.length) return '<div class="empty-state" style="padding:20px"><div class="empty-state-text">No transactions this month. Press A to add one.</div></div>';
     const accounts = Object.fromEntries(this.data.accounts.map(a => [a.id, a]));
@@ -173,7 +195,7 @@ Object.assign(window.BlackBook, {
     for (const tx of txs) {
       const card = tx.cardId ? cards[tx.cardId] : null;
       const acc = card
-        ? { color: card.color || '#71717a', shortName: card.name, name: card.name }
+        ? { color: card.color || '#71717a', shortName: card.shortName || '?', name: card.name }
         : (accounts[tx.accountId] || { color: '#52525b', shortName: 'TR', name: 'Transfer' });
       const cat = categories[tx.categoryId] || { color: '#555555', name: '?' };
       const rsd = this.toRsd(tx.amount, tx.currency);
@@ -181,7 +203,7 @@ Object.assign(window.BlackBook, {
       const amtClass = tx.type === 'income' ? 'amt-income' : 'amt-expense';
       let wtClass = '';
       if (Math.abs(rsd) > 10000) wtClass = ' amt-heavy'; else if (Math.abs(rsd) > 5000) wtClass = ' amt-medium';
-      rows += '<div class="tx-row' + (this._bulkSel && this._bulkSel.has(tx.id) ? ' bulk-selected' : '') + '" onmouseenter="BlackBook.hoveredTxId=\x27' + tx.id + '\x27" onmouseleave="BlackBook.hoveredTxId=null"><input type="checkbox" class="tx-bulk" onclick="event.stopPropagation()" onchange="BlackBook.bulkToggle(\x27' + tx.id + '\x27, this.checked)"' + (this._bulkSel && this._bulkSel.has(tx.id) ? ' checked' : '') + '><div class="tx-acct-stripe" style="background:' + acc.color + '"><span class="tx-acct-label">' + this.escapeHtml((acc.shortName || '?').toUpperCase()) + '</span></div><span class="tx-date">' + tx.date + '</span><span class="tx-cat" style="color:' + cat.color + '">' + this.escapeHtml(cat.name) + '</span><span class="tx-note">' + this.escapeHtml(tx.note || '') + '</span><span class="tx-actions"><button class="btn btn-sm btn-secondary" onclick="BlackBook.openEditTransaction(\x27' + tx.id + '\x27)">EDIT</button><button class="btn btn-sm btn-danger" onclick="BlackBook.deleteTransaction(\x27' + tx.id + '\x27)">DEL</button></span><span class="tx-amt ' + amtClass + wtClass + '">' + sign + Math.abs(tx.amount).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' ' + tx.currency + '</span></div>';
+      rows += '<div class="tx-row' + (this._bulkSel && this._bulkSel.has(tx.id) ? ' bulk-selected' : '') + '" onclick="BlackBook.bulkToggle(\x27' + tx.id + '\x27)" onmouseenter="BlackBook.hoveredTxId=\x27' + tx.id + '\x27" onmouseleave="BlackBook.hoveredTxId=null"><div class="tx-acct-stripe" style="background:' + acc.color + '"><span class="tx-acct-label">' + this.escapeHtml((acc.shortName || '?').toUpperCase()) + '</span></div><span class="tx-date">' + tx.date + '</span><span class="tx-cat" style="color:' + cat.color + '">' + this.escapeHtml(cat.name) + '</span><span class="tx-note">' + this.escapeHtml(tx.note || '') + '</span><span class="tx-actions" onclick="event.stopPropagation()"><button class="btn btn-sm btn-secondary" onclick="BlackBook.openEditTransaction(\x27' + tx.id + '\x27)">EDIT</button><button class="btn btn-sm btn-danger" onclick="BlackBook.deleteTransaction(\x27' + tx.id + '\x27)">DEL</button></span><span class="tx-amt ' + amtClass + wtClass + '">' + sign + Math.abs(tx.amount).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' ' + tx.currency + '</span></div>';
     }
     let html = '<div class="tx-list">' + rows + '</div>';
     if (this._bulkSel && this._bulkSel.size) {
@@ -240,13 +262,17 @@ Object.assign(window.BlackBook, {
       const m = d.getMonth(), rsd = this.toRsd(tx.amount, tx.currency);
       if (tx.type === 'income') income[m] += rsd; else expenses[m] += rsd;
     }
+    const incCol = this.data.settings.incomeColor || '#4ade80';
+    const expCol = this.data.settings.expenseColor || '#f87171';
+    const showIncome = !this._ovExp || this._ovInc;
+    const showExpenses = !this._ovInc || this._ovExp;
+    const datasets = [];
+    if (showIncome) datasets.push({ label: 'Income', data: income, borderColor: incCol, backgroundColor: this.hexToRgba(incCol, 0.1), tension: 0.3, fill: true });
+    if (showExpenses) datasets.push({ label: 'Expenses', data: expenses, borderColor: expCol, backgroundColor: this.hexToRgba(expCol, 0.1), tension: 0.3, fill: true });
     this.overviewLineChart = new Chart(canvas.getContext('2d'), {
       type: 'line',
-      data: { labels: months, datasets: [
-        { label: 'Income', data: income, borderColor: '#4ade80', backgroundColor: 'rgba(74,222,128,0.1)', tension: 0.3, fill: true },
-        { label: 'Expenses', data: expenses, borderColor: '#f87171', backgroundColor: 'rgba(248,113,113,0.1)', tension: 0.3, fill: true }
-      ] },
-      options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false }, title: { display: true, text: 'INCOME VS EXPENSES (' + year + ')', color: '#777777', font: { size: 12 } } }, scales: { x: { ticks: { color: '#555555' }, grid: { color: '#222222' } }, y: { ticks: { color: '#555555' }, grid: { color: '#222222' } } } }
+      data: { labels: months, datasets: datasets },
+      options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false }, title: { display: false } }, scales: { x: { ticks: { color: '#555555' }, grid: { color: '#222222' } }, y: { ticks: { color: '#555555' }, grid: { color: '#222222' } } } }
     });
   }
 });

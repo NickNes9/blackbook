@@ -10,12 +10,21 @@ Object.assign(window.BlackBook, {
       '<span class="mp-year"><button class="mp-year-btn" onclick="BlackBook.shiftYear(-1)">&#9664;</button><span class="mp-year-label">' + this.vy() + '</span><button class="mp-year-btn" onclick="BlackBook.shiftYear(1)">&#9654;</button></span>' +
       '<button class="mp-today' + (offToday ? ' mp-today-active' : '') + '" onclick="BlackBook.gotoToday()">TODAY</button>' +
       '<span style="flex:1;"></span>' +
+      this.invoiceFilterChipsHtml() +
       '<button class="btn btn-primary" onclick="BlackBook.openNewInvoice()">+ NEW INVOICE</button>' +
       '</div>';
     html += this.invoicesSummaryHtml();
     html += '<div class="list-sep"></div>';
     html += '<div class="page-scroll-wrap">' + this.invoicesListHtml() + '</div>';
     el.innerHTML = html;
+  },
+
+  setInvoiceFilter(f) { this._invFilter = f; this.renderPage('invoices'); },
+
+  invoiceFilterChipsHtml() {
+    const f = this._invFilter || 'all';
+    const chip = (key, label) => '<div class="cat-filter-chip' + (f === key ? ' selected' : '') + '" onclick="BlackBook.setInvoiceFilter(\x27' + key + '\x27)">' + label + '</div>';
+    return '<div class="cat-filter" style="margin-bottom:0;margin-right:10px;">' + chip('out', 'INCOMES') + chip('in', 'EXPENSES') + chip('all', 'ALL') + '</div>';
   },
 
   _invoicesForYear() {
@@ -43,16 +52,17 @@ Object.assign(window.BlackBook, {
       if (v.dir === 'out') owedMe += remRsd; else iOwe += remRsd;
       if (this.invOverdue(v)) { overdueCnt++; overdueAmt += remRsd; }
     }
-    return '<div class="month-summary" style="margin-bottom:10px;">' +
+    return '<div class="month-summary">' +
       '<div class="month-summary-item"><span class="month-summary-label">INCOME</span><span class="month-summary-value amount-positive">' + this.fmtRsd(owedMe) + '</span></div>' +
       '<div class="month-summary-item"><span class="month-summary-label">EXPENSE</span><span class="month-summary-value amount-negative">' + this.fmtRsd(iOwe) + '</span></div>' +
       '<div class="month-summary-item"><span class="month-summary-label">OVERDUE</span><span class="month-summary-value ' + (overdueCnt ? 'amount-negative' : '') + '">' + (overdueCnt ? overdueCnt + ' &middot; ' + this.fmtRsd(overdueAmt) : this.fmtRsd(0)) + '</span></div></div>';
   },
 
   invoicesListHtml() {
-    const yearInv = this._invoicesForYear();
-    if (!yearInv.length) return '<div class="empty-state"><div class="empty-state-text">No invoices issued in ' + this.vy() + '. Click + NEW INVOICE to create one.</div></div>';
-    const sorted = yearInv.slice().sort((a, b) => {
+    const f = this._invFilter || 'all';
+    const all = f === 'all' ? this._invoicesForYear() : this._invoicesForYear().filter(v => (v.dir === 'out') === (f === 'out'));
+    if (!all.length) return '<div class="empty-state"><div class="empty-state-text">' + (this._invoicesForYear().length ? 'No invoices in this filter.' : 'No invoices issued in ' + this.vy() + '. Click + NEW INVOICE to create one.') + '</div></div>';
+    const sorted = all.slice().sort((a, b) => {
       const pa = this.invIsPaid(a) ? 1 : 0, pb = this.invIsPaid(b) ? 1 : 0;
       if (pa !== pb) return pa - pb;
       return String(a.dueDate || a.date || '').localeCompare(String(b.dueDate || b.date || ''));
@@ -117,8 +127,8 @@ Object.assign(window.BlackBook, {
   _recalcInvTotal() {
     let total = 0;
     document.querySelectorAll('#inv-lines .inv-line').forEach(row => {
-      const qty = parseFloat(String(row.querySelector('.inv-line-qty').value).trim().replace(/\s+/g, '').replace(',', '.')) || 0;
-      const price = parseFloat(String(row.querySelector('.inv-line-price').value).trim().replace(/\s+/g, '').replace(',', '.')) || 0;
+      const qty = this.evalAmount(String(row.querySelector('.inv-line-qty').value)) || 0;
+      const price = this.evalAmount(String(row.querySelector('.inv-line-price').value)) || 0;
       const lineT = Math.round(qty * price * 100) / 100;
       row.querySelector('.inv-line-total').textContent = lineT.toLocaleString('en-US', { maximumFractionDigits: 2 });
       total += lineT;
@@ -198,7 +208,7 @@ Object.assign(window.BlackBook, {
       const id = document.getElementById('invoice-id').value;
       const party = document.getElementById('invoice-party').value.trim();
       if (!party) return;
-      const parseNum = (s) => { const n = parseFloat(String(s).trim().replace(/\s+/g, '').replace(',', '.')); return isNaN(n) ? 0 : Math.round(n * 100) / 100; };
+      const parseNum = (s) => { const n = this.evalAmount(s); return isNaN(n) ? 0 : n; };
       const lines = [];
       document.querySelectorAll('#inv-lines .inv-line').forEach(row => {
         const desc = row.querySelector('.inv-line-desc').value.trim();
@@ -260,7 +270,7 @@ Object.assign(window.BlackBook, {
       e.preventDefault();
       const v = this.data.invoices.find(x => x.id === document.getElementById('ipay-id').value);
       if (!v) return;
-      let amt = Math.round(parseFloat(String(document.getElementById('ipay-amount').value).trim().replace(/\s+/g, '').replace(',', '.')) * 100) / 100;
+      let amt = this.evalAmount(document.getElementById('ipay-amount').value);
       if (!(amt > 0)) { alert('Enter a valid amount.'); return; }
       const remaining = this.invRemaining(v);
       if (amt > remaining) amt = remaining;

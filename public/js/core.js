@@ -33,6 +33,9 @@ window.BlackBook = {
     if (!this.data.debts) this.data.debts = [];
     if (!this.data.invoices) this.data.invoices = [];
     if (this.migrateCreditCards()) await this.save();
+    if (!this.data.billPayments) this.data.billPayments = [];
+    if (this.applyAutopay()) await this.save();
+    this.applyTheme();
     this.applyThemeColors();
     this.updateNavVisibility();
 
@@ -178,7 +181,11 @@ window.BlackBook = {
       if (e.key === 'd' || e.key === 'D') { e.preventDefault(); this.gotoToday(); }
       if (e.key === '/') { e.preventDefault(); document.getElementById('header-command-input').focus(); }
       if (e.key === 'e' || e.key === 'E') { e.preventDefault(); this.editHoveredTransaction(); }
-      if ((e.key === 'h' || e.key === 'H') && this.currentPage === 'overview') { e.preventDefault(); this.toggleOverviewGraph(); return; }
+      if (e.key === 'h' || e.key === 'H') {
+        e.preventDefault();
+        if (this.currentPage === 'overview') { this.toggleOverviewGraph(); return; }
+        if (this.currentPage === 'bills') { this.toggleBillsGraph(); return; }
+      }
       if (e.key === 'Tab') { e.preventDefault(); if (this.currentPage === 'overview') this.cycleAccount(); return; }
       if (/^[1-9]$/.test(e.key)) {
         const idx = parseInt(e.key, 10) - 1;
@@ -214,10 +221,10 @@ window.BlackBook = {
     return '#' + [r, g, b].map(x => Math.round(x * 255).toString(16).padStart(2, '0')).join('');
   },
 
-  pageList() { return ['overview', 'budget', 'bills', 'cards', 'savings', 'debts', 'invoices', 'settings']; },
+  pageList() { return ['overview', 'bills', 'budget', 'cards', 'savings', 'debts', 'invoices', 'settings']; },
 
   isPageEnabled(page) {
-    if (page === 'settings') return true;
+    if (page === 'settings' || page === 'overview') return true;
     const off = (this.data && this.data.settings && this.data.settings.disabledPages) || [];
     return !off.includes(page);
   },
@@ -234,7 +241,7 @@ window.BlackBook = {
   },
 
   async togglePageEnabled(page) {
-    if (page === 'settings' || !this.data.settings) return;
+    if (page === 'settings' || page === 'overview' || !this.data.settings) return;
     if (!this.data.settings.disabledPages) this.data.settings.disabledPages = [];
     const arr = this.data.settings.disabledPages;
     const i = arr.indexOf(page);
@@ -530,7 +537,7 @@ window.BlackBook = {
       }
       searchHtml += '</div>';
     }
-    const allPages = ['overview', 'budget', 'bills', 'cards', 'savings', 'debts', 'invoices', 'settings'];
+    const allPages = ['overview', 'bills', 'budget', 'cards', 'savings', 'debts', 'invoices', 'settings'];
     const matchingPages = allPages.filter(p => p.includes(lq));
     if (matchingPages.length) {
       searchHtml += '<div class="command-section"><div style="padding:4px 12px;font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text-muted);">PAGES</div>';
@@ -555,7 +562,7 @@ window.BlackBook = {
   parseTransferCommand(input) {
     const parts = input.trim().split(/\s+/);
     if (parts[0].toLowerCase() !== 't' && parts[0].toLowerCase() !== 'tr') throw new Error('not transfer');
-    const amount = parseFloat(parts[1]);
+    const amount = this.evalAmount(parts[1]);
     if (isNaN(amount) || amount <= 0) throw new Error('transfer needs positive amount');
     const from = this.findAccountByName(parts[2]);
     const to = this.findAccountByName(parts[3]);
@@ -600,7 +607,7 @@ window.BlackBook = {
     if (!cat) throw new Error('category not found');
     let clear = false, amount = 0;
     if ((parts[2] || '').toLowerCase() === 'clear') { clear = true; }
-    else { amount = parseFloat(parts[2]); if (isNaN(amount) || amount <= 0) throw new Error('budget amount invalid'); }
+    else { amount = this.evalAmount(parts[2]); if (isNaN(amount) || amount <= 0) throw new Error('budget amount invalid'); }
     const label = (clear ? 'Clear budget: ' : 'Set budget: ') + cat.name + (clear ? '' : ' \u00b7 ' + Math.round(amount * 100) / 100 + ' RSD/mo');
     return {
       label: label,
@@ -623,7 +630,7 @@ window.BlackBook = {
     const goalName = (parts[1] || '').toLowerCase();
     const goal = this.data.savingsGoals.find(g => g.name.toLowerCase().startsWith(goalName));
     if (!goal) throw new Error('goal not found');
-    const amount = parseFloat(parts[2]);
+    const amount = this.evalAmount(parts[2]);
     if (isNaN(amount) || amount <= 0) throw new Error('amount invalid');
     const isDep = verb === 'dep' || verb === 'deposit';
     const signed = isDep ? amount : -amount;
@@ -655,7 +662,7 @@ window.BlackBook = {
   parseCommand(input) {
     const parts = input.trim().split(/\s+/);
     if (parts.length < 2) throw new Error('Format: amount category [date] [account] [note]');
-    const amount = parseFloat(parts[0]);
+    const amount = this.evalAmount(parts[0]);
     if (isNaN(amount)) throw new Error('Invalid amount');
     const catName = parts[1];
     const category = this.data.categories.find(c => c.name.toLowerCase().startsWith(catName.toLowerCase()));
@@ -681,6 +688,16 @@ window.BlackBook = {
     return { amount: Math.abs(amount), type: amount < 0 ? 'expense' : 'income', category, date, account, note: noteParts.join(' ') };
   },
 
+  evalAmount(input) {
+    const s = String(input == null ? '' : input).trim().replace(/\s+/g, '').replace(',', '.').replace(/(^|[^0-9.])0+([0-9])/g, '$1$2');
+    if (!s) return NaN;
+    if (!/^[0-9+\-*/().]+$/.test(s)) { const v = parseFloat(s); return isNaN(v) ? NaN : Math.round(v * 100) / 100; }
+    try {
+      const v = Function('"use strict";return (' + s + ')')();
+      return typeof v === 'number' && isFinite(v) ? Math.round(v * 100) / 100 : NaN;
+    } catch (e) { return NaN; }
+  },
+
   ordinalDay(n) {
     const d = parseInt(n, 10);
     if (isNaN(d)) return '';
@@ -688,11 +705,46 @@ window.BlackBook = {
     return d + (s[(v - 20) % 10] || s[v] || s[0]);
   },
 
+  currentTheme() {
+    let t = null;
+    try { t = localStorage.getItem('bb-theme'); } catch (e) {}
+    return t === 'light' ? 'light' : 'dark';
+  },
+
+  applyTheme() {
+    let t = null;
+    try { t = localStorage.getItem('bb-theme'); } catch (e) {}
+    document.documentElement.setAttribute('data-theme', t === 'light' ? 'light' : 'dark');
+  },
+
+  setTheme(t) {
+    try { localStorage.setItem('bb-theme', t); } catch (e) {}
+    this.applyTheme();
+  },
+
+  hexDim(hex, f) {
+    const m = /^#?([0-9a-f]{6})$/i.exec(String(hex || ''));
+    if (!m) return hex;
+    const n = parseInt(m[1], 16);
+    const r = Math.round(((n >> 16) & 255) * f), g = Math.round(((n >> 8) & 255) * f), b = Math.round((n & 255) * f);
+    return 'rgb(' + r + ',' + g + ',' + b + ')';
+  },
+
+  hexToRgba(hex, a) {
+    const m = /^#?([0-9a-f]{6})$/i.exec(String(hex || ''));
+    if (!m) return hex;
+    const n = parseInt(m[1], 16);
+    return 'rgba(' + ((n >> 16) & 255) + ',' + ((n >> 8) & 255) + ',' + (n & 255) + ',' + a + ')';
+  },
+
   applyThemeColors() {
     const s = this.data && this.data.settings;
     if (!s) return;
     const root = document.documentElement.style;
-    if (s.highlightColor) root.setProperty('--accent', s.highlightColor);
+    if (s.highlightColor) {
+      root.setProperty('--accent', s.highlightColor);
+      root.setProperty('--accent-dim', this.hexDim(s.highlightColor, 0.72));
+    }
     if (s.incomeColor) root.setProperty('--income', s.incomeColor);
     if (s.expenseColor) root.setProperty('--expense', s.expenseColor);
   },
@@ -786,8 +838,8 @@ window.BlackBook = {
       e.preventDefault();
       const id = document.getElementById('bill-id').value;
       const rawAmt = String(document.getElementById('bill-amount').value).trim().replace(/\s+/g, '').replace(',', '.');
-      const parsedAmt = Math.round(parseFloat(rawAmt) * 100) / 100;
-      const billData = { name: document.getElementById('bill-name').value, amount: parsedAmt > 0 ? parsedAmt : null, currency: document.getElementById('bill-currency').value, dueDay: parseInt(document.getElementById('bill-dueDay').value), categoryId: document.getElementById('bill-category').value, active: document.getElementById('bill-active').value === 'true', autopay: document.getElementById('bill-autopay').checked, color: document.getElementById('bill-color-auto').checked ? null : document.getElementById('bill-color').value };
+      const parsedAmt = this.evalAmount(rawAmt);
+      const billData = { name: document.getElementById('bill-name').value, amount: parsedAmt > 0 ? parsedAmt : null, currency: document.getElementById('bill-currency').value, dueDay: parseInt(document.getElementById('bill-dueDay').value), categoryId: document.getElementById('bill-category').value, active: document.getElementById('bill-active').value === 'true', autopay: document.getElementById('bill-autopay').checked, payAccountId: document.getElementById('bill-payfrom').value || null, color: document.getElementById('bill-color-auto').checked ? null : document.getElementById('bill-color').value };
       if (id) { const bill = this.data.bills.find(b => b.id === id); if (bill) Object.assign(bill, billData); }
       else { billData.id = crypto.randomUUID(); this.data.bills.push(billData); }
       await this.save(); this.closeModal('bill-modal'); this.renderPage(this.currentPage);
