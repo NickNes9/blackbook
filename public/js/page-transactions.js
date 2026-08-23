@@ -10,13 +10,14 @@ Object.assign(window.BlackBook, {
 
   openNewTransaction(targetId) {
     document.getElementById('tx-id').value = '';
-    document.getElementById('tx-date').value = this.today();
+    document.getElementById('tx-date').value = this.fmtDateInput(this.today());
     document.getElementById('tx-type').value = 'expense';
     document.getElementById('tx-amount').value = '';
     document.getElementById('tx-note').value = '';
     const cardPrefill = targetId && String(targetId).startsWith('card:') ? targetId : null;
-    const defaultAccountId = targetId || this.selectedAccount || this.data.settings.defaultAccountId || (this.data.accounts[0] && this.data.accounts[0].id) || '';
-    document.getElementById('tx-account').innerHTML = this.accountSelectOptions(defaultAccountId) || '<option value="">no accounts</option>';
+    const defaultAccountId = targetId || this.selectedAccount || '';
+    const accSelect = document.getElementById('tx-account');
+    accSelect.innerHTML = (defaultAccountId ? '' : '<option value="">-- SELECT ACCOUNT --</option>') + (this.accountSelectOptions(defaultAccountId) || '<option value="">no accounts</option>');
     const selAcc = cardPrefill ? null : this.data.accounts.find(a => a.id === defaultAccountId);
     document.getElementById('tx-currency').value = selAcc ? (selAcc.currency || 'RSD') : 'RSD';
     const defaultCatId = this.data.settings.defaultCategoryId || (this.data.categories[0] && this.data.categories[0].id) || '';
@@ -60,7 +61,7 @@ Object.assign(window.BlackBook, {
     document.getElementById('tr-amount').value = '';
     document.getElementById('tr-amount-in').value = '';
     document.getElementById('tr-note').value = '';
-    document.getElementById('tr-date').value = new Date().toISOString().slice(0, 10);
+    document.getElementById('tr-date').value = this.fmtDateInput(this.today());
     this.updateTransferCurrencyLabels();
     this.openModal('transfer-modal');
     setTimeout(() => document.getElementById('tr-amount').focus(), 50);
@@ -132,7 +133,7 @@ Object.assign(window.BlackBook, {
       const amountOut = parseFloat(amtOut.value);
       const amountInRaw = amtIn.value.trim();
       const amountIn = amountInRaw === '' ? null : parseFloat(amountInRaw);
-      const date = document.getElementById('tr-date').value || new Date().toISOString().slice(0, 10);
+      const date = this.parseDateInput(document.getElementById('tr-date').value) || this.today();
       const noteExtra = document.getElementById('tr-note').value.trim();
       const ok = await this.doTransfer(from, to, amountOut, noteExtra, date, amountIn);
       if (!ok) return;
@@ -146,7 +147,7 @@ Object.assign(window.BlackBook, {
     const tx = this.data.transactions.find(t => t.id === txId);
     if (!tx) return;
     document.getElementById('tx-id').value = tx.id;
-    document.getElementById('tx-date').value = tx.date;
+    document.getElementById('tx-date').value = this.fmtDateInput(tx.date);
     document.getElementById('tx-type').value = tx.type;
     document.getElementById('tx-amount').value = Math.abs(tx.amount);
     document.getElementById('tx-currency').value = tx.currency;
@@ -234,10 +235,13 @@ Object.assign(window.BlackBook, {
       const id = document.getElementById('tx-id').value;
       const rawParsed = parseFloat(document.getElementById('tx-amount').value.trim().replace(/\s+/g, '').replace(',', '.').replace(/^\+/, ''));
       if (isNaN(rawParsed)) { alert('Please enter a valid amount.'); return; }
+      const txDate = this.parseDateInput(document.getElementById('tx-date').value);
+      if (!txDate) { alert('Enter a valid date (DD.MM.YYYY).'); return; }
       const rawAmt = Math.abs(Math.round(rawParsed * 100) / 100);
       const txType = document.getElementById('tx-type').value;
       const accountVal = document.getElementById('tx-account').value;
-      const txData = { date: document.getElementById('tx-date').value, type: txType, amount: txType === 'income' ? rawAmt : -rawAmt, currency: document.getElementById('tx-currency').value, accountId: accountVal.startsWith('card:') ? null : accountVal, categoryId: document.getElementById('tx-category').value, note: document.getElementById('tx-note').value };
+      if (!accountVal) { alert('Select an account first.'); return; }
+      const txData = { date: txDate, type: txType, amount: txType === 'income' ? rawAmt : -rawAmt, currency: document.getElementById('tx-currency').value, accountId: accountVal.startsWith('card:') ? null : accountVal, categoryId: document.getElementById('tx-category').value, note: document.getElementById('tx-note').value };
       const orig = id ? this.data.transactions.find(t => t.id === id) : null;
       if (orig && orig.cardId) { txData.cardId = orig.cardId; txData.accountId = null; }
       else if (accountVal.startsWith('card:')) { txData.cardId = accountVal.slice(5); }

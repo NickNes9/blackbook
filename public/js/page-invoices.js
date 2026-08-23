@@ -155,9 +155,9 @@ Object.assign(window.BlackBook, {
     this._setInvDir('out');
     document.getElementById('invoice-party').value = '';
     document.getElementById('invoice-number').value = '';
-    document.getElementById('invoice-date').value = this.today();
+    document.getElementById('invoice-date').value = this.fmtDateInput(this.today());
     const in14 = new Date(Date.now() + 14 * 86400000);
-    document.getElementById('invoice-due').value = in14.toISOString().slice(0, 10);
+    document.getElementById('invoice-due').value = this.fmtDateInput(in14.toISOString().slice(0, 10));
     document.getElementById('invoice-currency').value = 'RSD';
     document.getElementById('invoice-note').value = '';
     document.getElementById('inv-lines').innerHTML = this._invLineRow('', '', '');
@@ -176,8 +176,8 @@ Object.assign(window.BlackBook, {
     this._setInvDir(v.dir || 'out');
     document.getElementById('invoice-party').value = v.party || '';
     document.getElementById('invoice-number').value = v.number || '';
-    document.getElementById('invoice-date').value = v.date || '';
-    document.getElementById('invoice-due').value = v.dueDate || '';
+    document.getElementById('invoice-date').value = this.fmtDateInput(v.date || '');
+    document.getElementById('invoice-due').value = this.fmtDateInput(v.dueDate || '');
     document.getElementById('invoice-currency').value = v.currency || 'RSD';
     document.getElementById('invoice-note').value = v.note || '';
     const lines = (v.lines && v.lines.length) ? v.lines : [{ desc: '', qty: '', price: '' }];
@@ -207,7 +207,10 @@ Object.assign(window.BlackBook, {
         if (desc || qty || price) lines.push({ desc: desc, qty: qty, price: price });
       });
       if (!lines.length) { alert('Add at least one line item.'); return; }
-      const data = { dir: document.getElementById('invoice-dir').value, party: party, number: document.getElementById('invoice-number').value.trim(), date: document.getElementById('invoice-date').value || this.today(), dueDate: document.getElementById('invoice-due').value || '', currency: document.getElementById('invoice-currency').value, note: document.getElementById('invoice-note').value.trim(), lines: lines };
+      const invDate = this.parseDateInput(document.getElementById('invoice-date').value) || this.today();
+      const invDue = this.parseDateInput(document.getElementById('invoice-due').value);
+      if (document.getElementById('invoice-due').value.trim() && !invDue) { alert('Enter a valid due date (DD.MM.YYYY).'); return; }
+      const data = { dir: document.getElementById('invoice-dir').value, party: party, number: document.getElementById('invoice-number').value.trim(), date: invDate, dueDate: invDue || '', currency: document.getElementById('invoice-currency').value, note: document.getElementById('invoice-note').value.trim(), lines: lines };
       if (!this.data.invoices) this.data.invoices = [];
       if (id) {
         const v = this.data.invoices.find(x => x.id === id);
@@ -241,8 +244,8 @@ Object.assign(window.BlackBook, {
     document.getElementById('ipay-id').value = id;
     document.getElementById('ipay-amount').value = this.invRemaining(v).toFixed(2);
     document.getElementById('ipay-account').innerHTML = this.visibleAccounts().map(a => '<option value="' + a.id + '"' + (a.currency === (v.currency || 'RSD') ? ' selected' : '') + '>' + this.escapeHtml(a.name) + ' (' + a.currency + ')</option>').join('');
-    document.getElementById('ipay-category').innerHTML = this.data.categories.map(c => '<option value="' + c.id + '">' + this.escapeHtml(c.name) + '</option>').join('');
-    document.getElementById('ipay-date').value = this.today();
+    document.getElementById('ipay-category').innerHTML = this.sortedCategories().map(c => '<option value="' + c.id + '">' + this.escapeHtml(c.name) + '</option>').join('');
+    document.getElementById('ipay-date').value = this.fmtDateInput(this.today());
     document.getElementById('invoice-pay-title').textContent = 'Payment \u2014 ' + (v.party || 'invoice') + ' #' + (v.number || '-');
     this.bindInvPayForm();
     this.openModal('invoice-pay-modal');
@@ -261,7 +264,8 @@ Object.assign(window.BlackBook, {
       if (!(amt > 0)) { alert('Enter a valid amount.'); return; }
       const remaining = this.invRemaining(v);
       if (amt > remaining) amt = remaining;
-      await this.applyInvoicePayment(v, amt, document.getElementById('ipay-account').value, document.getElementById('ipay-category').value, document.getElementById('ipay-date').value || this.today());
+      const payDate = this.parseDateInput(document.getElementById('ipay-date').value) || this.today();
+      await this.applyInvoicePayment(v, amt, document.getElementById('ipay-account').value, document.getElementById('ipay-category').value, payDate);
       this.closeModal('invoice-pay-modal');
       this.renderPage(this.currentPage === 'invoices' ? 'invoices' : this.currentPage);
     });

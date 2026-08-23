@@ -229,7 +229,7 @@ Object.assign(window.BlackBook, {
     if (!card) return;
     document.getElementById('ctx-card').value = cardId;
     document.getElementById('ctx-amount').value = '';
-    document.getElementById('ctx-date').value = this.today();
+    document.getElementById('ctx-date').value = this.fmtDateInput(this.today());
     document.getElementById('ctx-note').value = '';
     document.getElementById('ctx-months').value = '1';
     const sel = document.getElementById('ctx-category');
@@ -253,7 +253,7 @@ Object.assign(window.BlackBook, {
       if (!card) return;
       let amt = Math.round(parseFloat(String(document.getElementById('ctx-amount').value).trim().replace(/\s+/g, '').replace(',', '.')) * 100) / 100;
       if (!(amt > 0)) { alert('Enter a valid amount.'); return; }
-      const date = document.getElementById('ctx-date').value || this.today();
+      const date = this.parseDateInput(document.getElementById('ctx-date').value) || this.today();
       const note = document.getElementById('ctx-note').value.trim();
       const months = parseInt(document.getElementById('ctx-months').value, 10) || 1;
       const categoryId = document.getElementById('ctx-category').value;

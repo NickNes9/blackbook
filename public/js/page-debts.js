@@ -69,9 +69,9 @@ Object.assign(window.BlackBook, {
     document.getElementById('debt-type').value = 'in';
     document.getElementById('debt-amount').value = '';
     document.getElementById('debt-currency').value = 'RSD';
-    document.getElementById('debt-date').value = this.today();
+    document.getElementById('debt-date').value = this.fmtDateInput(this.today());
     const in30 = new Date(Date.now() + 30 * 86400000);
-    document.getElementById('debt-due').value = in30.toISOString().slice(0, 10);
+    document.getElementById('debt-due').value = this.fmtDateInput(in30.toISOString().slice(0, 10));
     document.getElementById('debt-paid').value = '';
     document.getElementById('debt-note').value = '';
     document.getElementById('debt-modal-title').textContent = 'New Debt';
@@ -88,8 +88,8 @@ Object.assign(window.BlackBook, {
     document.getElementById('debt-type').value = d.type || 'in';
     document.getElementById('debt-amount').value = d.amount;
     document.getElementById('debt-currency').value = d.currency || 'RSD';
-    document.getElementById('debt-date').value = d.date || '';
-    document.getElementById('debt-due').value = d.dueDate || '';
+    document.getElementById('debt-date').value = this.fmtDateInput(d.date || '');
+    document.getElementById('debt-due').value = this.fmtDateInput(d.dueDate || '');
     document.getElementById('debt-paid').value = d.amountPaid || '';
     document.getElementById('debt-note').value = d.note || '';
     document.getElementById('debt-modal-title').textContent = 'Edit Debt';
@@ -112,7 +112,10 @@ Object.assign(window.BlackBook, {
       if (!(amount > 0)) { alert('Enter a valid amount.'); return; }
       let amountPaid = parseNum(document.getElementById('debt-paid').value) || 0;
       if (amountPaid > amount) amountPaid = amount;
-      const data = { person: person, type: document.getElementById('debt-type').value, amount: amount, currency: document.getElementById('debt-currency').value, date: document.getElementById('debt-date').value || this.today(), dueDate: document.getElementById('debt-due').value || '', amountPaid: amountPaid, note: document.getElementById('debt-note').value.trim() };
+      const debtDate = this.parseDateInput(document.getElementById('debt-date').value) || this.today();
+      const debtDue = this.parseDateInput(document.getElementById('debt-due').value);
+      if (document.getElementById('debt-due').value.trim() && !debtDue) { alert('Enter a valid due date (DD.MM.YYYY).'); return; }
+      const data = { person: person, type: document.getElementById('debt-type').value, amount: amount, currency: document.getElementById('debt-currency').value, date: debtDate, dueDate: debtDue || '', amountPaid: amountPaid, note: document.getElementById('debt-note').value.trim() };
       if (!this.data.debts) this.data.debts = [];
       if (id) {
         const d = this.data.debts.find(x => x.id === id);

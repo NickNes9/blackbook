@@ -137,6 +137,7 @@ Object.assign(window.BlackBook, {
     const todayDate = now.getDate();
     for (const bill of this.data.bills) {
       if (!bill.active) continue;
+      if (bill.amount == null) continue;
       if (bill.dueDay >= todayDate && bill.dueDay <= todayDate + 7) { upcomingBillCount++; upcomingBillTotal += this.toRsd(bill.amount, bill.currency); }
     }
     return '<div class="metrics-grid">' +
