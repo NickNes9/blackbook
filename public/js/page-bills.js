@@ -2,18 +2,19 @@
 Object.assign(window.BlackBook, {
   billsChipsHtml() {
     const bills = this.data.bills;
-    if (!bills.length) return '';
     let html = '<div class="cat-filter">';
-    const hc = this.data.settings.highlightColor || '#f9a05c';
+    const hc = this.data.settings.highlightColor || '#fa8c3c';
     const totOn = this._billsTotalOn !== false;
-    html += '<div class="cat-filter-chip' + (totOn ? ' selected' : '') + '" style="' + (totOn ? 'background:' + hc + ';color:#000;' : 'color:' + hc + ';') + '" onclick="BlackBook.toggleBillsTotal()" title="Monthly total line \u00b7 click to toggle">' +
+    html += '<div class="cat-filter-chip' + (totOn ? ' selected' : '') + '" style="--cc:' + hc + ';' + (totOn ? 'background:' + hc + ';color:var(--on-fill);' : '') + '" onclick="BlackBook.toggleBillsTotal()" title="Monthly total line \u00b7 click to toggle">' +
       '<span style="' + (totOn ? '' : 'opacity:0.5;') + '">TOTAL</span></div>';
     for (const b of bills) {
       const color = b.color || this.billColor(b);
       const on = b.active !== false;
       const amt = b.amount != null ? ' \u00b7 ' + this.fmtAmount(Math.abs(b.amount), b.currency || 'RSD') : '';
-      html += '<div class="cat-filter-chip' + (on ? ' selected' : '') + '" style="' + (on ? 'background:' + color + ';color:#000;' : 'color:' + color + ';') + (on ? '' : ';opacity:0.55;') + '" onclick="BlackBook.toggleBillActive(\x27' + b.id + '\x27)" title="' + this.escapeHtml(b.name) + amt + ' \u00b7 click to show/hide in graph">' + this.escapeHtml(b.name) + '</div>';
+      html += '<div class="cat-filter-chip' + (on ? ' selected' : '') + '" style="--cc:' + color + ';' + (on ? 'background:' + color + ';color:var(--on-fill);' : '') + (on ? '' : 'opacity:0.55;') + '" onclick="BlackBook.toggleBillActive(\x27' + b.id + '\x27)" title="' + this.escapeHtml(b.name) + amt + ' \u00b7 click to show/hide in graph">' + this.escapeHtml(b.name) + '</div>';
     }
+    html += '<span style="flex:1;"></span>';
+    html += '<button class="btn btn-sm btn-secondary" style="margin-left:4px;" onclick="BlackBook.toggleBillsGraph()" title="Hide bills graph (H)">HIDE</button>';
     return html + '</div>';
   },
 
@@ -25,60 +26,90 @@ Object.assign(window.BlackBook, {
   renderBills() {
     const el = document.getElementById('page-bills');
     if (!el) return;
-    el.innerHTML = this.monthPickerHtml() +
+    const hideGraph = !!(this.data.settings && this.data.settings.hideBillsGraph);
+    const offToday = this.vy() !== new Date().getFullYear();
+    el.innerHTML = '<div class="month-picker">' +
+      '<span class="mp-year"><button class="mp-year-btn" onclick="BlackBook.shiftYear(-1)">&#9664;</button><span class="mp-year-label">' + this.vy() + '</span><button class="mp-year-btn" onclick="BlackBook.shiftYear(1)">&#9654;</button></span>' +
+      '<span style="flex:1;"></span>' +
+      '<button class="btn btn-primary" onclick="BlackBook.openNewBill()">+ NEW BILL</button>' +
+      '<button class="mp-today' + (offToday ? ' mp-today-active' : '') + '" onclick="BlackBook.gotoToday()">TODAY</button>' +
+      '</div>' +
       this.billsSummaryHtml() +
       '<div class="list-sep"></div>' +
-      this.billsChipsHtml() +
-      '<div class="chart-panel chart-panel-full"><canvas id="bills-chart"></canvas></div>' +
-      '<div style="display:flex;justify-content:flex-end;margin:8px 0;"><button class="btn btn-primary" onclick="BlackBook.openNewBill()">+ NEW BILL</button></div>' +
-      '<div class="page-scroll-wrap"><div class="bills-grid-wrap">' + this.billsGridHtml() + '</div></div>';
-    setTimeout(() => this.renderBillsChart(), 50);
+      '<div class="page-scroll-wrap"><div class="bills-grid-wrap">' + this.billsGridHtml() + '</div></div>' +
+      '<div class="list-sep"></div>' +
+      (hideGraph
+        ? '<div class="graph-show-row"><button class="btn btn-sm btn-secondary" onclick="BlackBook.toggleBillsGraph()">SHOW GRAPH</button></div>'
+        : this.billsChipsHtml() +
+          '<div class="overview-charts"><div class="chart-panel chart-panel-full"><canvas id="bills-chart"></canvas></div></div>');
+    if (!hideGraph) setTimeout(() => this.renderBillsChart(), 50);
+  },
+
+  async toggleBillsGraph() {
+    this.data.settings.hideBillsGraph = !(this.data.settings && this.data.settings.hideBillsGraph);
+    await this.save();
+    this.renderPage('bills');
   },
 
   billsSummaryHtml() {
     let total = 0;
     for (const b of this.data.bills) { if (b.amount != null) total += Math.abs(this.toRsd(b.amount, b.currency || 'RSD')); }
-    return '<div class="month-summary" style="margin-bottom:10px;">' +
+    return '<div class="month-summary">' +
       '<div class="month-summary-item"><span class="month-summary-label">MONTHLY TOTAL</span><span class="month-summary-value">' + this.fmtRsd(total) + '</span></div>' +
       '<div class="month-summary-item"><span class="month-summary-label">BILLS</span><span class="month-summary-value">' + this.data.bills.length + '</span></div>' +
       '</div>';
   },
 
   billsGridHtml() {
-    const MONTHS_S = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
-    const now = new Date();
-    const curYM = now.getFullYear() * 12 + now.getMonth();
+    const MONTHS_F = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
     let html = '<div class="bills-grid">';
     html += '<div class="bills-grid-head">BILL</div>';
-    for (let m = 0; m < 12; m++) html += '<div class="bills-grid-head">' + MONTHS_S[m] + '</div>';
+    const now = new Date();
+    const curMonth = this.vy() === now.getFullYear() ? now.getMonth() : -1;
+    for (let m = 0; m < 12; m++) {
+      html += '<div class="bills-grid-head' + (this.vm() === m ? ' selected' : '') + (m === curMonth ? ' current' : '') + '">' + MONTHS_F[m] + '</div>';
+    }
+    html += '<div class="bills-grid-head">TOTAL</div>';
     if (!this.data.bills.length) {
       html += '<div class="bills-grid-empty">No bills yet. Click + NEW BILL to add one.</div>';
     }
+    let bi = 0;
     for (const bill of this.data.bills) {
+      const alt = bi % 2 === 1 ? ' alt' : '';
       const color = bill.color || this.billColor(bill);
-      html += '<div class="bill-cell-label' + (bill.active ? '' : ' inactive') + '">' +
+      let yearTotal = 0;
+      let yearHasPaid = false;
+      for (let m = 0; m < 12; m++) {
+        const p = this.getBillPayment(bill.id, this.vy() + '-' + String(m + 1).padStart(2, '0'));
+        if (!p) continue;
+        const native = p.amount != null ? p.amount : bill.amount;
+        if (native != null) { yearTotal += Math.abs(this.toRsd(native, bill.currency || 'RSD')); yearHasPaid = true; }
+      }
+      html += '<div class="bill-cell-label' + alt + (bill.active ? '' : ' inactive') + '">' +
         '<span class="bill-name-line"><span class="cat-dot" style="background:' + color + ';"></span><span class="bill-name-text">' + this.escapeHtml(bill.name) + '</span><span class="bill-due-day">' + this.ordinalDay(bill.dueDay) + '</span></span>' +
         '<span class="bill-actions-mini">' +
-        '<button class="btn btn-sm ' + (bill.autopay ? 'btn-primary' : 'btn-muted') + '" onclick="BlackBook.toggleBillAutopay(\x27' + bill.id + '\x27)" title="Auto-mark past months as paid">' + (bill.autopay ? 'AUTO' : 'MAN') + '</button>' +
+        '<button class="btn btn-sm ' + (bill.autopay ? 'btn-primary' : 'btn-muted') + '" onclick="BlackBook.toggleBillAutopay(\x27' + bill.id + '\x27)" title="Auto-mark upcoming months as paid">' + (bill.autopay ? 'AUTO' : 'MAN') + '</button>' +
         '<button class="btn btn-sm btn-secondary" onclick="BlackBook.openEditBill(\x27' + bill.id + '\x27)">EDIT</button>' +
         '<button class="btn btn-sm btn-danger" onclick="BlackBook.deleteBill(\x27' + bill.id + '\x27)">DEL</button></span></div>';
       for (let m = 0; m < 12; m++) {
         const mk = this.vy() + '-' + String(m + 1).padStart(2, '0');
-        const ym = this.vy() * 12 + m;
         const paid = this.getBillPayment(bill.id, mk);
-        const cls = paid ? 'paid' : (ym <= curYM ? 'unpaid' : '');
         let amtLabel;
-        if (paid && paid.amount != null) amtLabel = Math.abs(Math.round(this.toRsd(paid.amount, bill.currency || 'RSD'))).toLocaleString('en-US');
-        else if (bill.amount == null) amtLabel = paid ? '\u2713' : '&mdash;';
-        else amtLabel = Math.abs(Math.round(this.toRsd(bill.amount, bill.currency || 'RSD'))).toLocaleString('en-US');
-        const cellStyle = paid ? ' style="background:' + color + ';color:#000;font-weight:700;"' : '';
-        const clickFn = (!paid && bill.amount == null) ? 'openBillPayModal' : 'toggleBillPayment';
-        const hint = (!paid && bill.amount == null) ? 'click to set amount &amp; mark paid' : 'click to toggle';
-        html += '<div class="bill-cell ' + cls + '"' + cellStyle + ' onclick="BlackBook.' + clickFn + '(\x27' + bill.id + '\x27,\x27' + mk + '\x27)" oncontextmenu="BlackBook.openBillPayModal(\x27' + bill.id + '\x27,\x27' + mk + '\x27);return false;" title="' +
+        if (paid) {
+          const native = paid.amount != null ? paid.amount : bill.amount;
+          amtLabel = native != null ? Math.abs(Math.round(this.toRsd(native, bill.currency || 'RSD'))).toLocaleString('en-US') : '\u2713';
+        } else {
+          amtLabel = '';
+        }
+        const cellStyle = paid ? ' style="background:' + color + ';color:var(--on-fill);font-weight:700;"' : '';
+        const clickFn = paid ? 'toggleBillPayment' : 'openBillPayModal';
+        html += '<div class="bill-cell' + alt + (paid ? ' paid' : '') + '"' + cellStyle + ' onclick="BlackBook.' + clickFn + '(\x27' + bill.id + '\x27,\x27' + mk + '\x27)" oncontextmenu="BlackBook.openBillPayModal(\x27' + bill.id + '\x27,\x27' + mk + '\x27);return false;" title="' +
           bill.name + ' \u00b7 due ' + this.ordinalDay(bill.dueDay) +
-          (paid ? (' \u00b7 paid' + (paid.amount != null ? ' (custom)' : '')) : '') +
-          ' &middot; ' + hint + ' &middot; right-click for custom amount">' + amtLabel + '</div>';
+          (paid ? ' \u00b7 paid \u00b7 click to unpay' : ' \u00b7 click to enter amount &amp; mark paid') +
+          ' &middot; right-click for custom amount">' + amtLabel + '</div>';
       }
+      html += '<div class="bill-cell-total' + alt + '"' + (yearHasPaid ? ' style="background:' + color + '22;color:' + color + ';font-weight:700;"' : '') + '>' + (yearHasPaid ? Math.round(yearTotal).toLocaleString('en-US') : '') + '</div>';
+      bi++;
     }
     html += '</div>';
     return html;
@@ -100,6 +131,8 @@ Object.assign(window.BlackBook, {
     catSelect.innerHTML = this.sortedCategories().map(c => '<option value="' + c.id + '">' + this.escapeHtml(c.name) + '</option>').join('');
     const billCat = this.data.categories.find(c => /^bill/i.test(String(c.name).trim()));
     if (billCat) catSelect.value = billCat.id;
+    const paySel = document.getElementById('bill-payfrom');
+    paySel.innerHTML = this.accountSelectOptions(this.data.settings.defaultAccountId || '');
     document.getElementById('bill-modal-title').textContent = 'New Bill';
     this.openModal('bill-modal');
   },
@@ -120,6 +153,8 @@ Object.assign(window.BlackBook, {
     colorEl.disabled = !bill.color;
     const catSelect = document.getElementById('bill-category');
     catSelect.innerHTML = this.sortedCategories().map(c => '<option value="' + c.id + '"' + (c.id === bill.categoryId ? ' selected' : '') + '>' + this.escapeHtml(c.name) + '</option>').join('');
+    const paySel = document.getElementById('bill-payfrom');
+    paySel.innerHTML = this.accountSelectOptions(bill.payAccountId || this.data.settings.defaultAccountId || '');
     document.getElementById('bill-modal-title').textContent = 'Edit Bill';
     this.openModal('bill-modal');
   },
@@ -131,6 +166,7 @@ Object.assign(window.BlackBook, {
   async deleteBill(billId) {
     if (!confirm('Delete this bill?')) return;
     this.data.bills = this.data.bills.filter(b => b.id !== billId);
+    for (const p of (this.data.billPayments || [])) { if (p.billId === billId) this.removeBillTransaction(p); }
     this.data.billPayments = (this.data.billPayments || []).filter(p => p.billId !== billId);
     await this.save();
     this.renderBills();
@@ -145,11 +181,19 @@ Object.assign(window.BlackBook, {
   },
 
   async toggleBillPayment(billId, monthKey) {
-    const mk = monthKey || (this.vy() + '-' + String(this.vm() + 1).padStart(2, '0'));
+    const n = new Date();
+    const mk = monthKey || (n.getFullYear() + '-' + String(n.getMonth() + 1).padStart(2, '0'));
     if (!this.data.billPayments) this.data.billPayments = [];
+    const bill = this.data.bills.find(b => b.id === billId);
     const idx = this.data.billPayments.findIndex(p => p.billId === billId && p.month === mk);
-    if (idx >= 0) { this.data.billPayments.splice(idx, 1); }
-    else { this.data.billPayments.push({ billId: billId, month: mk, paid: true }); }
+    if (idx >= 0) {
+      this.removeBillTransaction(this.data.billPayments[idx]);
+      this.data.billPayments.splice(idx, 1);
+    } else {
+      const pay = { billId: billId, month: mk, paid: true };
+      if (bill) this.attachBillTransaction(bill, pay);
+      this.data.billPayments.push(pay);
+    }
     await this.save();
     this.renderBills();
   },
@@ -164,14 +208,9 @@ Object.assign(window.BlackBook, {
   },
 
   applyAutopayForBill(bill) {
-    const nowYM = new Date().getFullYear() * 12 + new Date().getMonth();
-    for (let ym = nowYM, i = 0; i < 36; ym--, i++) {
-      const y = Math.floor(ym / 12), m = ym % 12;
-      const mk = y + '-' + String(m + 1).padStart(2, '0');
-      if (!this.data.billPayments.some(p => p.billId === bill.id && p.month === mk)) {
-        this.data.billPayments.push({ billId: bill.id, month: mk, paid: true, auto: true });
-      }
-    }
+    const n = new Date();
+    const mk = n.getFullYear() + '-' + String(n.getMonth() + 1).padStart(2, '0');
+    this.ensureBillPaid(bill, mk);
   },
 
   applyAutopay() {
@@ -185,6 +224,45 @@ Object.assign(window.BlackBook, {
     return changed;
   },
 
+  ensureBillPaid(bill, mk) {
+    if (!this.data.billPayments) this.data.billPayments = [];
+    if (this.getBillPayment(bill.id, mk)) return;
+    const pay = { billId: bill.id, month: mk, paid: true, auto: true };
+    this.attachBillTransaction(bill, pay);
+    this.data.billPayments.push(pay);
+  },
+
+  billPayFrom(bill) {
+    const sel = bill.payAccountId;
+    if (sel && sel.startsWith('card:')) return sel;
+    if (sel && this.visibleAccounts().some(a => a.id === sel)) return sel;
+    const def = this.data.settings.defaultAccountId;
+    const fallback = this.visibleAccounts().find(a => a.id === def) || this.visibleAccounts()[0];
+    return fallback ? fallback.id : null;
+  },
+
+  attachBillTransaction(bill, pay) {
+    if (pay.txId) return;
+    const amt = pay.amount != null ? pay.amount : bill.amount;
+    const from = this.billPayFrom(bill);
+    if (amt == null || !from) return;
+    const mp = pay.month.split('-');
+    const y = parseInt(mp[0]), m = parseInt(mp[1]);
+    const day = Math.min(Math.max(parseInt(bill.dueDay) || 1, 1), new Date(y, m, 0).getDate());
+    const txId = 'bil-' + crypto.randomUUID();
+    const tx = { id: txId, date: y + '-' + String(m).padStart(2, '0') + '-' + String(day).padStart(2, '0'), type: 'expense', amount: -Math.abs(amt), currency: bill.currency || 'RSD', categoryId: bill.categoryId || null, note: bill.name };
+    if (from.startsWith('card:')) { tx.cardId = from.slice(5); }
+    else { tx.accountId = from; }
+    this.data.transactions.unshift(tx);
+    pay.txId = txId;
+  },
+
+  removeBillTransaction(pay) {
+    if (!pay.txId) return;
+    this.data.transactions = (this.data.transactions || []).filter(t => t.id !== pay.txId);
+    delete pay.txId;
+  },
+
   renderBillsChart() {
     if (this.billsChart) { this.billsChart.destroy(); this.billsChart = null; }
     const canvas = document.getElementById('bills-chart');
@@ -194,7 +272,7 @@ Object.assign(window.BlackBook, {
     for (let m = 1; m <= 12; m++) months.push(this.vy() + '-' + String(m).padStart(2, '0'));
     const datasets = [];
     if (this._billsTotalOn !== false) {
-      const hc = this.data.settings.highlightColor || '#f9a05c';
+      const hc = this.data.settings.highlightColor || '#fa8c3c';
       datasets.push({
         label: 'TOTAL',
         data: months.map(mk => {
@@ -264,12 +342,18 @@ Object.assign(window.BlackBook, {
       e.preventDefault();
       const billId = document.getElementById('bpay-bill').value;
       const mk = document.getElementById('bpay-month').value;
-      let amt = Math.round(parseFloat(String(document.getElementById('bpay-amount').value).trim().replace(/\s+/g, '').replace(',', '.')) * 100) / 100;
+      let amt = this.evalAmount(document.getElementById('bpay-amount').value);
       if (!(amt > 0)) { alert('Enter a valid amount.'); return; }
       if (!this.data.billPayments) this.data.billPayments = [];
+      const bill = this.data.bills.find(b => b.id === billId);
       const idx = this.data.billPayments.findIndex(p => p.billId === billId && p.month === mk);
-      if (idx >= 0) this.data.billPayments.splice(idx, 1);
-      this.data.billPayments.push({ billId: billId, month: mk, paid: true, amount: amt });
+      if (idx >= 0) {
+        this.removeBillTransaction(this.data.billPayments[idx]);
+        this.data.billPayments.splice(idx, 1);
+      }
+      const pay = { billId: billId, month: mk, paid: true, amount: amt };
+      if (bill) this.attachBillTransaction(bill, pay);
+      this.data.billPayments.push(pay);
       await this.save();
       this.closeModal('bill-pay-modal');
       this.renderBills();

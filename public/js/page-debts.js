@@ -4,11 +4,21 @@ Object.assign(window.BlackBook, {
     const el = document.getElementById('page-debts');
     if (!el) return;
     if (!this.data.debts) this.data.debts = [];
-    let html = '<div class="month-picker" style="justify-content:flex-end;"><button class="btn btn-primary" onclick="BlackBook.openNewDebt()">+ NEW DEBT</button></div>';
+    let html = '<div class="month-picker" style="justify-content:flex-end;">' +
+      this.debtFilterChipsHtml() +
+      '<button class="btn btn-primary" onclick="BlackBook.openNewDebt()">+ NEW DEBT</button></div>';
     html += this.debtsSummaryHtml();
     html += '<div class="list-sep"></div>';
     html += '<div class="page-scroll-wrap">' + this.debtsListHtml() + '</div>';
     el.innerHTML = html;
+  },
+
+  setDebtFilter(f) { this._debtFilter = f; this.renderPage('debts'); },
+
+  debtFilterChipsHtml() {
+    const f = this._debtFilter || 'all';
+    const chip = (key, label) => '<div class="cat-filter-chip' + (f === key ? ' selected' : '') + '" onclick="BlackBook.setDebtFilter(\x27' + key + '\x27)">' + label + '</div>';
+    return '<div class="cat-filter" style="margin-bottom:0;margin-right:10px;">' + chip('in', 'OWED') + chip('out', 'I OWE') + chip('all', 'ALL') + '</div>';
   },
 
   debtRsd(d) { return Math.abs(this.toRsd(d.amount, d.currency || 'RSD')); },
@@ -22,7 +32,7 @@ Object.assign(window.BlackBook, {
       if (d.type === 'in') owedToMe += left; else iOwe += left;
     }
     const net = owedToMe - iOwe;
-    return '<div class="month-summary" style="margin-bottom:10px;">' +
+    return '<div class="month-summary">' +
       '<div class="month-summary-item"><span class="month-summary-label">OWED TO ME</span><span class="month-summary-value amount-positive">' + this.fmtRsd(owedToMe) + '</span></div>' +
       '<div class="month-summary-item"><span class="month-summary-label">I OWE</span><span class="month-summary-value amount-negative">' + this.fmtRsd(iOwe) + '</span></div>' +
       '<div class="month-summary-item"><span class="month-summary-label">NET</span><span class="month-summary-value ' + (net >= 0 ? 'amount-positive' : 'amount-negative') + '">' + this.fmtRsd(net) + '</span></div></div>';
@@ -30,7 +40,10 @@ Object.assign(window.BlackBook, {
 
   debtsListHtml() {
     if (!this.data.debts.length) return '<div class="empty-state"><div class="empty-state-text">No debts tracked. Click + NEW DEBT to add one.</div></div>';
-    const sorted = this.data.debts.slice().sort((a, b) => {
+    const f = this._debtFilter || 'all';
+    const filtered = f === 'all' ? this.data.debts : this.data.debts.filter(d => (d.type === 'in') === (f === 'in'));
+    if (!filtered.length) return '<div class="empty-state"><div class="empty-state-text">No debts in this filter.</div></div>';
+    const sorted = filtered.slice().sort((a, b) => {
       const sa = this.debtIsSettled(a) ? 1 : 0, sb = this.debtIsSettled(b) ? 1 : 0;
       if (sa !== sb) return sa - sb;
       return String(a.dueDate || a.date).localeCompare(String(b.dueDate || b.date));
@@ -107,7 +120,7 @@ Object.assign(window.BlackBook, {
       const id = document.getElementById('debt-id').value;
       const person = document.getElementById('debt-person').value.trim();
       if (!person) return;
-      const parseNum = (v) => Math.round(parseFloat(String(v).trim().replace(/\s+/g, '').replace(',', '.')) * 100) / 100;
+      const parseNum = (v) => { const n = this.evalAmount(v); return isNaN(n) ? 0 : n; };
       const amount = parseNum(document.getElementById('debt-amount').value);
       if (!(amount > 0)) { alert('Enter a valid amount.'); return; }
       let amountPaid = parseNum(document.getElementById('debt-paid').value) || 0;
@@ -150,7 +163,7 @@ Object.assign(window.BlackBook, {
       e.preventDefault();
       const d = this.data.debts.find(x => x.id === document.getElementById('dpay-id').value);
       if (!d) return;
-      let amt = Math.round(parseFloat(String(document.getElementById('dpay-amount').value).trim().replace(/\s+/g, '').replace(',', '.')) * 100) / 100;
+      let amt = this.evalAmount(document.getElementById('dpay-amount').value);
       if (!(amt > 0)) { alert('Enter a valid amount.'); return; }
       const remaining = this.debtRsd(d) - this.debtPaidRsd(d);
       if (amt > remaining) amt = remaining;

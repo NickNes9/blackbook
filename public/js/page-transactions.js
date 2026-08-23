@@ -117,7 +117,7 @@ Object.assign(window.BlackBook, {
       const t = document.getElementById('tr-to');
       const curF = (this.data.accounts.find(a => a.id === f.value) || {}).currency || 'RSD';
       const curT = (this.data.accounts.find(a => a.id === t.value) || {}).currency || 'RSD';
-      const converted = this.convertBetweenCurrencies(parseFloat(amtOut.value), curF, curT);
+      const converted = this.convertBetweenCurrencies(this.evalAmount(amtOut.value), curF, curT);
       if (converted != null) amtIn.value = converted;
     });
     ['tr-from', 'tr-to'].forEach(id => {
@@ -130,9 +130,9 @@ Object.assign(window.BlackBook, {
       e.preventDefault();
       const from = document.getElementById('tr-from').value;
       const to = document.getElementById('tr-to').value;
-      const amountOut = parseFloat(amtOut.value);
+      const amountOut = this.evalAmount(amtOut.value);
       const amountInRaw = amtIn.value.trim();
-      const amountIn = amountInRaw === '' ? null : parseFloat(amountInRaw);
+      const amountIn = amountInRaw === '' ? null : this.evalAmount(amountInRaw);
       const date = this.parseDateInput(document.getElementById('tr-date').value) || this.today();
       const noteExtra = document.getElementById('tr-note').value.trim();
       const ok = await this.doTransfer(from, to, amountOut, noteExtra, date, amountIn);
@@ -169,19 +169,23 @@ Object.assign(window.BlackBook, {
   async deleteTransaction(txId) {
     const removed = this.data.transactions.find(t => t.id === txId);
     this.data.transactions = this.data.transactions.filter(t => t.id !== txId);
+    const bp = (this.data.billPayments || []).find(p => p.txId === txId);
+    if (bp) {
+      this.data.billPayments = this.data.billPayments.filter(p => p !== bp);
+      const bill = (this.data.bills || []).find(b => b.id === bp.billId);
+      if (bill) bill.active = false;
+    }
     try { await this.save(); } catch (e) { if (removed) this.data.transactions.push(removed); }
     this.renderPage(this.currentPage);
   },
 
-  bulkToggle(id, on) {
+  bulkToggle(id) {
     if (!this._bulkSel) this._bulkSel = new Set();
+    const on = !this._bulkSel.has(id);
     if (on) this._bulkSel.add(id); else this._bulkSel.delete(id);
-    const rows = document.querySelectorAll('.tx-row');
-    rows.forEach(r => {
-      const cb = r.querySelector('.tx-bulk');
-      if (!cb) return;
-      const m = cb.getAttribute('onchange').match(/'([^']+)'/);
-      if (m && m[1] === id) r.classList.toggle('bulk-selected', cb.checked);
+    document.querySelectorAll('.tx-row').forEach(r => {
+      const m = (r.getAttribute('onclick') || '').match(/'([^']+)'/);
+      if (m && m[1] === id) r.classList.toggle('bulk-selected', on);
     });
     const wrap = document.querySelector('.tx-list-wrap');
     if (wrap) { const sc = wrap.scrollTop; this.renderOverview(); wrap.scrollTop = sc; }
@@ -233,7 +237,7 @@ Object.assign(window.BlackBook, {
     document.getElementById('transaction-form').addEventListener('submit', async (e) => {
       e.preventDefault();
       const id = document.getElementById('tx-id').value;
-      const rawParsed = parseFloat(document.getElementById('tx-amount').value.trim().replace(/\s+/g, '').replace(',', '.').replace(/^\+/, ''));
+      const rawParsed = this.evalAmount(document.getElementById('tx-amount').value);
       if (isNaN(rawParsed)) { alert('Please enter a valid amount.'); return; }
       const txDate = this.parseDateInput(document.getElementById('tx-date').value);
       if (!txDate) { alert('Enter a valid date (DD.MM.YYYY).'); return; }

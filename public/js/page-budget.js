@@ -23,7 +23,7 @@ Object.assign(window.BlackBook, {
       if (y === year && m === month) { used += Math.abs(this.toRsd(tx.amount, tx.currency)); }
     }
     const totalRemaining = totalBudgeted - used;
-    return '<div class="month-summary" style="margin-bottom:8px;">' +
+    return '<div class="month-summary">' +
       '<div class="month-summary-item"><span class="month-summary-label">TOTAL BUDGET</span><span class="month-summary-value">' + this.fmtRsd(totalBudgeted) + '</span></div>' +
       '<div class="month-summary-item"><span class="month-summary-label">USED</span><span class="month-summary-value">' + this.fmtRsd(used) + '</span></div>' +
       '<div class="month-summary-item"><span class="month-summary-label">REMAINING</span><span class="month-summary-value ' + (totalRemaining >= 0 ? 'amount-positive' : 'amount-negative') + '">' + this.fmtRsd(totalRemaining) + '</span></div>' +
@@ -56,19 +56,20 @@ Object.assign(window.BlackBook, {
       const barWidth = Math.min(pct, 100);
       const rightHtml = budget
         ? '<div class="budget-big-spent ' + (over ? 'amount-negative' : 'amount-positive') + '">' + this.fmtRsd(spentAbs) + '</div>' +
-          '<div class="budget-big-budget">/ ' + this.fmtRsd(amount) + '</div>' +
-          '<div class="budget-left-small">' + (over ? this.fmtRsd(Math.abs(remaining)) + ' OVER' : this.fmtRsd(remaining) + ' left') + '</div>'
+          '<div class="budget-big-budget">/ ' + this.fmtRsd(amount) + '</div>'
         : '<div class="budget-big-spent" style="color:var(--text);">' + this.fmtRsd(spentAbs) + '</div>' +
           '<div class="budget-left-small">NO LIMIT</div>';
+      const budgetName = budget && budget.name ? budget.name : cat.name;
       html += '<div class="budget-card" style="cursor:pointer;" onclick="BlackBook.openBudgetModal(\x27' + cat.id + '\x27)">' +
         '<div class="budget-header">' +
         '<span style="display:flex;align-items:center;gap:8px;">' +
-        '<button class="btn btn-sm ' + (budget ? 'btn-secondary' : 'btn-primary') + '" onclick="event.stopPropagation();BlackBook.openBudgetModal(\x27' + cat.id + '\x27)">' + (budget ? 'EDIT' : 'SET') + '</button>' +
-        '<span style="color:' + cat.color + ';">' + this.escapeHtml(cat.name) + '</span></span>' +
+        '<button class="btn btn-sm ' + (budget ? 'btn-secondary' : 'btn-primary') + '" style="min-width:64px;" onclick="event.stopPropagation();BlackBook.openBudgetModal(\x27' + cat.id + '\x27)">' + (budget ? 'EDIT' : 'SET') + '</button>' +
+        '<span style="color:' + cat.color + ';">' + this.escapeHtml(budgetName) + '</span>' +
+        (budget ? '<span class="budget-pct-inline">' + pct + '% used &middot; <span class="' + (over ? 'amount-negative' : 'amount-positive') + '">' + (over ? this.fmtRsd(Math.abs(remaining)) + ' OVER' : this.fmtRsd(remaining) + ' left') + '</span></span>' : '') +
+        '</span>' +
         '<span class="budget-right">' + rightHtml + '</span>' +
         '</div>' +
-        (budget ? '<div class="budget-bar"><div class="budget-bar-fill ' + barClass + '" style="width:' + barWidth + '%;"></div></div>' +
-        '<div class="budget-amounts"><span>' + pct + '% used &middot; ' + (over ? this.fmtRsd(Math.abs(remaining)) + ' over' : this.fmtRsd(remaining) + ' left') + '</span></div>' : '') +
+        (budget ? '<div class="budget-bar"><div class="budget-bar-fill ' + barClass + '" style="width:' + barWidth + '%;"></div></div>' : '') +
         '</div>';
     }
     return html || '<div class="empty-state"><div class="empty-state-text">No categories. Add categories in Settings first.</div></div>';
@@ -80,6 +81,7 @@ Object.assign(window.BlackBook, {
     const budget = this.data.budgets.find(b => b.categoryId === categoryId);
     document.getElementById('budget-category-id').value = categoryId;
     document.getElementById('budget-category-name').value = cat.name;
+    document.getElementById('budget-name').value = budget && budget.name ? budget.name : '';
     document.getElementById('budget-amount').value = budget ? budget.amount : '';
     this.openModal('budget-modal');
     setTimeout(() => document.getElementById('budget-amount').focus(), 50);
@@ -90,13 +92,22 @@ Object.assign(window.BlackBook, {
       e.preventDefault();
       const catId = document.getElementById('budget-category-id').value;
       const raw = document.getElementById('budget-amount').value.trim();
-      const amount = parseFloat(raw);
+      const amount = this.evalAmount(raw);
       if (!catId) return;
       const existing = this.data.budgets.find(b => b.categoryId === catId);
       if (raw === '' || isNaN(amount) || amount <= 0) {
         if (existing) { this.data.budgets = this.data.budgets.filter(b => b !== existing); }
-      } else if (existing) { existing.amount = amount; }
-      else { this.data.budgets.push({ categoryId: catId, amount: amount }); }
+      } else if (existing) {
+        existing.amount = amount;
+        const customName = document.getElementById('budget-name').value.trim();
+        if (customName) existing.name = customName; else delete existing.name;
+      }
+      else {
+        const newBudget = { categoryId: catId, amount: amount };
+        const customName = document.getElementById('budget-name').value.trim();
+        if (customName) newBudget.name = customName;
+        this.data.budgets.push(newBudget);
+      }
       await this.save();
       this.closeModal('budget-modal');
       this.renderBudget();

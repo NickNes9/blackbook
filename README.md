@@ -1,16 +1,20 @@
 # BLACK BOOK
 
-A local-first personal finance console. Flat-black terminal aesthetic, fully keyboard-driven, single Node.js server with flat-file storage — no cloud, no accounts, your data stays on your machine.
+A local-first personal finance console. Terminal aesthetic with light/dark themes, fully keyboard-driven, single Node.js server with flat-file storage — no cloud, no accounts, your data stays on your machine.
 
 ## Features
 
-- **Accounts** — cash/bank accounts, multiple currencies (RSD base + EUR/USD/CHF/XAU auto-fetched rates)
-- **Transactions** — quick-entry popup (`A`), transfers between accounts (`T`), income vs expense sign convention (`+` prefix = income)
-- **Budgets** — per-category monthly limits with progress bars and over-budget %
-- **Bills** — yearly payment grid, autopay toggle, custom amounts per month (right-click a cell), monthly total strip
-- **Savings goals** — target tracking, deposit/withdraw history, full-width progress bar
-- **Credit cards** — dedicated page, installment plans with first-installment interest (configurable % per card), PAY/PAID slots, custom payments that fill installments greedily, advance credit
-- **Profiles** — isolated data sets (default + named profiles) stored as separate files
+- **Accounts** — cash/bank accounts, multiple currencies (RSD base + EUR/USD/XAU auto-fetched rates)
+- **Transactions** — quick-entry popup (`A`), transfers between accounts (`T`), income vs expense sign convention (`+` prefix = income), click a row to select it for bulk edit/delete
+- **Budgets** — per-category monthly limits (optionally renamed), progress bars, % used · left shown inline, SET/EDIT per row
+- **Bills** — yearly payment grid (zebra rows, vertical separators) with per-bill TOTAL column, pay from any account or card, custom amounts per month (right-click a cell), AUTO mode marks the current month paid automatically and creates linked transactions — deleting one deactivates the bill, year selector + TODAY navigation, `H` toggles the graph
+- **Savings goals** — target tracking, deposit/withdraw history, progress bars, command-palette deposits (`dep goal 500`)
+- **Credit cards** — installment plans with interest baked into the debt (100 @ 5% = 105; first installment carries the interest), PAY/PAID slots, greedy custom payments, advance credit
+- **Debts / Invoices** — OWED · I OWE and INCOMES · EXPENSES · ALL filters inline with the period controls
+- **Overview** — metric panels, category breakdown bar, month filters that drive both the income-vs-expenses graph and the transaction list, `H` hides the graph
+- **Themes** — dark (default) and light, device-level toggle in Settings; customizable highlight, income and expense colors used across UI *and* charts
+- **Math in amount fields** — type `50+20*3`, `(2+3)*4` or `12,5` anywhere an amount is accepted
+- **Profiles** — isolated data sets (default + named profiles) stored as separate files, per-profile page visibility
 - **Command palette** — `/` or `Ctrl-K`: search transactions, pages, quick commands (`t 500 cash bank`, `pay electricity`, `bg groceries 20000`, `csv`, `demo`, …)
 - **Demo data generator** — realistic sample year for trying things out
 
@@ -22,8 +26,9 @@ A local-first personal finance console. Flat-black terminal aesthetic, fully key
 | `T` | Transfer |
 | `D` | Jump to today |
 | `E` | Edit hovered transaction |
-| `←` / `→` | Previous / next month (year on Savings) |
-| `1–6` | Switch pages |
+| `H` | Show/hide graph (Overview, Bills) |
+| `←` / `→` | Previous / next month (year on Bills & Savings) |
+| `1–8` | Switch pages |
 | `Tab` | Cycle account filter (overview) |
 | `/` | Command palette |
 
@@ -46,7 +51,6 @@ Any Node-capable machine can host it: clone, `npm install`, `node server.js`, ex
 
 ---
 
-**BLACK BOOK v0.1.0**
+**BLACK BOOK v0.5.0**
 
 Created by Nikola Nešić
-

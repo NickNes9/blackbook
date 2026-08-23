@@ -1,22 +1,56 @@
 :root {
-  --bg: #000000;
-  --surface: #000000;
+  --bg: #101010;
+  --surface: #101010;
   --surface-raised: #1a1a1a;
   --block: #1f1f1f;
   --block-hover: #2a2a2a;
-  --divider: #141414;
+  --divider: #191919;
+  --border: #2e2e2e;
   --text: #c8c8c8;
-  --text-bright: #ffffff;
-  --text-dim: #777777;
-  --text-muted: #555555;
-  --accent: #f97316;
-  --accent-dim: #c2590f;
+  --text-bright: #f2f0eb;
+  --text-dim: #7a7a7a;
+  --text-muted: #5c5c5c;
+  --accent: #fa8c3c;
+  --accent-dim: #b4652b;
   --income: #4ade80;
   --expense: #f87171;
   --warning: #facc15;
+  --modal-bg: #181818;
+  --stripe: rgba(255, 255, 255, 0.04);
+  --hover-tint: rgba(255, 255, 255, 0.03);
+  --scrim: rgba(0, 0, 0, 0.75);
+  --shadow-pop: 0 12px 48px rgba(0, 0, 0, 0.9);
+  --shadow-up: 0 -8px 24px rgba(0, 0, 0, 0.7);
+  --on-fill: #141414;
   --header-h: 40px;
   --sidebar-w: 152px;
   --footer-h: 32px;
+}
+
+[data-theme="light"] {
+  --bg: #f2f0ec;
+  --surface: #f2f0ec;
+  --surface-raised: #faf9f7;
+  --block: #e5e2dc;
+  --block-hover: #d8d5ce;
+  --divider: #dedbd4;
+  --border: #c9c5bd;
+  --text: #35332f;
+  --text-bright: #111110;
+  --text-dim: #6d6a63;
+  --text-muted: #98948b;
+  --accent: #d47733;
+  --accent-dim: #a35d2a;
+  --income: #16a34a;
+  --expense: #dc2626;
+  --warning: #ca8a04;
+  --modal-bg: #fbfaf7;
+  --stripe: rgba(0, 0, 0, 0.04);
+  --hover-tint: rgba(0, 0, 0, 0.045);
+  --scrim: rgba(40, 36, 30, 0.45);
+  --shadow-pop: 0 12px 40px rgba(40, 36, 30, 0.28);
+  --shadow-up: 0 -8px 24px rgba(40, 36, 30, 0.18);
+  --on-fill: #171512;
 }
 
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -31,7 +65,7 @@ body {
   scrollbar-gutter: stable;
 }
 
-html { background: #000000; }
+html { background: var(--bg); }
 
 ::-webkit-scrollbar { width: 12px; -webkit-appearance: none; appearance: none; }
 ::-webkit-scrollbar-track { background: var(--bg); box-shadow: none; }
@@ -133,7 +167,7 @@ html { background: #000000; }
   position: relative;
   height: 28px;
   background: var(--surface-raised);
-  margin-bottom: 8px;
+  margin-bottom: 6px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -159,7 +193,7 @@ input[type="checkbox"] {
   width: 14px;
   height: 14px;
   border: 1px solid var(--border);
-  background: #161616;
+  background: var(--block);
   cursor: pointer;
   padding: 0;
   margin: 0 4px 0 0;
@@ -170,17 +204,7 @@ input[type="checkbox"]:checked {
   background: var(--accent);
   border-color: var(--accent);
 }
-input[type="checkbox"]:checked::after {
-  content: '';
-  position: absolute;
-  left: 4px;
-  top: 1px;
-  width: 3px;
-  height: 7px;
-  border: solid #000;
-  border-width: 0 2px 2px 0;
-  transform: rotate(45deg);
-}
+
 
 /* Credit card installment rows */
 .inst-status .btn { min-width: 64px; }
@@ -326,7 +350,7 @@ input[type="checkbox"]:checked::after {
 }
 
 .sidebar-nav-item.active {
-  color: #000000;
+  color: var(--on-fill);
   background: var(--accent);
 }
 
@@ -407,12 +431,12 @@ input[type="checkbox"]:checked::after {
 
 .btn-primary {
   background: var(--accent);
-  color: #000000;
+  color: var(--on-fill);
 }
 
 .btn-primary:hover {
   background: var(--accent-dim);
-  color: #000000;
+  color: var(--on-fill);
 }
 
 .btn-secondary {
@@ -427,20 +451,20 @@ input[type="checkbox"]:checked::after {
 
 .btn-danger {
   background: var(--expense);
-  color: #000000;
+  color: var(--on-fill);
 }
 
 .btn-danger:hover {
   background: #fb9a9a;
-  color: #000000;
+  color: var(--on-fill);
 }
 
 .btn-paid {
   background: var(--income);
-  color: #000000;
+  color: var(--on-fill);
 }
 
-.btn-paid:hover { background: #7ee89f; color: #000000; }
+.btn-paid:hover { background: #7ee89f; color: var(--on-fill); }
 
 .btn-unpaid {
   background: var(--block);
@@ -487,7 +511,7 @@ input[type="checkbox"]:checked::after {
 
 .seg-btn.active {
   background: var(--accent);
-  color: #000000;
+  color: var(--on-fill);
 }
 
 /* ===== FORMS ===== */
@@ -508,6 +532,10 @@ input[type="checkbox"]:checked::after {
 }
 
 .input::placeholder { color: var(--text-muted); }
+
+input[type="number"]::-webkit-outer-spin-button,
+input[type="number"]::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
 
 .select {
   width: 100%;
@@ -564,14 +592,14 @@ input[type="checkbox"]:checked::after {
 .modal-backdrop {
   position: absolute;
   inset: 0;
-  background: rgba(0, 0, 0, 0.75);
+  background: var(--scrim);
 }
 
 .modal-content {
   position: relative;
-  background: #0c0c0c;
+  background: var(--modal-bg);
   border-left: 4px solid var(--accent);
-  box-shadow: 0 12px 48px rgba(0, 0, 0, 0.9);
+  box-shadow: var(--shadow-pop);
   padding: 16px;
   width: 100%;
   max-width: 400px;
@@ -654,9 +682,9 @@ input[type="checkbox"]:checked::after {
   transform: translate(-50%, -50%);
   width: 100%;
   max-width: 540px;
-  background: #0c0c0c;
+  background: var(--modal-bg);
   border-left: 4px solid var(--accent);
-  box-shadow: 0 12px 48px rgba(0, 0, 0, 0.9);
+  box-shadow: var(--shadow-pop);
   max-height: 400px;
   display: flex;
   flex-direction: column;
@@ -715,7 +743,7 @@ input[type="checkbox"]:checked::after {
 
 .command-item.active {
   background: var(--accent);
-  color: #000000;
+  color: var(--on-fill);
 }
 
 .command-item-label {
@@ -852,12 +880,12 @@ input[type="checkbox"]:checked::after {
   cursor: pointer;
   border: none;
   background: var(--block);
-  color: var(--text-dim);
+  color: var(--cc, var(--text-dim));
   font-family: inherit;
 }
 
-.cat-filter-chip:hover { background: var(--block-hover); color: var(--text); }
-.cat-filter-chip.selected { background: var(--accent); color: #000000; }
+.cat-filter-chip:hover { background: var(--cc, var(--block-hover)); color: var(--on-fill); }
+.cat-filter-chip.selected { background: var(--accent); color: var(--on-fill); }
 
 .cat-filter-square {
   width: 10px;
@@ -866,7 +894,7 @@ input[type="checkbox"]:checked::after {
 }
 
 .cat-filter-chip.selected .cat-filter-square {
-  background: #000000 !important;
+  background: var(--on-fill) !important;
 }
 
 /* ===== TRANSACTION LIST ===== */
@@ -882,16 +910,16 @@ input[type="checkbox"]:checked::after {
   box-shadow: 0 -1px 0 var(--divider) inset;
 }
 
-.tx-row:nth-child(even) { background: #0d0d0d; }
+.tx-row:nth-child(even) { background: var(--stripe); }
 .tx-row:hover { background: var(--surface-raised); }
 
-.budget-card:nth-child(even) { background: #0d0d0d; }
+.budget-card:nth-child(even) { background: var(--stripe); }
 
 /* Zebras elsewhere */
-.inst-row:nth-child(even) { background: rgba(255,255,255,0.045); }
-.settings-row:nth-child(even) { background: #0d0d0d; }
-.savings-card:nth-child(even) { background: #0d0d0d; }
-.plan-card:nth-child(even) { background: #0d0d0d; }
+.inst-row:nth-child(even) { background: var(--stripe); }
+.settings-row:nth-child(even) { background: var(--stripe); }
+.savings-card:nth-child(even) { background: var(--stripe); }
+.plan-card:nth-child(even) { background: var(--stripe); }
 
 .settings-footer {
   text-align: right;
@@ -912,36 +940,11 @@ input[type="checkbox"]:checked::after {
 }
 .debt-badge-in { color: var(--income); border-color: var(--income); }
 .debt-badge-out { color: var(--expense); border-color: var(--expense); }
-.debt-badge-settled { color: #000; background: var(--income); border-color: var(--income); }
+.debt-badge-settled { color: var(--on-fill); background: var(--income); border-color: var(--income); }
 
 /* Bulk edit */
-.tx-bulk {
-  -webkit-appearance: none;
-  appearance: none;
-  width: 13px;
-  height: 13px;
-  border: 1px solid var(--border);
-  background: #161616;
-  cursor: pointer;
-  flex-shrink: 0;
-  position: relative;
-}
-.tx-bulk:checked {
-  background: var(--accent);
-  border-color: var(--accent);
-}
-.tx-bulk:checked::after {
-  content: '';
-  position: absolute;
-  left: 3.5px;
-  top: 0.5px;
-  width: 3px;
-  height: 7px;
-  border: solid #000;
-  border-width: 0 2px 2px 0;
-  transform: rotate(45deg);
-}
-.tx-row.bulk-selected { background: rgba(249, 165, 92, 0.10); }
+.tx-row { cursor: pointer; }
+.tx-row.bulk-selected { box-shadow: inset 8px 0 0 var(--accent), 0 -1px 0 var(--divider) inset; }
 .bulk-bar {
   display: flex;
   align-items: center;
@@ -971,7 +974,7 @@ input[type="checkbox"]:checked::after {
 
 .tx-acct-stripe {
   width: 28px;
-  height: 100%;
+  height: 28px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -982,7 +985,7 @@ input[type="checkbox"]:checked::after {
 .tx-acct-label {
   font-size:11px;
   font-weight: 700;
-  color: #000000;
+  color: var(--on-fill);
 }
 
 .tx-date {
@@ -1025,7 +1028,7 @@ input[type="checkbox"]:checked::after {
 .cat-seg-inner {
   font-size:12px;
   font-weight: 700;
-  color: #000000;
+  color: var(--on-fill);
   overflow: hidden;
   white-space: nowrap;
 }
@@ -1064,7 +1067,7 @@ input[type="checkbox"]:checked::after {
   background: var(--surface-raised);
 }
 
-.data-table tbody tr:nth-child(even) { background: #0d0d0d; }
+.data-table tbody tr:nth-child(even) { background: var(--stripe); }
 
 .data-table .amount-positive { color: var(--income); font-weight: 600; }
 .data-table .amount-negative { color: var(--expense); font-weight: 600; }
@@ -1098,7 +1101,7 @@ input[type="checkbox"]:checked::after {
 .month-summary {
   display: flex;
   gap: 24px;
-  margin-bottom: 20px;
+  margin-bottom: 10px;
   font-size:16px;
 }
 
@@ -1191,7 +1194,7 @@ input[type="checkbox"]:checked::after {
 
 .mp-month.selected {
   background: var(--accent);
-  color: #000000;
+  color: var(--on-fill);
 }
 
 .mp-today {
@@ -1207,7 +1210,7 @@ input[type="checkbox"]:checked::after {
 
 .mp-today-active {
   background: var(--accent);
-  color: #000;
+  color: var(--on-fill);
 }
 
 .mp-today:hover { background: var(--block-hover); color: var(--accent); }
@@ -1215,7 +1218,7 @@ input[type="checkbox"]:checked::after {
 /* ===== BAR TOOLTIP ===== */
 #bar-tooltip {
   position: fixed;
-  background: #222222;
+  background: var(--surface-raised);
   color: var(--text-bright);
   font-size:12px;
   padding: 4px 8px;
@@ -1275,7 +1278,7 @@ input[type="checkbox"]:checked::after {
   justify-content: center;
   font-size:13px;
   font-weight: 700;
-  color: #000000;
+  color: var(--on-fill);
   overflow: hidden;
   white-space: nowrap;
   min-width: 2px;
@@ -1321,7 +1324,7 @@ input[type="checkbox"]:checked::after {
 
 .account-chip.selected {
   background: var(--accent);
-  color: #000000;
+  color: var(--on-fill);
 }
 
 .chip-name { font-weight: 700; letter-spacing: 4px; }
@@ -1332,7 +1335,7 @@ input[type="checkbox"]:checked::after {
   font-weight: 700;
 }
 
-.account-chip.selected .chip-name { color: #000000; }
+.account-chip.selected .chip-name { color: var(--on-fill); }
 .account-chip.selected .chip-balance { color: rgba(0,0,0,0.6); }
 
 /* ===== FILTER BAR ===== */
@@ -1372,7 +1375,7 @@ input[type="checkbox"]:checked::after {
 
 .filter-cat-chip.active {
   background: var(--accent);
-  color: #000000;
+  color: var(--on-fill);
   font-weight: 700;
 }
 
@@ -1384,9 +1387,9 @@ input[type="checkbox"]:checked::after {
   transform: translateX(-50%);
   width: 90%;
   max-width: 680px;
-  background: #0c0c0c;
+  background: var(--modal-bg);
   border-left: 4px solid var(--accent);
-  box-shadow: 0 12px 48px rgba(0, 0, 0, 0.9);
+  box-shadow: var(--shadow-pop);
   padding: 10px 12px;
   z-index: 90;
 }
@@ -1615,6 +1618,13 @@ input[type="checkbox"]:checked::after {
   color: var(--text-dim);
 }
 
+.budget-pct-inline {
+  margin-left: 14px;
+  font-size: 13px;
+  color: var(--text-dim);
+  white-space: nowrap;
+}
+
 .budget-right {
   display: flex;
   flex-direction: column;
@@ -1632,7 +1642,7 @@ input[type="checkbox"]:checked::after {
 .budget-big-budget {
   font-size: 15px;
   font-weight: 600;
-  color: #ffffff;
+  color: var(--text-bright);
 }
 
 .budget-left-small {
@@ -1694,7 +1704,7 @@ input[type="checkbox"]:checked::after {
 }
 
 .settings-row:last-child { box-shadow: none; }
-.settings-row:hover { background: rgba(255, 255, 255, 0.03); }
+.settings-row:hover { background: var(--hover-tint); }
 
 .settings-row-name {
   flex: 1;
@@ -1730,7 +1740,7 @@ input[type="checkbox"]:checked::after {
 .rate-grid-row:last-child { box-shadow: none; }
 
 .settings-rate-card .rate-grid-row:nth-child(even):not(.rate-grid-head) {
-  background: rgba(255, 255, 255, 0.04);
+  background: var(--stripe);
 }
 
 .rate-unit {
@@ -1802,14 +1812,14 @@ input[type="checkbox"]:checked::after {
   bottom: 38px;
   left: 50%;
   transform: translateX(-50%);
-  background: #0c0c0c;
+  background: var(--modal-bg);
   border-left: 4px solid var(--accent);
   padding: 6px 14px;
   display: flex;
   align-items: center;
   gap: 10px;
   z-index: 90;
-  box-shadow: 0 12px 48px rgba(0, 0, 0, 0.9);
+  box-shadow: var(--shadow-pop);
 }
 
 .bulk-actions.hidden { display: none; }
@@ -1884,8 +1894,8 @@ h1, h2, h3 {
   top: auto;
   left: 0;
   right: 0;
-  background: #1a1a1a;
-  box-shadow: 0 -8px 24px rgba(0, 0, 0, 0.7);
+  background: var(--surface-raised);
+  box-shadow: var(--shadow-up);
   max-height: 240px;
   overflow-y: auto;
   z-index: 60;
@@ -1906,7 +1916,7 @@ h1, h2, h3 {
 .category-dropdown-item:hover,
 .category-dropdown-item.active {
   background: var(--accent);
-  color: #000000;
+  color: var(--on-fill);
 }
 
 .cat-dot {
@@ -1937,7 +1947,7 @@ h1, h2, h3 {
 
 .bills-grid {
   display: grid;
-  grid-template-columns: minmax(200px, 250px) repeat(12, minmax(52px, 1fr));
+  grid-template-columns: minmax(200px, 250px) repeat(12, minmax(52px, 1fr)) minmax(72px, 92px);
   gap: 2px;
   margin-bottom: 20px;
   font-size:12px;
@@ -1950,11 +1960,50 @@ h1, h2, h3 {
   padding: 4px 6px;
   font-size:11px;
   letter-spacing: 0.5px;
+  box-shadow: inset 1px 0 0 var(--divider);
 }
+
+.bill-cell-total {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  padding: 0 8px;
+  white-space: nowrap;
+  box-shadow: inset 1px 0 0 var(--divider), inset 0 -1px 0 var(--divider);
+}
+
+.bills-grid > .alt { background: var(--stripe); }
 
 .bills-grid-head:not(:first-child) { text-align: center; }
 
+.bills-grid-head.current { background: var(--block-hover); color: var(--text-bright); }
+.bills-grid-head.selected { background: var(--accent); color: var(--on-fill); }
+
 .overview-charts { position: relative; }
+
+.graph-show-row {
+  display: flex;
+  justify-content: flex-end;
+  margin: 2px 0 2px;
+}
+.graph-show-row + .overview-charts { margin-top: 0; }
+.cat-filter + .overview-charts { margin-top: 0; }
+.list-sep + .overview-charts { margin-top: 0; }
+
+.chart-head-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 4px;
+}
+
+.chart-title-text {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  color: var(--text-dim);
+}
 .overview-hide-btn {
   position: absolute;
   top: 4px;
@@ -2020,7 +2069,7 @@ h1, h2, h3 {
   flex-direction: column;
   gap: 2px;
   padding: 6px;
-  box-shadow: inset 0 -1px 0 var(--divider);
+  box-shadow: inset 0 -1px 0 var(--divider), inset 1px 0 0 var(--divider);
 }
 
 .bill-cell-label.inactive { opacity: 0.45; }
@@ -2068,10 +2117,10 @@ h1, h2, h3 {
   align-items: center;
   justify-content: center;
   padding: 4px 2px;
-  box-shadow: inset 0 -1px 0 var(--divider);
+  box-shadow: inset 0 -1px 0 var(--divider), inset 1px 0 0 var(--divider);
   cursor: pointer;
   color: var(--text-muted);
-  font-size: 9.5px;
+  font-size: 12px;
   user-select: none;
   min-height: 34px;
 }

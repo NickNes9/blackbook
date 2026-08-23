@@ -5,17 +5,18 @@ Object.assign(window.BlackBook, {
       (this.data.creditCards || []).find(c => c.legacyAccountId === inst.accountId) || null;
   },
 
+  instGrandTotal(inst) { const r = inst.ratePct != null ? inst.ratePct : 5; return Math.round(inst.total * (1 + r / 100) * 100) / 100; },
   instMonthlyAmount(inst) { return Math.round(inst.total / inst.months * 100) / 100; },
-  instInterest(inst) { return Math.round(inst.total * (inst.ratePct != null ? inst.ratePct : 5)) / 100; },
+  instInterest(inst) { return Math.round((this.instGrandTotal(inst) - inst.total) * 100) / 100; },
   instBaseAmount(inst, seq) {
     if (seq === inst.months && inst.months > 1) return Math.round((inst.total - this.instMonthlyAmount(inst) * (inst.months - 1)) * 100) / 100;
     return this.instMonthlyAmount(inst);
   },
   instDueAmount(inst, seq) { return Math.round((this.instBaseAmount(inst, seq) + (seq === 1 ? this.instInterest(inst) : 0)) * 100) / 100; },
   instOutstanding(inst) {
-    let paidPrincipal = inst.advance || 0;
-    for (const e of this.instPaidEntries(inst)) paidPrincipal += this.instBaseAmount(inst, e.seq);
-    return Math.max(0, Math.round((inst.total - paidPrincipal) * 100) / 100);
+    let paid = inst.advance || 0;
+    for (const e of this.instPaidEntries(inst)) paid += this.instDueAmount(inst, e.seq);
+    return Math.max(0, Math.round((this.instGrandTotal(inst) - paid) * 100) / 100);
   },
   instIsClosed(inst) {
     if (this.instOutstanding(inst) > 0.009) return false;
@@ -49,16 +50,15 @@ Object.assign(window.BlackBook, {
 
   cardsSummaryHtml() {
     const cards = this.data.creditCards || [];
-    if (!cards.length) return '';
     let totalOwed = 0, totalPlanned = 0;
     for (const inst of this.data.installments) {
       const card = this.instCard(inst);
       if (!card) continue;
       totalOwed += this.instOutstanding(inst);
-      totalPlanned += inst.total + this.instInterest(inst);
+      totalPlanned += this.instGrandTotal(inst);
     }
     const pct = totalPlanned > 0 ? Math.min(Math.round((totalPlanned - totalOwed) / totalPlanned * 100), 100) : 0;
-    return '<div class="month-summary" style="margin-bottom:10px;">' +
+    return '<div class="month-summary">' +
       '<div class="month-summary-item"><span class="month-summary-label">TOTAL DEBT</span><span class="month-summary-value amount-negative">' + this.fmtRsd(totalOwed) + '</span></div>' +
       '<div class="month-summary-item"><span class="month-summary-label">PAID OFF</span><span class="month-summary-value amount-positive">' + pct + '%</span></div></div>';
   },
@@ -97,16 +97,16 @@ Object.assign(window.BlackBook, {
     html += '<div class="savings-header">' +
       '<span class="savings-name">' + this.escapeHtml(inst.name) + '</span>' +
       '<span class="savings-actions">' +
-      '<span class="inst-count-badge"' + (closed ? ' style="border-color:' + color + ';color:#000;background:' + color + ';"' : '') + '>' + paidCount + '/' + inst.months + ' PAID</span>' +
+      '<span class="inst-count-badge"' + (closed ? ' style="border-color:' + color + ';color:var(--on-fill);background:' + color + ';"' : '') + '>' + paidCount + '/' + inst.months + ' PAID</span>' +
       '<span class="inst-custom"><input type="text" inputmode="decimal" id="cust-' + inst.id + '" class="input inst-custom-input" placeholder="AMOUNT" autocomplete="off">' +
       (closed ? '' : '<button class="btn btn-sm btn-primary" onclick="BlackBook.customPayInstallments(\x27' + inst.id + '\x27)" title="Pay the amount entered - fills installments in order">PAY</button>') + '</span>' +
       '<button class="btn btn-sm btn-danger" onclick="BlackBook.deleteInstallment(\x27' + inst.id + '\x27)">DEL</button></span></div>';
     html += '<div class="savings-progress-text"><span>' + (closed ? '&#10003; FULLY PAID OFF' :
-      'LEFT ' + this.fmtRsd(this.instOutstanding(inst)) + ' of ' + this.fmtRsd(inst.total)) + '</span><span>' + pct + '%</span></div>' +
+      'LEFT ' + this.fmtRsd(this.instOutstanding(inst)) + ' of ' + this.fmtRsd(this.instGrandTotal(inst))) + '</span><span>' + pct + '%</span></div>' +
       '<div class="savings-progress-bar"><div class="savings-progress-fill" style="width:' + pct + '%;background:' + color + ';"></div></div>';
     html += '<div class="bill-meta-line" style="display:block;margin-top:6px;">' +
-      this.fmtRsd(this.instMonthlyAmount(inst)) + ' &times; ' + inst.months + ' &middot; TOTAL ' + this.fmtRsd(inst.total) +
-      ' &middot; INT ' + (inst.ratePct != null ? inst.ratePct : 5) + '% FIRST (' + this.fmtRsd(this.instInterest(inst)) + ')' +
+      this.fmtRsd(this.instMonthlyAmount(inst)) + ' &times; ' + inst.months +
+      ' &middot; PRICE ' + this.fmtRsd(inst.total) + ' + INT ' + (inst.ratePct != null ? inst.ratePct : 5) + '% (' + this.fmtRsd(this.instInterest(inst)) + ') = TOTAL ' + this.fmtRsd(this.instGrandTotal(inst)) +
       ' &middot; DUE ' + (inst.dueDay || 15) + '/mo &middot; FROM ' + inst.startMonth +
       (advance > 0 ? ' &middot; <span class="amount-positive">ADVANCE ' + this.fmtRsd(advance) + '</span>' : '') + '</div>';
     html += '<div class="inst-rows">';
@@ -145,9 +145,9 @@ Object.assign(window.BlackBook, {
     const entry = paidEntries.find(e => e.seq === seq);
     if (!entry) {
       if (this.instIsClosed(inst)) return;
-      const base = this.instBaseAmount(inst, seq);
-      if ((inst.advance || 0) >= base - 0.009) {
-        inst.advance = Math.round(((inst.advance || 0) - base) * 100) / 100;
+      const due = this.instDueAmount(inst, seq);
+      if ((inst.advance || 0) >= due - 0.009) {
+        inst.advance = Math.round(((inst.advance || 0) - due) * 100) / 100;
         paidEntries.push({ seq: seq, via: 'advance' });
       } else {
         this.createInstPaymentTx(inst, seq);
@@ -156,7 +156,7 @@ Object.assign(window.BlackBook, {
     } else {
       inst.paid = paidEntries.filter(e => e.seq !== seq);
       if (entry.via === 'advance') {
-        inst.advance = Math.round(((inst.advance || 0) + this.instBaseAmount(inst, seq)) * 100) / 100;
+        inst.advance = Math.round(((inst.advance || 0) + this.instDueAmount(inst, seq)) * 100) / 100;
       } else {
         const pairId = 'inst-' + inst.id + '-s' + seq;
         this.data.transactions = this.data.transactions.filter(t => t.pairId !== pairId);
@@ -174,7 +174,7 @@ Object.assign(window.BlackBook, {
     const amount = this.instDueAmount(inst, seq);
     const pairId = 'inst-' + inst.id + '-s' + seq;
     const date = this.mkOfSeq(inst, seq) + '-' + String(inst.dueDay || 15).padStart(2, '0');
-    const note = 'Installment ' + inst.name + ' ' + seq + '/' + inst.months + (seq === 1 ? ' (incl ' + this.fmtRsd(this.instInterest(inst)) + ' int)' : '');
+    const note = 'Installment ' + inst.name + ' ' + seq + '/' + inst.months;
     this.data.transactions.unshift({ id: 'tx-' + pairId, type: 'expense', amount: -amount, currency: acc.currency || 'RSD', accountId: fundingAccId, categoryId: catId, date: date, note: note, pairId: pairId });
   },
 
@@ -187,16 +187,16 @@ Object.assign(window.BlackBook, {
     const paidEntries = this.instPaidEntries(inst);
     const outstanding = this.instOutstanding(inst);
     if (!(outstanding > 0)) { alert('Nothing left to pay on this plan.'); return; }
-    let amt = Math.round(parseFloat(rawVal.replace(/\s+/g, '').replace(',', '.')) * 100) / 100;
+    let amt = this.evalAmount(rawVal);
     if (!(amt > 0)) { alert('Enter a valid amount.'); return; }
     let rem = amt, cleared = 0;
     for (let s = 1; s <= inst.months; s++) {
       if (paidEntries.some(e => e.seq === s)) continue;
-      const base = this.instBaseAmount(inst, s);
-      if (rem >= base - 0.009) {
+      const due = this.instDueAmount(inst, s);
+      if (rem >= due - 0.009) {
         this.createInstPaymentTx(inst, s);
         paidEntries.push({ seq: s, via: 'tx' });
-        rem = Math.round((rem - base) * 100) / 100;
+        rem = Math.round((rem - due) * 100) / 100;
         cleared++;
       } else break;
     }
@@ -251,7 +251,7 @@ Object.assign(window.BlackBook, {
       const cardId = document.getElementById('ctx-card').value;
       const card = this.cardById(cardId);
       if (!card) return;
-      let amt = Math.round(parseFloat(String(document.getElementById('ctx-amount').value).trim().replace(/\s+/g, '').replace(',', '.')) * 100) / 100;
+      let amt = this.evalAmount(document.getElementById('ctx-amount').value);
       if (!(amt > 0)) { alert('Enter a valid amount.'); return; }
       const date = this.parseDateInput(document.getElementById('ctx-date').value) || this.today();
       const note = document.getElementById('ctx-note').value.trim();
