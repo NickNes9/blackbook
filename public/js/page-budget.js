@@ -12,16 +12,20 @@ Object.assign(window.BlackBook, {
 
   budgetSummaryHtml() {
     const year = this.vy(), month = this.vm();
+    const budgetedIds = new Set(this.data.budgets.map(b => b.categoryId));
     let totalBudgeted = 0;
     for (const b of this.data.budgets) { totalBudgeted += b.amount; }
-    let totalSpent = 0;
+    let used = 0;
     for (const tx of this.data.transactions) {
       if (tx.type !== 'expense') continue;
+      if (!budgetedIds.has(tx.categoryId) || this.isTransfer(tx)) continue;
       const { y, m } = this.ymOf(tx.date);
-      if (y === year && m === month) { totalSpent += this.toRsd(tx.amount, tx.currency); }
+      if (y === year && m === month) { used += Math.abs(this.toRsd(tx.amount, tx.currency)); }
     }
-    const totalRemaining = totalBudgeted - Math.abs(totalSpent);
+    const totalRemaining = totalBudgeted - used;
     return '<div class="month-summary" style="margin-bottom:8px;">' +
+      '<div class="month-summary-item"><span class="month-summary-label">TOTAL BUDGET</span><span class="month-summary-value">' + this.fmtRsd(totalBudgeted) + '</span></div>' +
+      '<div class="month-summary-item"><span class="month-summary-label">USED</span><span class="month-summary-value">' + this.fmtRsd(used) + '</span></div>' +
       '<div class="month-summary-item"><span class="month-summary-label">REMAINING</span><span class="month-summary-value ' + (totalRemaining >= 0 ? 'amount-positive' : 'amount-negative') + '">' + this.fmtRsd(totalRemaining) + '</span></div>' +
       '</div>';
   },
@@ -37,25 +41,34 @@ Object.assign(window.BlackBook, {
       if (y === year && m === month) { catSpent[tx.categoryId] = (catSpent[tx.categoryId] || 0) + this.toRsd(tx.amount, tx.currency); }
     }
     let html = '';
-    const cats = this.data.categories.slice().sort((a, b) => a.name.localeCompare(b.name));
-    for (const cat of cats) {
+    const sorted = this.sortedCategories();
+    const withBudget = sorted.filter(c => !!budgetMap[c.id]);
+    const withoutBudget = sorted.filter(c => !budgetMap[c.id]);
+    for (const cat of withBudget.concat(withoutBudget)) {
       const budget = budgetMap[cat.id];
       const spent = catSpent[cat.id] || 0;
       const amount = budget ? budget.amount : 0;
       const spentAbs = Math.abs(spent);
       const remaining = amount - spentAbs;
+      const over = !!budget && remaining < 0;
       const pct = amount > 0 ? Math.round(spentAbs / amount * 100) : 0;
       const barClass = amount === 0 ? '' : (pct < 80 ? 'under' : pct <= 100 ? 'warning' : 'over');
       const barWidth = Math.min(pct, 100);
+      const rightHtml = budget
+        ? '<div class="budget-big-spent ' + (over ? 'amount-negative' : 'amount-positive') + '">' + this.fmtRsd(spentAbs) + '</div>' +
+          '<div class="budget-big-budget">/ ' + this.fmtRsd(amount) + '</div>' +
+          '<div class="budget-left-small">' + (over ? this.fmtRsd(Math.abs(remaining)) + ' OVER' : this.fmtRsd(remaining) + ' left') + '</div>'
+        : '<div class="budget-big-spent" style="color:var(--text);">' + this.fmtRsd(spentAbs) + '</div>' +
+          '<div class="budget-left-small">NO LIMIT</div>';
       html += '<div class="budget-card" style="cursor:pointer;" onclick="BlackBook.openBudgetModal(\x27' + cat.id + '\x27)">' +
-        '<div class="budget-header"><span style="color:' + cat.color + ';">' + this.escapeHtml(cat.name) + '</span>' +
+        '<div class="budget-header">' +
         '<span style="display:flex;align-items:center;gap:8px;">' +
-        '<span style="font-size:12px;color:' + (budget ? 'var(--text-dim)' : 'var(--text-muted)') + ';">' + (budget ? this.fmtRsd(amount) + ' / mo' : 'NO LIMIT') + '</span>' +
-        '<button class="btn btn-sm ' + (budget ? 'btn-secondary' : 'btn-primary') + '" onclick="event.stopPropagation();BlackBook.openBudgetModal(\x27' + cat.id + '\x27)">' + (budget ? 'EDIT' : 'SET') + '</button></span>' +
+        '<button class="btn btn-sm ' + (budget ? 'btn-secondary' : 'btn-primary') + '" onclick="event.stopPropagation();BlackBook.openBudgetModal(\x27' + cat.id + '\x27)">' + (budget ? 'EDIT' : 'SET') + '</button>' +
+        '<span style="color:' + cat.color + ';">' + this.escapeHtml(cat.name) + '</span></span>' +
+        '<span class="budget-right">' + rightHtml + '</span>' +
         '</div>' +
-        (budget ? '<div class="budget-progress-text"><span>' + this.fmtRsd(spentAbs) + ' spent</span><span>' + (remaining >= 0 ? this.fmtRsd(remaining) + ' left' : this.fmtRsd(Math.abs(remaining)) + ' over') + '</span></div>' +
-        '<div class="budget-bar"><div class="budget-bar-fill ' + barClass + '" style="width:' + barWidth + '%;"></div></div>' +
-        '<div class="budget-amounts"><span>' + pct + '% used</span></div>' : '<div class="budget-amounts"><span>' + this.fmtRsd(spentAbs) + ' spent this month</span></div>') +
+        (budget ? '<div class="budget-bar"><div class="budget-bar-fill ' + barClass + '" style="width:' + barWidth + '%;"></div></div>' +
+        '<div class="budget-amounts"><span>' + pct + '% used &middot; ' + (over ? this.fmtRsd(Math.abs(remaining)) + ' over' : this.fmtRsd(remaining) + ' left') + '</span></div>' : '') +
         '</div>';
     }
     return html || '<div class="empty-state"><div class="empty-state-text">No categories. Add categories in Settings first.</div></div>';

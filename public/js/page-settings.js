@@ -594,7 +594,7 @@ Object.assign(window.BlackBook, {
         if (!name) return;
         if (idVal.startsWith('card:') || (!idVal && type === 'creditcard')) {
           const rateVal = parseFloat(String(document.getElementById('settings-account-rate').value).replace(',', '.'));
-          const cardData = { name: name, color: color, ratePct: isNaN(rateVal) ? 5 : rateVal, dueDay: parseInt(document.getElementById('settings-account-due-day').value, 10) || 15 };
+          const cardData = { name: name, shortName: shortName, color: color, ratePct: isNaN(rateVal) ? 5 : rateVal, dueDay: parseInt(document.getElementById('settings-account-due-day').value, 10) || 15 };
           if (!this.data.creditCards) this.data.creditCards = [];
           if (idVal.startsWith('card:')) {
             const card = this.cardById(idVal.slice(5));
@@ -687,7 +687,7 @@ Object.assign(window.BlackBook, {
     if (!card) return;
     document.getElementById('settings-account-id').value = 'card:' + cardId;
     document.getElementById('settings-account-name').value = card.name;
-    document.getElementById('settings-account-shortname').value = '';
+    document.getElementById('settings-account-shortname').value = card.shortName || '';
     document.getElementById('settings-account-color').value = card.color || '#71717a';
     document.getElementById('settings-account-currency').value = 'RSD';
     document.getElementById('settings-account-type').value = 'creditcard';
@@ -753,9 +753,22 @@ Object.assign(window.BlackBook, {
     if (!this.data.categories.length) categoriesList = '<div style="padding:8px;color:var(--text-muted);font-size:13px;">No categories yet.</div>';
 
     const defaultAccountOpts = '<option value="">None</option>' + this.visibleAccounts().map(a => '<option value="' + a.id + '"' + (a.id === defaultAccountId ? ' selected' : '') + '>' + this.escapeHtml(a.name) + '</option>').join('');
-    const defaultCategoryOpts = '<option value="">None</option>' + this.data.categories.map(c => '<option value="' + c.id + '"' + (c.id === defaultCategoryId ? ' selected' : '') + '>' + this.escapeHtml(c.name) + '</option>').join('');
+    const defaultCategoryOpts = '<option value="">None</option>' + this.sortedCategories().map(c => '<option value="' + c.id + '"' + (c.id === defaultCategoryId ? ' selected' : '') + '>' + this.escapeHtml(c.name) + '</option>').join('');
 
-    return '<div class="settings-section">' +
+    let pagesList = '';
+    const PAGE_LABELS = { overview: 'Overview', budget: 'Budget', bills: 'Bills', cards: 'Credit Cards', savings: 'Savings', debts: 'Debts', invoices: 'Invoices' };
+    for (const p of Object.keys(PAGE_LABELS)) {
+      const on = this.isPageEnabled(p);
+      pagesList += '<div class="settings-row">' +
+        '<span class="row-swatch" style="visibility:hidden;"></span>' +
+        '<span class="settings-row-name">' + PAGE_LABELS[p] + '</span>' +
+        '<span class="settings-row-meta">' + (on ? '' : 'hidden') + '</span>' +
+        '<button class="btn btn-sm ' + (on ? 'btn-paid' : 'btn-muted') + '" onclick="BlackBook.togglePageEnabled(\'' + p + '\')" title="Show/hide this page for the current profile">' + (on ? 'ON' : 'OFF') + '</button></div>';
+    }
+
+    return '<div class="settings-cols">' +
+      '<div>' +
+      '<div class="settings-section">' +
       '<div class="settings-section-header"><span class="settings-section-title">APPEARANCE</span></div>' +
       '<div class="form-row-2col">' +
       '<div class="form-group"><label>Highlight Color</label><div style="display:flex;align-items:center;gap:8px;"><input type="color" id="settings-highlight-color" value="' + (this.data.settings.highlightColor || '#f9a05c') + '" style="width:28px;height:28px;border:none;background:none;cursor:pointer;padding:0;"><span style="font-size:13px;color:var(--text-dim);">' + (this.data.settings.highlightColor || '#f9a05c') + '</span></div></div>' +
@@ -769,16 +782,12 @@ Object.assign(window.BlackBook, {
       '<div class="form-group"><label>Default Account</label><select id="settings-default-account" class="input">' + defaultAccountOpts + '</select></div>' +
       '<div class="form-group"><label>Default Category</label><select id="settings-default-category" class="input">' + defaultCategoryOpts + '</select></div></div></div>' +
 
-      '<div class="settings-cols">' +
       '<div class="settings-section">' +
-      '<div class="settings-section-header"><span class="settings-section-title">ACCOUNTS</span><button class="btn btn-sm btn-primary" onclick="BlackBook.openNewAccount()">+ ADD</button></div>' +
-      '<div class="settings-list">' + accountsList + '</div></div>' +
-
-      '<div class="settings-section">' +
-      '<div class="settings-section-header"><span class="settings-section-title">CATEGORIES</span><button class="btn btn-sm btn-primary" onclick="BlackBook.openNewCategory()">+ ADD</button></div>' +
-      '<div class="settings-list">' + categoriesList + '</div></div>' +
+      '<div class="settings-section-header"><span class="settings-section-title">PAGES &middot; PROFILE ' + this.escapeHtml((this.profile || 'default').toUpperCase()) + '</span></div>' +
+      '<div class="settings-list">' + pagesList + '</div></div>' +
       '</div>' +
 
+      '<div>' +
       '<div class="settings-section">' +
       '<div class="settings-section-header"><span class="settings-section-title">EXCHANGE RATES &middot; 1 UNIT IN RSD</span><button class="btn btn-sm btn-secondary" id="settings-refresh-all-rates">REFRESH ALL</button></div>' +
       '<div class="settings-rate-card">' + this.ratesTableHtml() + '</div></div>' +
@@ -786,6 +795,18 @@ Object.assign(window.BlackBook, {
       '<div class="settings-section">' +
       '<div class="settings-section-header"><span class="settings-section-title">PROFILES</span><button class="btn btn-sm btn-primary" onclick="BlackBook.createProfile()">+ NEW PROFILE</button></div>' +
       '<div class="settings-list" id="profiles-list">' + this.profilesListHtml() + '</div></div>' +
+      '</div>' +
+    '</div>' +
+
+    '<div class="settings-cols">' +
+      '<div class="settings-section">' +
+      '<div class="settings-section-header"><span class="settings-section-title">ACCOUNTS</span><button class="btn btn-sm btn-primary" onclick="BlackBook.openNewAccount()">+ ADD</button></div>' +
+      '<div class="settings-list">' + accountsList + '</div></div>' +
+
+      '<div class="settings-section">' +
+      '<div class="settings-section-header"><span class="settings-section-title">CATEGORIES</span><button class="btn btn-sm btn-primary" onclick="BlackBook.openNewCategory()">+ ADD</button></div>' +
+      '<div class="settings-list">' + categoriesList + '</div></div>' +
+    '</div>' +
 
       '<div class="settings-section">' +
       '<div class="settings-section-header"><span class="settings-section-title">DATA</span></div>' +

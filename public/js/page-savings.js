@@ -132,7 +132,7 @@ Object.assign(window.BlackBook, {
 
   openNewSavingsEntry(goalId) {
     document.getElementById('savings-entry-goal-id').value = goalId;
-    document.getElementById('savings-entry-date').value = this.today();
+    document.getElementById('savings-entry-date').value = this.fmtDateInput(this.today());
     document.getElementById('savings-entry-amount').value = '';
     document.getElementById('savings-entry-note').value = '';
     this.openModal('savings-entry-modal');
@@ -164,7 +164,8 @@ Object.assign(window.BlackBook, {
     document.getElementById('savings-entry-form').addEventListener('submit', async (e) => {
       e.preventDefault();
       const goalId = document.getElementById('savings-entry-goal-id').value;
-      const date = document.getElementById('savings-entry-date').value;
+      const date = this.parseDateInput(document.getElementById('savings-entry-date').value);
+      if (!date) { alert('Enter a valid date (DD.MM.YYYY).'); return; }
       const amount = parseFloat(document.getElementById('savings-entry-amount').value);
       const note = document.getElementById('savings-entry-note').value.trim();
       if (!goalId || isNaN(amount) || amount === 0) return;

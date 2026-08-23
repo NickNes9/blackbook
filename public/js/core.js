@@ -34,6 +34,7 @@ window.BlackBook = {
     if (!this.data.invoices) this.data.invoices = [];
     if (this.migrateCreditCards()) await this.save();
     this.applyThemeColors();
+    this.updateNavVisibility();
 
     const rates = this.getRates();
     if (['EUR', 'USD', 'XAU'].some(c => !rates[c].rate)) {
@@ -177,10 +178,11 @@ window.BlackBook = {
       if (e.key === 'd' || e.key === 'D') { e.preventDefault(); this.gotoToday(); }
       if (e.key === '/') { e.preventDefault(); document.getElementById('header-command-input').focus(); }
       if (e.key === 'e' || e.key === 'E') { e.preventDefault(); this.editHoveredTransaction(); }
+      if ((e.key === 'h' || e.key === 'H') && this.currentPage === 'overview') { e.preventDefault(); this.toggleOverviewGraph(); return; }
       if (e.key === 'Tab') { e.preventDefault(); if (this.currentPage === 'overview') this.cycleAccount(); return; }
-      const pages = ['overview', 'budget', 'bills', 'cards', 'savings', 'debts', 'invoices', 'settings'];
       if (/^[1-9]$/.test(e.key)) {
         const idx = parseInt(e.key, 10) - 1;
+        const pages = this.pageList().filter(p => this.isPageEnabled(p));
         if (idx < pages.length) { e.preventDefault(); this.navigateTo(pages[idx]); }
       }
     });
@@ -212,9 +214,40 @@ window.BlackBook = {
     return '#' + [r, g, b].map(x => Math.round(x * 255).toString(16).padStart(2, '0')).join('');
   },
 
+  pageList() { return ['overview', 'budget', 'bills', 'cards', 'savings', 'debts', 'invoices', 'settings']; },
+
+  isPageEnabled(page) {
+    if (page === 'settings') return true;
+    const off = (this.data && this.data.settings && this.data.settings.disabledPages) || [];
+    return !off.includes(page);
+  },
+
+  firstEnabledPage() {
+    for (const p of this.pageList()) { if (this.isPageEnabled(p)) return p; }
+    return 'settings';
+  },
+
+  updateNavVisibility() {
+    document.querySelectorAll('.sidebar-nav-item').forEach(b => {
+      b.classList.toggle('hidden', !this.isPageEnabled(b.dataset.page));
+    });
+  },
+
+  async togglePageEnabled(page) {
+    if (page === 'settings' || !this.data.settings) return;
+    if (!this.data.settings.disabledPages) this.data.settings.disabledPages = [];
+    const arr = this.data.settings.disabledPages;
+    const i = arr.indexOf(page);
+    if (i >= 0) arr.splice(i, 1); else arr.push(page);
+    this.updateNavVisibility();
+    await this.save();
+    if (!this.isPageEnabled(this.currentPage)) this.navigateTo(this.firstEnabledPage());
+    else this.renderSettings();
+  },
+
   navigateTo(page) {
-    const known = ['overview', 'budget', 'bills', 'cards', 'savings', 'debts', 'invoices', 'settings'];
-    if (!known.includes(page)) page = 'overview';
+    const known = this.pageList();
+    if (!known.includes(page) || !this.isPageEnabled(page)) page = this.firstEnabledPage();
     if (this.overviewPieChart) { this.overviewPieChart.destroy(); this.overviewPieChart = null; }
     if (this.overviewLineChart) { this.overviewLineChart.destroy(); this.overviewLineChart = null; }
     if (this.billsChart) { this.billsChart.destroy(); this.billsChart = null; }
@@ -278,6 +311,33 @@ window.BlackBook = {
   today() {
     const n = new Date();
     return n.getFullYear() + '-' + String(n.getMonth() + 1).padStart(2, '0') + '-' + String(n.getDate()).padStart(2, '0');
+  },
+
+  fmtDateInput(iso) {
+    const p = String(iso || '').split('-');
+    if (p.length !== 3 || p[0].length !== 4) return '';
+    return parseInt(p[2], 10) + '.' + parseInt(p[1], 10) + '.' + p[0];
+  },
+
+  parseDateInput(str) {
+    let s = String(str || '').trim().replace(/\s+/g, '');
+    if (!s) return null;
+    s = s.replace(/[-/.]/g, '.').replace(/\.+/g, '.').replace(/^\.|\.$/g, '');
+    let d, m, y;
+    if (/^\d{4}\.\d{1,2}\.\d{1,2}$/.test(s)) { const q = s.split('.'); y = parseInt(q[0], 10); m = parseInt(q[1], 10); d = parseInt(q[2], 10); }
+    else {
+      const q = s.split('.');
+      if (q.length !== 3 || !q.every(x => /^\d+$/.test(x))) return null;
+      d = parseInt(q[0], 10); m = parseInt(q[1], 10); y = parseInt(q[2], 10);
+      if (y < 100) y += 2000;
+    }
+    const dt = new Date(y, m - 1, d);
+    if (dt.getFullYear() !== y || dt.getMonth() !== m - 1 || dt.getDate() !== d) return null;
+    return y + '-' + String(m).padStart(2, '0') + '-' + String(d).padStart(2, '0');
+  },
+
+  sortedCategories() {
+    return this.data.categories.slice().sort((a, b) => String(a.name).localeCompare(String(b.name)));
   },
 
   ymOf(dateStr) {
@@ -366,8 +426,8 @@ window.BlackBook = {
       this._cmdPaletteItems.push({ execute: () => { this.closeCommandPalette(); this.exportCsv(); } });
       html += '</div>';
       html += '<div class="command-section"><div style="padding:4px 12px;font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text-muted);">PAGES</div>';
-      const pages = ['overview', 'budget', 'bills', 'cards', 'savings', 'debts', 'invoices', 'settings'];
-      for (const p of pages) {
+      for (const p of this.pageList()) {
+        if (!this.isPageEnabled(p)) continue;
         html += this._paletteItemHtml(p.toUpperCase(), '');
         this._cmdPaletteItems.push({ execute: (_p => () => { this.closeCommandPalette(); this.navigateTo(_p); })(p) });
       }
@@ -613,7 +673,11 @@ window.BlackBook = {
       if (ma) { account = ma; i++; }
     }
     if (i < parts.length) noteParts = parts.slice(i);
-    if (!account) account = this.data.accounts.find(a => a.id === this.data.settings.defaultAccountId) || this.data.accounts[0];
+    if (!account) {
+      const act = this.visibleAccounts().find(a => a.id === this.selectedAccount);
+      if (act) account = act;
+      else throw new Error('No active account - include shorthand (e.g. 500 groceries CSH)');
+    }
     return { amount: Math.abs(amount), type: amount < 0 ? 'expense' : 'income', category, date, account, note: noteParts.join(' ') };
   },
 
@@ -703,7 +767,7 @@ window.BlackBook = {
       if (!sel || sel.disabled || sel.multiple || !sel.options.length) return;
       e.preventDefault();
       const d = e.deltaY > 0 ? 1 : -1;
-      sel.selectedIndex = Math.min(sel.options.length - 1, Math.max(0, sel.selectedIndex + d));
+      sel.selectedIndex = (sel.selectedIndex + d + sel.options.length) % sel.options.length;
       sel.dispatchEvent(new Event('change'));
     }, { passive: false });
   },
@@ -721,7 +785,9 @@ window.BlackBook = {
     document.getElementById('bill-form').addEventListener('submit', async (e) => {
       e.preventDefault();
       const id = document.getElementById('bill-id').value;
-      const billData = { name: document.getElementById('bill-name').value, amount: Math.round(parseFloat(document.getElementById('bill-amount').value) * 100) / 100, currency: document.getElementById('bill-currency').value, dueDay: parseInt(document.getElementById('bill-dueDay').value), categoryId: document.getElementById('bill-category').value, active: document.getElementById('bill-active').value === 'true', autopay: document.getElementById('bill-autopay').checked };
+      const rawAmt = String(document.getElementById('bill-amount').value).trim().replace(/\s+/g, '').replace(',', '.');
+      const parsedAmt = Math.round(parseFloat(rawAmt) * 100) / 100;
+      const billData = { name: document.getElementById('bill-name').value, amount: parsedAmt > 0 ? parsedAmt : null, currency: document.getElementById('bill-currency').value, dueDay: parseInt(document.getElementById('bill-dueDay').value), categoryId: document.getElementById('bill-category').value, active: document.getElementById('bill-active').value === 'true', autopay: document.getElementById('bill-autopay').checked, color: document.getElementById('bill-color-auto').checked ? null : document.getElementById('bill-color').value };
       if (id) { const bill = this.data.bills.find(b => b.id === id); if (bill) Object.assign(bill, billData); }
       else { billData.id = crypto.randomUUID(); this.data.bills.push(billData); }
       await this.save(); this.closeModal('bill-modal'); this.renderPage(this.currentPage);
