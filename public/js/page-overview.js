@@ -39,7 +39,7 @@ Object.assign(window.BlackBook, {
     return '<div class="account-detail">' +
       '<div class="account-detail-header"><span class="account-detail-name">' + this.escapeHtml(a.name) + '</span>' +
       '<span class="account-detail-type">' + this.escapeHtml(a.currency) + ' ' + this.escapeHtml(a.type || 'cash') + '</span>' +
-      '<span class="account-detail-balance ' + (bal >= 0 ? 'amount-positive' : 'amount-negative') + '">' + this.fmtAmount(Math.abs(bal), currency) + '</span></div>' +
+      '<span class="account-detail-balance ' + (bal >= 0 ? 'amount-positive' : 'amount-negative') + '">' + this.fmtAmount(bal, currency) + '</span></div>' +
       '<div class="account-detail-meta">' + txCount + ' transactions</div>' +
       '</div>';
   },
@@ -244,7 +244,7 @@ Object.assign(window.BlackBook, {
     for (const a of this.visibleAccounts()) {
       const { amount: bal, currency } = this.accountBalanceNative(a.id);
       const sel = this.selectedAccount === a.id;
-      html += '<div class="account-chip' + (sel ? ' selected' : '') + '" onclick="BlackBook.selectAccount(\x27' + a.id + '\x27)"><span class="chip-name">' + this.escapeHtml(a.name) + '</span><span class="chip-balance">' + this.fmtAmount(Math.abs(bal), currency) + '</span></div>';
+      html += '<div class="account-chip' + (sel ? ' selected' : '') + '" onclick="BlackBook.selectAccount(\x27' + a.id + '\x27)"><span class="chip-name">' + this.escapeHtml(a.name) + '</span><span class="chip-balance ' + (bal < 0 ? 'amount-negative' : 'amount-positive') + '">' + this.fmtAmount(bal, currency) + '</span></div>';
     }
     return html + '</div>';
   },

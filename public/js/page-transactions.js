@@ -79,10 +79,11 @@ Object.assign(window.BlackBook, {
   convertBetweenCurrencies(amount, curFrom, curTo) {
     if (!amount || isNaN(amount)) return null;
     if (curFrom === curTo) return Math.round(amount * 100) / 100;
-    const rsdFrom = this.toRsd(amount, curFrom);
-    const rateTo = (this.getRates()[curTo] || {}).rate;
-    if (!rateTo) return null;
-    return Math.round(rsdFrom / rateTo * 100) / 100;
+    const rateFrom = curFrom === 'RSD' ? 1 : (this.getRates()[curFrom] || {}).rate;
+    const rateTo = curTo === 'RSD' ? 1 : (this.getRates()[curTo] || {}).rate;
+    if (!rateFrom || !rateTo) return null;
+    const rsd = amount * rateFrom;
+    return Math.round(rsd / rateTo * 100) / 100;
   },
 
   async doTransfer(fromId, toId, amountOut, noteExtra, date, amountInOverride) {
