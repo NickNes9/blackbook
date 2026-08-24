@@ -51,6 +51,6 @@ Any Node-capable machine can host it: clone, `npm install`, `node server.js`, ex
 
 ---
 
-**BLACK BOOK v0.5.0**
+**BLACK BOOK v0.5.1**
 
 Created by Nikola Nešić
