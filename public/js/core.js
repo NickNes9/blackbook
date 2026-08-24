@@ -378,19 +378,23 @@ window.BlackBook = {
     let total = 0;
     for (const tx of this.data.transactions) {
       if (tx.accountId !== accountId) continue;
-      const rsd = this.toRsd(tx.amount, tx.currency);
-      total += tx.type === 'income' ? rsd : -rsd;
+      total += this.toRsd(tx.amount, tx.currency);
     }
     return total;
   },
 
   accountBalanceNative(accountId) {
+    const acc = this.data.accounts.find(a => a.id === accountId);
     let total = 0;
-    let currency = 'RSD';
+    let currency = (acc && acc.currency) || 'RSD';
     for (const tx of this.data.transactions) {
       if (tx.accountId !== accountId) continue;
-      total += tx.amount;
-      currency = tx.currency;
+      let amt = tx.amount;
+      if (tx.currency && acc && acc.currency && tx.currency !== acc.currency) {
+        const converted = this.convertBetweenCurrencies(tx.amount, tx.currency, acc.currency);
+        if (converted != null && !isNaN(converted)) amt = converted;
+      }
+      total += amt;
     }
     return { amount: total, currency: currency };
   },
@@ -516,7 +520,7 @@ window.BlackBook = {
       cmdHtml += this._paletteItemHtml('Create: ' + detail, 'Enter');
       this._cmdPaletteItems.push({
         execute: async () => {
-          const tx = { id: crypto.randomUUID(), date: parsed.date, type: parsed.type, amount: Math.round((parsed.type === 'expense' ? -1 : 1) * Math.abs(parsed.amount) * 100) / 100, currency: 'RSD', accountId: parsed.account.id, categoryId: parsed.category.id, note: parsed.note };
+          const tx = { id: crypto.randomUUID(), date: parsed.date, type: parsed.type, amount: Math.round((parsed.type === 'expense' ? -1 : 1) * Math.abs(parsed.amount) * 100) / 100, currency: parsed.account.currency || 'RSD', accountId: parsed.account.id, categoryId: parsed.category.id, note: parsed.note };
           this.data.transactions.unshift(tx);
           this.syncViewToDate(tx.date);
           await this.save();
