@@ -15,7 +15,20 @@ Object.assign(window.BlackBook, {
     if (!hideGraph) setTimeout(() => { this.renderOverviewLineChart(); }, 50);
   },
 
-  toggleOvType(t) { if (t === 'income') this._ovInc = !this._ovInc; else this._ovExp = !this._ovExp; this.renderPage('overview'); },
+  toggleOvType(t) {
+    const active = this.ovActiveTypes();
+    if (active === t) {
+      this._ovInc = false;
+      this._ovExp = false;
+    } else if (t === 'income') {
+      this._ovInc = true;
+      this._ovExp = false;
+    } else {
+      this._ovInc = false;
+      this._ovExp = true;
+    }
+    this.renderPage('overview');
+  },
 
   ovActiveTypes() {
     if (this._ovInc && this._ovExp) return null;
@@ -199,11 +212,13 @@ Object.assign(window.BlackBook, {
         : (accounts[tx.accountId] || { color: '#52525b', shortName: 'TR', name: 'Transfer' });
       const cat = categories[tx.categoryId] || { color: '#555555', name: '?' };
       const rsd = this.toRsd(tx.amount, tx.currency);
-      const sign = tx.type === 'income' ? '+' : '-';
       const amtClass = tx.type === 'income' ? 'amt-income' : 'amt-expense';
       let wtClass = '';
       if (Math.abs(rsd) > 10000) wtClass = ' amt-heavy'; else if (Math.abs(rsd) > 5000) wtClass = ' amt-medium';
-      rows += '<div class="tx-row' + (this._bulkSel && this._bulkSel.has(tx.id) ? ' bulk-selected' : '') + '" onclick="BlackBook.bulkToggle(\x27' + tx.id + '\x27)" onmouseenter="BlackBook.hoveredTxId=\x27' + tx.id + '\x27" onmouseleave="BlackBook.hoveredTxId=null"><div class="tx-acct-stripe" style="background:' + acc.color + '"><span class="tx-acct-label">' + this.escapeHtml((acc.shortName || '?').toUpperCase()) + '</span></div><span class="tx-date">' + tx.date + '</span><span class="tx-cat" style="color:' + cat.color + '">' + this.escapeHtml(cat.name) + '</span><span class="tx-note">' + this.escapeHtml(tx.note || '') + '</span><span class="tx-actions" onclick="event.stopPropagation()"><button class="btn btn-sm btn-secondary" onclick="BlackBook.openEditTransaction(\x27' + tx.id + '\x27)">EDIT</button><button class="btn btn-sm btn-danger" onclick="BlackBook.deleteTransaction(\x27' + tx.id + '\x27)">DEL</button></span><span class="tx-amt ' + amtClass + wtClass + '">' + sign + Math.abs(tx.amount).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' ' + tx.currency + '</span></div>';
+      const txCur = tx.currency || 'RSD';
+      const accCur = card ? 'RSD' : ((accounts[tx.accountId] || {}).currency || 'RSD');
+      const txAmtDisplay = this.fmtDualCurrency(tx.amount, txCur, accCur, tx.nativeAmount, tx.nativeCurrency);
+      rows += '<div class="tx-row' + (this._bulkSel && this._bulkSel.has(tx.id) ? ' bulk-selected' : '') + '" onclick="BlackBook.bulkToggle(\x27' + tx.id + '\x27)" onmouseenter="BlackBook.hoveredTxId=\x27' + tx.id + '\x27" onmouseleave="BlackBook.hoveredTxId=null"><div class="tx-acct-stripe" style="background:' + acc.color + '"><span class="tx-acct-label">' + this.escapeHtml((acc.shortName || '?').toUpperCase()) + '</span></div><span class="tx-date">' + tx.date + '</span><span class="tx-cat" style="color:' + cat.color + '">' + this.escapeHtml(cat.name) + '</span><span class="tx-note">' + this.escapeHtml(tx.note || '') + '</span><span class="tx-actions" onclick="event.stopPropagation()"><button class="btn btn-sm btn-secondary" onclick="BlackBook.openEditTransaction(\x27' + tx.id + '\x27)">EDIT</button><button class="btn btn-sm btn-danger" onclick="BlackBook.deleteTransaction(\x27' + tx.id + '\x27)">DEL</button></span><span class="tx-amt ' + amtClass + wtClass + '">' + txAmtDisplay + '</span></div>';
     }
     let html = '<div class="tx-list">' + rows + '</div>';
     if (this._bulkSel && this._bulkSel.size) {

@@ -20,6 +20,11 @@ Object.assign(window.BlackBook, {
     accSelect.innerHTML = (defaultAccountId ? '' : '<option value="">-- SELECT ACCOUNT --</option>') + (this.accountSelectOptions(defaultAccountId) || '<option value="">no accounts</option>');
     const selAcc = cardPrefill ? null : this.data.accounts.find(a => a.id === defaultAccountId);
     document.getElementById('tx-currency').value = selAcc ? (selAcc.currency || 'RSD') : 'RSD';
+    document.getElementById('tx-currency-select').value = selAcc ? (selAcc.currency || 'RSD') : 'RSD';
+    document.getElementById('tx-native-amount').value = '';
+    document.getElementById('tx-fee-amount').value = '';
+    document.getElementById('tx-preview').textContent = '';
+    this.updateTxNativeRow();
     const defaultCatId = this.data.settings.defaultCategoryId || (this.data.categories[0] && this.data.categories[0].id) || '';
     const catInput = document.getElementById('tx-category-input');
     const catHidden = document.getElementById('tx-category');
@@ -31,8 +36,6 @@ Object.assign(window.BlackBook, {
     setTimeout(() => amountInput.focus(), 50);
     this.initCategoryPicker();
     this.bindQuickEntryExtras();
-    const form = document.getElementById('transaction-form');
-    if (!form._enterBound) { form._enterBound = true; form.addEventListener('keydown', (e) => { if (e.key === 'Enter' && e.target.tagName !== 'SELECT') { e.preventDefault(); form.requestSubmit(); } }); }
   },
 
   bindQuickEntryExtras() {
@@ -42,11 +45,73 @@ Object.assign(window.BlackBook, {
       const v = String(e.target.value);
       if (v.startsWith('card:')) {
         document.getElementById('tx-currency').value = 'RSD';
+        document.getElementById('tx-currency-select').value = 'RSD';
       } else {
         const acc = this.data.accounts.find(a => a.id === v);
-        document.getElementById('tx-currency').value = acc ? (acc.currency || 'RSD') : 'RSD';
+        const cur = acc ? (acc.currency || 'RSD') : 'RSD';
+        document.getElementById('tx-currency').value = cur;
+        document.getElementById('tx-currency-select').value = cur;
       }
+      this.updateTxNativeRow();
+      this.updateTxPreview();
     });
+    document.getElementById('tx-currency-select').addEventListener('change', (e) => {
+      document.getElementById('tx-currency').value = e.target.value;
+      this.updateTxNativeRow();
+      this.updateTxPreview();
+    });
+    document.getElementById('tx-amount').addEventListener('input', () => this.updateTxPreview());
+    document.getElementById('tx-native-amount').addEventListener('input', () => this.updateTxPreview());
+    document.getElementById('tx-fee-amount').addEventListener('input', () => this.updateTxPreview());
+  },
+
+  updateTxNativeRow() {
+    const accountVal = document.getElementById('tx-account').value;
+    const cur = document.getElementById('tx-currency-select').value;
+    const row = document.getElementById('tx-native-row');
+    const feeRow = document.getElementById('tx-fee-row');
+    const label = row ? row.querySelector('label') : null;
+    if (!accountVal || accountVal.startsWith('card:') || cur === 'RSD') {
+      row.style.display = 'none';
+      if (feeRow) feeRow.style.display = 'none';
+      return;
+    }
+    const acc = this.data.accounts.find(a => a.id === accountVal);
+    const accCur = (acc && acc.currency) || 'RSD';
+    if (accCur !== 'RSD') { row.style.display = 'none'; if (feeRow) feeRow.style.display = 'none'; return; }
+    row.style.display = '';
+    if (feeRow) feeRow.style.display = '';
+    if (label) label.textContent = 'NATIVE AMOUNT (' + cur + ')';
+  },
+
+  updateTxPreview() {
+    const previewEl = document.getElementById('tx-preview');
+    if (!previewEl) return;
+    const accountVal = document.getElementById('tx-account').value;
+    const cur = document.getElementById('tx-currency-select').value;
+    if (!accountVal || accountVal.startsWith('card:') || cur === 'RSD') { previewEl.textContent = ''; return; }
+    const acc = this.data.accounts.find(a => a.id === accountVal);
+    const accCur = (acc && acc.currency) || 'RSD';
+    if (accCur !== 'RSD') { previewEl.textContent = ''; return; }
+    const nativeEl = document.getElementById('tx-native-amount');
+    const nativeVal = nativeEl && nativeEl.value.trim() ? this.evalAmount(nativeEl.value) : null;
+    const amtVal = this.evalAmount(document.getElementById('tx-amount').value);
+    const feeEl = document.getElementById('tx-fee-amount');
+    const manualFee = feeEl && feeEl.value.trim() ? this.evalAmount(feeEl.value) : null;
+    const fee = (acc && acc.foreignFee) || 0;
+    const parts = [];
+    if (amtVal > 0 && fee > 0 && (nativeVal > 0 || manualFee > 0)) {
+      const autoRes = nativeVal > 0 ? this.calcForeignFee(nativeVal, fee, cur) : { feeNative: null, feeRsd: 0 };
+      const feeRsd = manualFee > 0 ? manualFee : autoRes.feeRsd;
+      const total = this.round2(amtVal + feeRsd);
+      let feeTxt = 'FEE ' + feeRsd.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' RSD';
+      if (manualFee > 0) feeTxt += ' (manual)';
+      else if (autoRes.feeNative != null) feeTxt += ' (' + autoRes.feeNative.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' ' + cur + ')';
+      parts.push(feeTxt + ' \u2192 ' + total.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' RSD');
+    } else if (nativeVal > 0) {
+      parts.push('\u2248 ' + nativeVal.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' ' + cur);
+    }
+    previewEl.textContent = parts.join(' \u00b7 ');
   },
 
   openTransferModal() {
@@ -150,8 +215,11 @@ Object.assign(window.BlackBook, {
     document.getElementById('tx-id').value = tx.id;
     document.getElementById('tx-date').value = this.fmtDateInput(tx.date);
     document.getElementById('tx-type').value = tx.type;
-    document.getElementById('tx-amount').value = Math.abs(tx.amount);
+    document.getElementById('tx-amount').value = tx.baseAmount != null ? Math.abs(tx.baseAmount) : Math.abs(tx.amount);
     document.getElementById('tx-currency').value = tx.currency;
+    document.getElementById('tx-currency-select').value = tx.nativeCurrency || tx.currency;
+    document.getElementById('tx-native-amount').value = tx.nativeAmount != null ? Math.abs(tx.nativeAmount) : '';
+    document.getElementById('tx-fee-amount').value = tx.feeAmount != null ? Math.abs(tx.feeAmount) : '';
     document.getElementById('tx-note').value = tx.note || '';
     document.getElementById('tx-account').innerHTML = (tx.cardId
       ? this.accountSelectOptions('card:' + tx.cardId)
@@ -163,6 +231,8 @@ Object.assign(window.BlackBook, {
     setTimeout(() => document.getElementById('tx-amount').focus(), 50);
     this.initCategoryPicker();
     this.bindQuickEntryExtras();
+    this.updateTxNativeRow();
+    this.updateTxPreview();
   },
 
   editHoveredTransaction() { if (this.hoveredTxId) this.openEditTransaction(this.hoveredTxId); },
@@ -235,6 +305,10 @@ Object.assign(window.BlackBook, {
   },
 
   bindModalSubmit() {
+    const form = document.getElementById('transaction-form');
+    form.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && e.target.tagName !== 'SELECT') { e.preventDefault(); form.requestSubmit(); }
+    });
     document.getElementById('transaction-form').addEventListener('submit', async (e) => {
       e.preventDefault();
       const id = document.getElementById('tx-id').value;
@@ -246,7 +320,42 @@ Object.assign(window.BlackBook, {
       const txType = document.getElementById('tx-type').value;
       const accountVal = document.getElementById('tx-account').value;
       if (!accountVal) { alert('Select an account first.'); return; }
-      const txData = { date: txDate, type: txType, amount: txType === 'income' ? rawAmt : -rawAmt, currency: document.getElementById('tx-currency').value, accountId: accountVal.startsWith('card:') ? null : accountVal, categoryId: document.getElementById('tx-category').value, note: document.getElementById('tx-note').value };
+      const txData = { date: txDate, type: txType, amount: txType === 'income' ? rawAmt : -rawAmt, currency: document.getElementById('tx-currency-select').value, accountId: accountVal.startsWith('card:') ? null : accountVal, categoryId: document.getElementById('tx-category').value, note: document.getElementById('tx-note').value };
+      if (!accountVal.startsWith('card:') && txData.currency && txData.currency !== 'RSD') {
+        const acc = this.data.accounts.find(a => a.id === accountVal);
+        const accCur = (acc && acc.currency) || 'RSD';
+        if (accCur === 'RSD') {
+          const nativeEl = document.getElementById('tx-native-amount');
+          const nativeVal = nativeEl && nativeEl.value.trim() ? this.evalAmount(nativeEl.value) : null;
+          const fee = (acc && acc.foreignFee) || 0;
+          if (nativeVal > 0) {
+            txData.nativeAmount = txType === 'income' ? Math.round(nativeVal * 100) / 100 : -Math.round(nativeVal * 100) / 100;
+            txData.nativeCurrency = txData.currency;
+          }
+          const feeEl = document.getElementById('tx-fee-amount');
+          const manualFee = feeEl && feeEl.value.trim() ? this.evalAmount(feeEl.value) : null;
+          if (fee > 0 || manualFee > 0) {
+            let feeRsd;
+            if (manualFee != null) {
+              feeRsd = this.round2(manualFee);
+            } else {
+              const nativeAbs = nativeVal > 0 ? nativeVal : (this.convertBetweenCurrencies(rawAmt, 'RSD', txData.currency) || 0);
+              feeRsd = this.calcForeignFee(nativeAbs, fee, txData.currency).feeRsd;
+            }
+            txData.amount = txType === 'income' ? this.round2(rawAmt + feeRsd) : -this.round2(rawAmt + feeRsd);
+            txData.baseAmount = rawAmt;
+            txData.feeAmount = feeRsd;
+          } else {
+            txData.amount = txType === 'income' ? rawAmt : -rawAmt;
+          }
+          txData.currency = accCur;
+        }
+      } else {
+        delete txData.nativeAmount;
+        delete txData.nativeCurrency;
+        delete txData.baseAmount;
+        delete txData.feeAmount;
+      }
       const orig = id ? this.data.transactions.find(t => t.id === id) : null;
       if (orig && orig.cardId) { txData.cardId = orig.cardId; txData.accountId = null; }
       else if (accountVal.startsWith('card:')) { txData.cardId = accountVal.slice(5); }
@@ -305,7 +414,7 @@ Object.assign(window.BlackBook, {
         if (!dropdown.classList.contains('hidden')) { e.preventDefault(); e.stopPropagation(); }
         closeDropdown();
       } else if (e.key === 'Enter' && !dropdown.classList.contains('hidden')) {
-        e.preventDefault(); e.stopPropagation(); closeDropdown();
+        e.preventDefault(); closeDropdown();
       }
     });
 

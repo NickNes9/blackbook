@@ -610,6 +610,8 @@ Object.assign(window.BlackBook, {
           }
         } else {
           const extra = {};
+          const feeVal = parseFloat(String(document.getElementById('settings-account-fee').value).replace(',', '.'));
+          extra.foreignFee = isNaN(feeVal) ? 0 : feeVal;
           if (type === 'creditcard') {
             const rateVal = parseFloat(String(document.getElementById('settings-account-rate').value).replace(',', '.'));
             extra.ratePct = isNaN(rateVal) ? 5 : rateVal;
@@ -617,7 +619,7 @@ Object.assign(window.BlackBook, {
           }
           if (idVal) {
             const acc = this.data.accounts.find(a => a.id === idVal);
-            if (acc) Object.assign(acc, { name: name, shortName: shortName, color: color, currency: currency, type: type });
+            if (acc) Object.assign(acc, { name: name, shortName: shortName, color: color, currency: currency, type: type, foreignFee: extra.foreignFee });
           } else {
             this.data.accounts.push(Object.assign({ id: crypto.randomUUID(), name: name, shortName: shortName, color: color, currency: currency, type: type }, extra));
           }
@@ -664,6 +666,7 @@ Object.assign(window.BlackBook, {
     document.getElementById('settings-account-shortname').value = '';
     document.getElementById('settings-account-color').value = this.hslToHex(this.randomPastel());
     document.getElementById('settings-account-currency').value = 'RSD';
+    document.getElementById('settings-account-fee').value = '0';
     document.getElementById('settings-account-type').value = 'cash';
     document.getElementById('settings-account-rate').value = '5';
     document.getElementById('settings-account-due-day').value = '15';
@@ -681,6 +684,7 @@ Object.assign(window.BlackBook, {
     document.getElementById('settings-account-shortname').value = acc.shortName || '';
     document.getElementById('settings-account-color').value = acc.color;
     document.getElementById('settings-account-currency').value = acc.currency;
+    document.getElementById('settings-account-fee').value = acc.foreignFee != null ? acc.foreignFee : 0;
     document.getElementById('settings-account-type').value = (acc.type === 'credit' ? 'creditcard' : (acc.type || 'cash'));
     document.getElementById('settings-account-rate').value = acc.ratePct != null ? acc.ratePct : 5;
     document.getElementById('settings-account-due-day').value = acc.dueDay || 15;
