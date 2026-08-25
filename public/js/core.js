@@ -67,6 +67,7 @@ window.BlackBook = {
     this.bindNav();
     this.bindKeyboard();
     this.bindGlobalSelectWheel();
+    this.bindDateWheel();
     this.bindModalSubmit();
     this.bindBillModalSubmit();
     this.bindSavingsGoalForm();
@@ -370,8 +371,32 @@ window.BlackBook = {
     return amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' RSD';
   },
 
+  round2(amount) {
+    return Math.round((amount + Number.EPSILON) * 100) / 100;
+  },
+
+  calcForeignFee(nativeAmt, pct, nativeCur) {
+    const feeNative = this.round2(Math.abs(nativeAmt) * pct / 100);
+    return { feeNative: feeNative, feeRsd: this.round2(this.toRsd(feeNative, nativeCur || 'RSD')) };
+  },
+
   fmtAmount(amount, currency) {
     return amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' ' + currency;
+  },
+
+  fmtDualCurrency(amount, currency, accountCurrency, nativeAmount, nativeCurrency) {
+    const cur = currency || 'RSD';
+    const accCur = accountCurrency || 'RSD';
+    const sign = amount < 0 ? '-' : '';
+    if (nativeCurrency && nativeCurrency !== accCur) {
+      const natAbs = Math.abs(nativeAmount);
+      const rsdAbs = Math.abs(amount);
+      return sign + natAbs.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' ' + nativeCurrency + ' (' + rsdAbs.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' ' + accCur + ')';
+    }
+    const abs = Math.abs(amount);
+    if (cur === accCur) return sign + abs.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' ' + cur;
+    const rsd = Math.abs(this.toRsd(abs, cur));
+    return sign + rsd.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' ' + accCur + ' (' + abs.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' ' + cur + ')';
   },
 
   accountBalance(accountId) {
@@ -831,6 +856,27 @@ window.BlackBook = {
       const d = e.deltaY > 0 ? 1 : -1;
       sel.selectedIndex = (sel.selectedIndex + d + sel.options.length) % sel.options.length;
       sel.dispatchEvent(new Event('change'));
+    }, { passive: false });
+  },
+
+  bindDateWheel() {
+    if (this._dateWheelBound) return;
+    this._dateWheelBound = true;
+    document.addEventListener('wheel', (e) => {
+      const el = e.target;
+      if (!el || el.tagName !== 'INPUT' || el.type !== 'text' || el.readOnly || el.disabled) return;
+      const ph = (el.placeholder || '').toUpperCase();
+      if (ph.indexOf('DD.MM.YYYY') === -1 && ph.indexOf('YYYY') === -1) return;
+      if (!el.value.trim()) { e.preventDefault(); el.value = this.fmtDateInput(this.today()); return; }
+      const parsed = this.parseDateInput(el.value);
+      if (!parsed) return;
+      e.preventDefault();
+      const dir = e.deltaY < 0 ? 1 : -1;
+      const p = parsed.split('-');
+      const d = new Date(parseInt(p[0], 10), parseInt(p[1], 10) - 1, parseInt(p[2], 10) + dir);
+      el.value = this.fmtDateInput(d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'));
+      el.dispatchEvent(new Event('input', { bubbles: true }));
+      el.dispatchEvent(new Event('change', { bubbles: true }));
     }, { passive: false });
   },
 
