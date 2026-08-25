@@ -193,6 +193,7 @@ window.BlackBook = {
         e.preventDefault();
         if (this.currentPage === 'overview') { this.toggleOverviewGraph(); return; }
         if (this.currentPage === 'bills') { this.toggleBillsGraph(); return; }
+        if (this.currentPage === 'budget') { this.toggleBudgetGraph(); return; }
       }
       if (e.key === 'Tab') { e.preventDefault(); if (this.currentPage === 'overview') this.cycleAccount(); return; }
       if (/^[1-9]$/.test(e.key)) {

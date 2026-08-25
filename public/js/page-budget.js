@@ -4,10 +4,124 @@ Object.assign(window.BlackBook, {
     const el = document.getElementById('page-budget');
     if (!el) return;
     if (!this.data.budgets) this.data.budgets = [];
+    const hideGraph = !!(this.data.settings && this.data.settings.hideBudgetGraph);
     el.innerHTML = this.monthPickerHtml() +
       this.budgetSummaryHtml() +
       '<div class="list-sep"></div>' +
-      '<div class="page-scroll-wrap">' + this.budgetCardsHtml() + '</div>';
+      '<div class="page-scroll-wrap">' + this.budgetCardsHtml() + '</div>' +
+      '<div class="list-sep"></div>' +
+      (hideGraph
+        ? '<div class="graph-show-row"><button class="btn btn-sm btn-secondary" onclick="BlackBook.toggleBudgetGraph()">SHOW GRAPH</button></div>'
+        : this.budgetChipsHtml() +
+          '<div class="overview-charts"><div class="chart-panel chart-panel-full"><canvas id="budget-chart"></canvas></div></div>');
+    if (!hideGraph) setTimeout(() => this.renderBudgetChart(), 50);
+  },
+
+  async toggleBudgetGraph() {
+    this.data.settings.hideBudgetGraph = !(this.data.settings && this.data.settings.hideBudgetGraph);
+    await this.save();
+    this.renderPage('budget');
+  },
+
+  budgetChipsHtml() {
+    const budgetMap = Object.fromEntries(this.data.budgets.map(b => [b.categoryId, b]));
+    let html = '<div class="cat-filter">';
+    const hc = this.data.settings.highlightColor || '#fa8c3c';
+    const totOn = this._budgetTotalOn !== false;
+    html += '<div class="cat-filter-chip' + (totOn ? ' selected' : '') + '" style="--cc:' + hc + ';' + (totOn ? 'background:' + hc + ';color:var(--on-fill);' : '') + '" onclick="BlackBook.toggleBudgetTotal()" title="Monthly total spent line \u00b7 click to toggle">' +
+      '<span style="' + (totOn ? '' : 'opacity:0.5;') + '">TOTAL</span></div>';
+    for (const cat of this.sortedCategories()) {
+      const color = cat.color || '#71717a';
+      const b = budgetMap[cat.id];
+      const on = !(this._budgetCatOff && this._budgetCatOff[cat.id]);
+      const name = b && b.name ? b.name : cat.name;
+      html += '<div class="cat-filter-chip' + (on ? ' selected' : '') + '" style="--cc:' + color + ';' + (on ? 'background:' + color + ';color:var(--on-fill);' : '') + (on ? '' : 'opacity:0.55;') + '" onclick="BlackBook.toggleBudgetCat(\x27' + cat.id + '\x27)" title="' + this.escapeHtml(name) + (b ? ' \u00b7 ' + this.fmtRsd(b.amount) : ' \u00b7 NO LIMIT') + ' \u00b7 click to show/hide in graph">' + this.escapeHtml(name) + '</div>';
+    }
+    html += '<span style="flex:1;"></span>';
+    html += '<button class="btn btn-sm btn-secondary" style="margin-left:4px;" onclick="BlackBook.toggleBudgetGraph()" title="Hide budget graph">HIDE</button>';
+    return html + '</div>';
+  },
+
+  toggleBudgetTotal() {
+    this._budgetTotalOn = (this._budgetTotalOn === false);
+    this.renderBudget();
+  },
+
+  toggleBudgetCat(catId) {
+    if (!this._budgetCatOff) this._budgetCatOff = {};
+    this._budgetCatOff[catId] = !this._budgetCatOff[catId];
+    this.renderBudget();
+  },
+
+  budgetMonthlySpend() {
+    const year = String(this.vy());
+    const months = [];
+    for (let m = 1; m <= 12; m++) months.push(year + '-' + String(m).padStart(2, '0'));
+    const totalSet = new Set(months);
+    const byCat = {};
+    const total = {};
+    for (const mk of months) { total[mk] = 0; }
+    for (const tx of this.data.transactions) {
+      if (tx.type !== 'expense' || this.isTransfer(tx)) continue;
+      const mk = String(tx.date || '').slice(0, 7);
+      if (!totalSet.has(mk)) continue;
+      const rsd = Math.abs(this.toRsd(tx.amount, tx.currency));
+      if (!byCat[tx.categoryId]) byCat[tx.categoryId] = {};
+      byCat[tx.categoryId][mk] = (byCat[tx.categoryId][mk] || 0) + rsd;
+      total[mk] += rsd;
+    }
+    return { months: months, byCat: byCat, total: total };
+  },
+
+  renderBudgetChart() {
+    if (this.budgetChart) { this.budgetChart.destroy(); this.budgetChart = null; }
+    const canvas = document.getElementById('budget-chart');
+    if (!canvas) return;
+    const MONTHS_S = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
+    const spend = this.budgetMonthlySpend();
+    const datasets = [];
+    if (this._budgetTotalOn !== false) {
+      const hc = this.data.settings.highlightColor || '#fa8c3c';
+      datasets.push({
+        label: 'TOTAL',
+        data: spend.months.map(mk => this.round2(spend.total[mk] || 0)),
+        borderColor: hc,
+        backgroundColor: 'transparent',
+        tension: 0.3,
+        borderWidth: 2.5,
+        pointRadius: 2
+      });
+    }
+    for (const cat of this.sortedCategories()) {
+      if (this._budgetCatOff && this._budgetCatOff[cat.id]) continue;
+      const b = this.data.budgets.find(x => x.categoryId === cat.id);
+      const per = spend.byCat[cat.id] || {};
+      datasets.push({
+        label: b && b.name ? b.name : cat.name,
+        data: spend.months.map(mk => this.round2(per[mk] || 0)),
+        borderColor: cat.color || '#71717a',
+        backgroundColor: 'transparent',
+        tension: 0.3,
+        borderWidth: 2,
+        pointRadius: 3
+      });
+    }
+    this.budgetChart = new Chart(canvas.getContext('2d'), {
+      type: 'line',
+      data: { labels: MONTHS_S, datasets: datasets },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { display: false },
+          title: { display: false }
+        },
+        scales: {
+          x: { ticks: { color: '#555555' }, grid: { color: '#141414' } },
+          y: { ticks: { color: '#555555' }, grid: { color: '#141414' } }
+        }
+      }
+    });
   },
 
   budgetSummaryHtml() {
