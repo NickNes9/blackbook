@@ -12,10 +12,13 @@ Object.assign(window.BlackBook, {
         ? '<div class="list-sep"></div><div class="graph-show-row"><button class="btn btn-sm btn-secondary" onclick="BlackBook.toggleOverviewGraph()">SHOW GRAPH</button></div>'
         : '<div class="list-sep"></div><div class="overview-charts"><div class="chart-panel overview-line-panel"><div class="chart-head-row"><span class="chart-title-text">INCOME VS EXPENSES</span><button class="btn btn-sm btn-secondary" onclick="BlackBook.toggleOverviewGraph()" title="Hide graph (H)">HIDE</button></div><canvas id="overview-line-chart"></canvas></div></div>');
     this.bindBarTooltip(el);
+    setTimeout(() => { this.fitElems('.account-chip .chip-name'); this.fitElems('.account-chip .chip-balance'); }, 20);
     if (!hideGraph) setTimeout(() => { this.renderOverviewLineChart(); }, 50);
   },
 
   toggleOvType(t) {
+    const wrap = document.querySelector('.tx-list-wrap');
+    const scrollTop = wrap ? wrap.scrollTop : 0;
     const active = this.ovActiveTypes();
     if (active === t) {
       this._ovInc = false;
@@ -28,6 +31,8 @@ Object.assign(window.BlackBook, {
       this._ovExp = true;
     }
     this.renderPage('overview');
+    const nw = document.querySelector('.tx-list-wrap');
+    if (nw) nw.scrollTop = scrollTop;
   },
 
   ovActiveTypes() {
@@ -38,9 +43,13 @@ Object.assign(window.BlackBook, {
   },
 
   async toggleOverviewGraph() {
+    const wrap = document.querySelector('.tx-list-wrap');
+    const scrollTop = wrap ? wrap.scrollTop : 0;
     this.data.settings.hideOverviewGraph = !(this.data.settings && this.data.settings.hideOverviewGraph);
     await this.save();
     this.renderOverview();
+    const nw = document.querySelector('.tx-list-wrap');
+    if (nw) nw.scrollTop = scrollTop;
   },
 
   accountDetailHtml() {
@@ -63,6 +72,7 @@ Object.assign(window.BlackBook, {
     for (const tx of this.data.transactions) {
       const { y, m } = this.ymOf(tx.date);
       if (this.isTransfer(tx)) continue;
+      if (this._bulkSel && this._bulkSel.size && this._bulkOnly && !this._bulkSel.has(tx.id)) continue;
       if (y === year && m === month) {
         const rsd = this.toRsd(tx.amount, tx.currency);
         if (tx.type === 'income') income += Math.abs(rsd); else expenses += Math.abs(rsd);
@@ -71,9 +81,20 @@ Object.assign(window.BlackBook, {
     return '<div class="month-summary"><div class="month-summary-item"><span class="month-summary-label">INCOME</span><span class="month-summary-value amount-positive">' + this.fmtRsd(income) + '</span></div><div class="month-summary-item"><span class="month-summary-label">EXPENSES</span><span class="month-summary-value amount-negative">' + this.fmtRsd(expenses) + '</span></div><div class="month-summary-item"><span class="month-summary-label">NET</span><span class="month-summary-value ' + (income - expenses >= 0 ? 'amount-positive' : 'amount-negative') + '">' + this.fmtRsd(income - expenses) + '</span></div>' +
       '<span style="flex:1;"></span>' +
       '<span style="display:flex;gap:6px;align-items:center;">' +
+      (this._bulkSel && this._bulkSel.size ? '<div class="cat-filter-chip bulk-filter-chip' + (this._bulkOnly ? ' selected' : '') + '" onclick="BlackBook.toggleBulkOnly()">SELECTED (' + this._bulkSel.size + ')</div>' : '') +
       '<div class="cat-filter-chip' + (this._ovInc ? ' selected' : '') + '" onclick="BlackBook.toggleOvType(\x27income\x27)" title="Filter the graph and the list to income only">INCOME</div>' +
       '<div class="cat-filter-chip' + (this._ovExp ? ' selected' : '') + '" onclick="BlackBook.toggleOvType(\x27expense\x27)" title="Filter the graph and the list to expenses only">EXPENSES</div>' +
       '</span></div>';
+  },
+
+  toggleBulkOnly() {
+    if (!this._bulkSel || !this._bulkSel.size) { this._bulkOnly = false; return; }
+    const wrap = document.querySelector('.tx-list-wrap');
+    const scrollTop = wrap ? wrap.scrollTop : 0;
+    this._bulkOnly = !this._bulkOnly;
+    this.renderPage('overview');
+    const nw = document.querySelector('.tx-list-wrap');
+    if (nw) nw.scrollTop = scrollTop;
   },
 
   categoryBreakdownHtml() {
@@ -152,6 +173,7 @@ Object.assign(window.BlackBook, {
     const now = new Date(), year = now.getFullYear(), month = now.getMonth();
     let monthlyIncome = 0, monthlyExpenses = 0;
     for (const tx of this.data.transactions) {
+      if (this.isTransfer(tx)) continue;
       const d = new Date(tx.date);
       if (d.getFullYear() === year && d.getMonth() === month) {
         const rsd = this.toRsd(tx.amount, tx.currency);
@@ -176,16 +198,16 @@ Object.assign(window.BlackBook, {
   },
 
   categoryFilterHtml() {
-    const allCat = !this.selectedCategory;
     const y = this.vy(), m = this.vm();
     const used = new Set();
     for (const tx of this.data.transactions) {
-      if (this.isTransfer(tx) || !tx.categoryId) continue;
       const { y: ty, m: tm } = this.ymOf(tx.date);
-      if (ty === y && tm === m) used.add(tx.categoryId);
+      if (ty !== y || tm !== m) continue;
+      if (!tx.categoryId) continue;
+      used.add(tx.categoryId);
     }
-    let html = '<div class="cat-filter"><div class="cat-filter-chip' + (allCat ? ' selected' : '') + '" onclick="BlackBook.selectCategory(null)">ALL</div>';
-    const sorted = this.data.categories.filter(c => used.has(c.id)).sort((a, b) => a.name.localeCompare(b.name));
+    let html = '<div class="cat-filter"><div class="cat-filter-chip' + (this.selectedCategory === null && !this._ovInc && !this._ovExp ? ' selected' : '') + '" onclick="BlackBook.selectCategory(null)">ALL</div>';
+    const sorted = (this.data.categories || []).filter(c => used.has(c.id)).sort((a, b) => a.name.localeCompare(b.name));
     for (const c of sorted) {
       const sel = this.selectedCategory === c.id;
       html += '<div class="cat-filter-chip' + (sel ? ' selected' : '') + '" style="--cc:' + c.color + ';' + (sel ? 'background:' + c.color + ';color:var(--on-fill);' : '') + '" onclick="BlackBook.selectCategory(\x27' + c.id + '\x27)">' + this.escapeHtml(c.name) + '</div>';
@@ -196,10 +218,17 @@ Object.assign(window.BlackBook, {
   recentTransactionsHtml() {
     let txs = this.data.transactions.slice().sort((a, b) => b.date.localeCompare(a.date));
     if (this.selectedAccount) txs = txs.filter(t => t.accountId === this.selectedAccount);
-    if (this.selectedCategory) txs = txs.filter(t => t.categoryId === this.selectedCategory);
+    if (this.selectedCategory) {
+      if (this.selectedCategory === '__TRANSFER__') {
+        txs = txs.filter(t => this.isTransfer(t));
+      } else {
+        txs = txs.filter(t => t.categoryId === this.selectedCategory);
+      }
+    }
     const typeFilter = this.ovActiveTypes();
     if (typeFilter) txs = txs.filter(t => t.type === typeFilter);
     txs = txs.filter(t => { const { y, m } = this.ymOf(t.date); return y === this.vy() && m === this.vm(); });
+    if (this._bulkSel && this._bulkSel.size && this._bulkOnly) txs = txs.filter(t => this._bulkSel.has(t.id));
     if (!txs.length) return '<div class="empty-state" style="padding:20px"><div class="empty-state-text">No transactions this month. Press A to add one.</div></div>';
     const accounts = Object.fromEntries(this.data.accounts.map(a => [a.id, a]));
     const cards = Object.fromEntries((this.data.creditCards || []).map(c => [c.id, c]));
@@ -218,16 +247,9 @@ Object.assign(window.BlackBook, {
       const txCur = tx.currency || 'RSD';
       const accCur = card ? 'RSD' : ((accounts[tx.accountId] || {}).currency || 'RSD');
       const txAmtDisplay = this.fmtDualCurrency(tx.amount, txCur, accCur, tx.nativeAmount, tx.nativeCurrency);
-      rows += '<div class="tx-row' + (this._bulkSel && this._bulkSel.has(tx.id) ? ' bulk-selected' : '') + '" onclick="BlackBook.bulkToggle(\x27' + tx.id + '\x27)" onmouseenter="BlackBook.hoveredTxId=\x27' + tx.id + '\x27" onmouseleave="BlackBook.hoveredTxId=null"><div class="tx-acct-stripe" style="background:' + acc.color + '"><span class="tx-acct-label">' + this.escapeHtml((acc.shortName || '?').toUpperCase()) + '</span></div><span class="tx-date">' + tx.date + '</span><span class="tx-cat" style="color:' + cat.color + '">' + this.escapeHtml(cat.name) + '</span><span class="tx-note">' + this.escapeHtml(tx.note || '') + '</span><span class="tx-actions" onclick="event.stopPropagation()"><button class="btn btn-sm btn-secondary" onclick="BlackBook.openEditTransaction(\x27' + tx.id + '\x27)">EDIT</button><button class="btn btn-sm btn-danger" onclick="BlackBook.deleteTransaction(\x27' + tx.id + '\x27)">DEL</button></span><span class="tx-amt ' + amtClass + wtClass + '">' + txAmtDisplay + '</span></div>';
+      rows += '<div class="tx-row' + (this._bulkSel && this._bulkSel.has(tx.id) ? ' bulk-selected' : '') + '" onclick="BlackBook.bulkToggle(\x27' + tx.id + '\x27)" onmouseenter="BlackBook.hoveredTxId=\x27' + tx.id + '\x27" onmouseleave="BlackBook.hoveredTxId=null"><div class="tx-acct-stripe" style="background:' + acc.color + '"><span class="tx-acct-label">' + this.escapeHtml((acc.shortName || '?').toUpperCase()) + '</span></div><span class="tx-date">' + this.fmtDateInput(tx.date) + '</span><span class="tx-cat" style="color:' + cat.color + '">' + this.escapeHtml(cat.name) + '</span><span class="tx-note">' + this.escapeHtml(tx.note || '') + '</span><span class="tx-actions" onclick="event.stopPropagation()"><button class="btn btn-sm btn-secondary" onclick="BlackBook.openEditTransaction(\x27' + tx.id + '\x27)">EDIT</button><button class="btn btn-sm btn-danger" onclick="BlackBook.deleteTransaction(\x27' + tx.id + '\x27)">DEL</button></span><span class="tx-amt ' + amtClass + wtClass + '">' + txAmtDisplay + '</span></div>';
     }
-    let html = '<div class="tx-list">' + rows + '</div>';
-    if (this._bulkSel && this._bulkSel.size) {
-      html += '<div class="bulk-bar"><span class="bulk-count">' + this._bulkSel.size + ' SELECTED</span>' +
-        '<button class="btn btn-sm btn-primary" onclick="BlackBook.openBulkEdit()">EDIT</button>' +
-        '<button class="btn btn-sm btn-danger" onclick="BlackBook.bulkDelete()">DELETE</button>' +
-        '<button class="btn btn-sm btn-secondary" onclick="BlackBook.bulkClear()">CLEAR</button></div>';
-    }
-    return html;
+    return '<div class="tx-list">' + rows + '</div>';
   },
 
 
@@ -241,15 +263,14 @@ Object.assign(window.BlackBook, {
   // ==================== BUDGET ====================
 
   selectAccount(id) { this.selectedAccount = id; this.renderPage(this.currentPage); },
-  cycleAccount() {
+  cycleAccount(dir) {
+    dir = dir || 1;
     const vis = this.visibleAccounts();
     if (vis.length === 0) return;
-    if (!this.selectedAccount || !vis.some(a => a.id === this.selectedAccount)) { this.selectedAccount = vis[0].id; }
-    else {
-      const idx = vis.findIndex(a => a.id === this.selectedAccount);
-      if (idx === -1 || idx === vis.length - 1) { this.selectedAccount = null; }
-      else { this.selectedAccount = vis[idx + 1].id; }
-    }
+    const states = [null].concat(vis.map(a => a.id));
+    const cur = (!this.selectedAccount || !vis.some(a => a.id === this.selectedAccount)) ? null : this.selectedAccount;
+    const idx = cur ? states.indexOf(cur) : 0;
+    this.selectedAccount = states[(idx + dir + states.length) % states.length];
     this.renderPage(this.currentPage);
   },
 
@@ -272,6 +293,7 @@ Object.assign(window.BlackBook, {
     const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
     const income = new Array(12).fill(0), expenses = new Array(12).fill(0);
     for (const tx of this.chartAccountsTx()) {
+      if (this.isTransfer(tx)) continue;
       const d = new Date(tx.date);
       if (d.getFullYear() !== year) continue;
       const m = d.getMonth(), rsd = this.toRsd(tx.amount, tx.currency);

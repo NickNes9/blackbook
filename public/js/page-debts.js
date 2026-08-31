@@ -53,7 +53,8 @@ Object.assign(window.BlackBook, {
 
   debtCardHtml(d) {
     const settled = this.debtIsSettled(d);
-    const total = this.debtRsd(d), paid = this.debtPaidRsd(d);
+    const cur = d.currency || 'RSD';
+    const total = Math.abs(d.amount || 0), paid = Math.min(total, Math.abs(d.amountPaid || 0));
     const pct = total > 0 ? Math.min(Math.round(paid / total * 100), 100) : 0;
     const overdue = !settled && d.dueDate && d.dueDate < this.today();
     const fill = d.type === 'in' ? 'var(--income)' : 'var(--accent)';
@@ -65,7 +66,7 @@ Object.assign(window.BlackBook, {
       (settled ? '<span class="debt-badge debt-badge-settled">&#10003; SETTLED</span>' : '<button class="btn btn-sm btn-primary" onclick="BlackBook.openDebtPayModal(\x27' + d.id + '\x27)">+ PAY</button>') +
       '<button class="btn btn-sm btn-secondary" onclick="BlackBook.openEditDebt(\x27' + d.id + '\x27)">EDIT</button>' +
       '<button class="btn btn-sm btn-danger" onclick="BlackBook.deleteDebt(\x27' + d.id + '\x27)">DEL</button></span></div>';
-    html += '<div class="savings-progress-text"><span>' + this.fmtRsd(paid) + ' of ' + this.fmtRsd(total) + '</span><span>' + pct + '%</span></div>' +
+    html += '<div class="savings-progress-text"><span>' + this.fmtAmount(paid, cur) + ' of ' + this.fmtAmount(total, cur) + '</span><span>' + pct + '%</span></div>' +
       '<div class="savings-progress-bar"><div class="savings-progress-fill" style="width:' + pct + '%;background:' + fill + ';"></div></div>';
     html += '<div class="bill-meta-line" style="display:block;margin-top:6px;">' +
       'DATE ' + (d.date || '?') +
@@ -127,7 +128,7 @@ Object.assign(window.BlackBook, {
       if (amountPaid > amount) amountPaid = amount;
       const debtDate = this.parseDateInput(document.getElementById('debt-date').value) || this.today();
       const debtDue = this.parseDateInput(document.getElementById('debt-due').value);
-      if (document.getElementById('debt-due').value.trim() && !debtDue) { alert('Enter a valid due date (DD.MM.YYYY).'); return; }
+      if (document.getElementById('debt-due').value.trim() && !debtDue) { alert('Enter a valid due date (DD/MM/YYYY).'); return; }
       const data = { person: person, type: document.getElementById('debt-type').value, amount: amount, currency: document.getElementById('debt-currency').value, date: debtDate, dueDate: debtDue || '', amountPaid: amountPaid, note: document.getElementById('debt-note').value.trim() };
       if (!this.data.debts) this.data.debts = [];
       if (id) {
@@ -146,7 +147,9 @@ Object.assign(window.BlackBook, {
   openDebtPayModal(id) {
     const d = this.data.debts.find(x => x.id === id);
     if (!d || this.debtIsSettled(d)) return;
-    const remaining = this.debtRsd(d) - this.debtPaidRsd(d);
+    const total = Math.abs(d.amount || 0);
+    const paid = Math.min(total, Math.abs(d.amountPaid || 0));
+    const remaining = total - paid;
     document.getElementById('dpay-id').value = id;
     document.getElementById('dpay-amount').value = remaining.toFixed(2);
     document.getElementById('debt-pay-title').textContent = 'Payment \u2014 ' + d.person;
@@ -165,7 +168,9 @@ Object.assign(window.BlackBook, {
       if (!d) return;
       let amt = this.evalAmount(document.getElementById('dpay-amount').value);
       if (!(amt > 0)) { alert('Enter a valid amount.'); return; }
-      const remaining = this.debtRsd(d) - this.debtPaidRsd(d);
+      const total = Math.abs(d.amount || 0);
+      const paid = Math.min(total, Math.abs(d.amountPaid || 0));
+      const remaining = total - paid;
       if (amt > remaining) amt = remaining;
       d.amountPaid = Math.round(((d.amountPaid || 0) + amt) * 100) / 100;
       await this.save();
@@ -177,7 +182,7 @@ Object.assign(window.BlackBook, {
   async deleteDebt(id) {
     const d = this.data.debts.find(x => x.id === id);
     if (!d) return;
-    if (!confirm('Delete debt entry for "' + d.person + '"?')) return;
+    if (!(await this.confirmModal({ title: 'Delete Debt', message: 'Delete debt entry for "' + d.person + '"?' , confirmText: 'Delete' }))) return;
     this.data.debts = this.data.debts.filter(x => x.id !== id);
     await this.save();
     this.renderPage(this.currentPage === 'debts' ? 'debts' : this.currentPage);

@@ -32,7 +32,9 @@ const DEFAULT_DATA = {
   settings: { eurToRsdRate: 117.2, eurToRsdRateSource: 'manual', eurToRsdRateUpdated: null, defaultAccountId: null, defaultCategoryId: null }
 };
 
-app.use(express.json());
+app.use(express.json({ limit: '50mb' }));
+let lastRequest = Date.now();
+app.use((req, res, next) => { lastRequest = Date.now(); next(); });
 app.use(express.static(join(__dirname, 'public'), {
   setHeaders(res) { res.setHeader('Cache-Control', 'no-store'); }
 }));
@@ -65,7 +67,7 @@ app.post('/api/save', (req, res) => {
 function safeProfileName(p) {
   const name = String(p || '').trim();
   if (!name) return '';
-  if (!/^[a-zA-Z0-9 _-]+$/.test(name)) return null;
+  if (!/^[a-zA-Z0-9 _.-]+$/.test(name)) return null;
   if (name.toLowerCase() === 'data') return null; // reserved: profiles/data.json is the default profile
   return name;
 }
@@ -248,14 +250,28 @@ const server = app.listen(PORT, () => console.log(`Black Book running at http://
 const wss = new WebSocketServer({ server });
 let browserConnected = false;
 let shutdownTimer = null;
+const IDLE_SHUTDOWN_MS = 60000;
 
 wss.on('connection', (ws) => {
   browserConnected = true;
-  if (shutdownTimer) { clearTimeout(shutdownTimer); shutdownTimer = null; console.log('Browser reconnected. Shutdown cancelled.'); }
+  if (shutdownTimer) { clearTimeout(shutdownTimer); shutdownTimer = null; console.log('Browser connected. Idle shutdown cancelled.'); }
   ws.on('close', () => {
     browserConnected = false;
-    if (shutdownTimer) return;
-    console.log('Browser disconnected. Shutting down in 3s unless it reconnects...');
-    shutdownTimer = setTimeout(() => process.exit(0), 3000);
+    scheduleShutdown();
   });
 });
+
+function scheduleShutdown() {
+  if (shutdownTimer) return;
+  console.log('Browser disconnected. Will auto-exit after an idle period unless it reconnects or activity resumes...');
+  shutdownTimer = setTimeout(() => {
+    shutdownTimer = null;
+    if (browserConnected) return;
+    if (Date.now() - lastRequest < IDLE_SHUTDOWN_MS) {
+      scheduleShutdown();
+      return;
+    }
+    console.log('Idle for ' + (IDLE_SHUTDOWN_MS / 1000) + 's with no browser. Exiting.');
+    process.exit(0);
+  }, IDLE_SHUTDOWN_MS);
+}

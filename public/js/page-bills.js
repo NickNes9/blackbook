@@ -44,6 +44,7 @@ Object.assign(window.BlackBook, {
         : this.billsChipsHtml() +
           '<div class="overview-charts"><div class="chart-panel chart-panel-full"><canvas id="bills-chart"></canvas></div></div>');
     if (!hideGraph) setTimeout(() => this.renderBillsChart(), 50);
+    setTimeout(() => this.fitElems('.bill-cell'), 20);
   },
 
   async toggleBillsGraph() {
@@ -210,7 +211,7 @@ Object.assign(window.BlackBook, {
   },
 
   async deleteBill(billId) {
-    if (!confirm('Delete this bill?')) return;
+    if (!(await this.confirmModal({ title: 'Delete Bill', message: 'Delete this bill?' , confirmText: 'Delete' }))) return;
     this.data.bills = this.data.bills.filter(b => b.id !== billId);
     for (const p of (this.data.billPayments || [])) { if (p.billId === billId) this.removeBillTransaction(p); }
     this.data.billPayments = (this.data.billPayments || []).filter(p => p.billId !== billId);
@@ -256,7 +257,10 @@ Object.assign(window.BlackBook, {
   applyAutopayForBill(bill) {
     const n = new Date();
     const mk = n.getFullYear() + '-' + String(n.getMonth() + 1).padStart(2, '0');
-    this.ensureBillPaid(bill, mk);
+    const dueDay = bill.dueDay || 1;
+    if (n.getDate() >= dueDay) {
+      this.ensureBillPaid(bill, mk);
+    }
   },
 
   applyAutopay() {

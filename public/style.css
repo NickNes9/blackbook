@@ -119,6 +119,10 @@ html { background: var(--bg); }
   padding: 20px 24px calc(var(--footer-h) + 20px);
 }
 
+body.sb-collapsed { --sidebar-w: 0px; }
+body.sb-collapsed .app-sidebar { overflow: hidden; }
+.app-sidebar, .app-workspace { transition: width .18s ease, margin-left .18s ease; }
+
 .page { display: block; }
 
 /* Homepage: fixed viewport height, only the transaction list scrolls */
@@ -264,7 +268,10 @@ input[type="checkbox"]:checked {
 .header-logo-mark {
   flex: 0 0 auto;
   vertical-align: middle;
+  cursor: pointer;
 }
+
+.header-logo-mark:hover { opacity: 0.7; }
 
 .header-logo {
   font-size:15px;
@@ -321,6 +328,18 @@ input[type="checkbox"]:checked {
 
 .status-dot.online {
   background: var(--income);
+}
+
+/* Save indicator */
+.save-status { transition: color .2s ease; }
+.save-status .save-label { color: var(--income, #22c55e); font-weight: 700; }
+.save-status.saving .save-label {
+  color: var(--expense, #ef4444);
+  animation: savePulse 1s ease-in-out infinite;
+}
+@keyframes savePulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.25; }
 }
 
 /* ===== SIDEBAR ===== */
@@ -897,7 +916,33 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
   background: var(--on-fill) !important;
 }
 
-/* ===== TRANSACTION LIST ===== */
+/* Bulk filter bar */
+.bulk-filter-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 14px;
+  background: var(--block);
+  border: 1px solid var(--divider);
+  border-radius: 8px;
+  margin: 8px 0 12px;
+  flex-wrap: wrap;
+}
+.bulk-filter-info {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--accent);
+}
+.bulk-filter-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.bulk-filter-actions .btn {
+  font-size: 12px;
+  padding: 6px 12px;
+}
 .tx-list {
   display: flex;
   flex-direction: column;
@@ -944,7 +989,17 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
 
 /* Bulk edit */
 .tx-row { cursor: pointer; }
-.tx-row.bulk-selected { box-shadow: inset 8px 0 0 var(--accent), 0 -1px 0 var(--divider) inset; }
+.tx-row.bulk-selected { position: relative; }
+.tx-row.bulk-selected::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 4px;
+  background: var(--accent);
+  z-index: 1;
+}
 .bulk-bar {
   display: flex;
   align-items: center;
@@ -2208,6 +2263,53 @@ h1, h2, h3 {
 .modal-content.wide {
   max-width: 640px;
 }
+
+/* Merge transactions */
+.merge-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border: 1px solid var(--divider);
+  border-radius: 8px;
+  margin-bottom: 6px;
+  cursor: pointer;
+  font-size: 13px;
+}
+.merge-row:hover { background: var(--block-hover, #1a1f2e); }
+.merge-row.merge-target { border-color: var(--accent); background: var(--accent-dim, rgba(88,101,242,0.12)); }
+.merge-radio {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 2px solid var(--text-muted);
+  flex: 0 0 auto;
+}
+.merge-row.merge-target .merge-radio { border: 5px solid var(--accent); }
+.merge-date { font-weight: 700; color: var(--text-bright); flex: 0 0 auto; }
+.merge-cat { font-weight: 600; flex: 0 0 auto; }
+.merge-acct { color: var(--text-dim); flex: 0 0 auto; }
+.merge-note { color: var(--text-muted); flex: 1 1 auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.merge-amt { font-variant-numeric: tabular-nums; font-weight: 700; flex: 0 0 auto; }
+
+/* Confirm modal */
+.confirm-message {
+  white-space: pre-line;
+  font-size: 14px;
+  color: var(--text-bright);
+  line-height: 1.5;
+  margin: 4px 0 12px;
+}
+.confirm-hint {
+  font-size: 11px;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  margin-bottom: 14px;
+}
+.confirm-hint .hotkey { margin: 0 2px; }
+
+
 
 .inv-dir-toggle {
   width: 100%;
