@@ -31,6 +31,7 @@ Object.assign(window.BlackBook, {
     html += '<div class="cat-filter-chip' + (totOn ? ' selected' : '') + '" style="--cc:' + hc + ';' + (totOn ? 'background:' + hc + ';color:var(--on-fill);' : '') + '" onclick="BlackBook.toggleBudgetTotal()" title="Monthly total spent line \u00b7 click to toggle">' +
       '<span style="' + (totOn ? '' : 'opacity:0.5;') + '">TOTAL</span></div>';
     for (const cat of this.sortedCategories()) {
+      if (cat.name.toLowerCase() === 'transfer') continue;
       const color = cat.color || '#71717a';
       const b = budgetMap[cat.id];
       const on = !(this._budgetCatOff && this._budgetCatOff[cat.id]);

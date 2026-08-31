@@ -100,7 +100,7 @@ Object.assign(window.BlackBook, {
   },
 
   async deleteSavingsGoal(goalId) {
-    if (!confirm('Delete this savings goal?')) return;
+    if (!(await this.confirmModal({ title: 'Delete Goal', message: 'Delete this savings goal?' , confirmText: 'Delete' }))) return;
     const goal = this.data.savingsGoals.find(g => g.id === goalId);
     const entryIds = new Set(((goal && goal.entries) || []).map(e => e.id));
     this.data.savingsGoals = this.data.savingsGoals.filter(g => g.id !== goalId);
@@ -164,7 +164,7 @@ Object.assign(window.BlackBook, {
       e.preventDefault();
       const goalId = document.getElementById('savings-entry-goal-id').value;
       const date = this.parseDateInput(document.getElementById('savings-entry-date').value);
-      if (!date) { alert('Enter a valid date (DD.MM.YYYY).'); return; }
+      if (!date) { alert('Enter a valid date (DD/MM/YYYY).'); return; }
       const amount = this.evalAmount(document.getElementById('savings-entry-amount').value);
       const note = document.getElementById('savings-entry-note').value.trim();
       if (!goalId || isNaN(amount) || amount === 0) return;

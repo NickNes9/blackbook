@@ -216,7 +216,7 @@ Object.assign(window.BlackBook, {
   async deleteInstallment(instId) {
     const inst = this.data.installments.find(i => i.id === instId);
     if (!inst) return;
-    if (!confirm('Delete purchase plan "' + inst.name + '"? Paid payments stay as transactions.')) return;
+    if (!(await this.confirmModal({ title: 'Delete Plan', message: 'Delete purchase plan "' + inst.name + '"? Paid payments stay as transactions.' , confirmText: 'Delete' }))) return;
     const pid = 'inst-' + inst.id + '-';
     this.data.installments = this.data.installments.filter(i => i.id !== instId);
     this.data.transactions = this.data.transactions.filter(t => !t.pairId || t.pairId.indexOf(pid) !== 0);
@@ -281,8 +281,8 @@ Object.assign(window.BlackBook, {
     const card = this.cardById(id);
     if (!card) return;
     const plans = this.data.installments.filter(i => (this.instCard(i) || {}).id === id);
-    const msg = plans.length ? '"' + card.name + '" has ' + plans.length + ' purchase plan' + (plans.length === 1 ? '' : 's') + '.\n\nOK = delete the card AND its plans.\nCancel = do nothing.' : 'Delete card "' + card.name + '"?';
-    if (!confirm(msg)) return;
+    const msg = plans.length ? '"' + card.name + '" has ' + plans.length + ' purchase plan' + (plans.length === 1 ? '' : 's') + '.\n\nConfirm = delete the card AND its plans.\nCancel = do nothing.' : 'Delete card "' + card.name + '"?';
+    if (!(await this.confirmModal({ title: 'Delete Card', message: msg, confirmText: 'Delete' }))) return;
     const planIds = plans.map(p => p.id);
     this.data.creditCards = this.data.creditCards.filter(c => c.id !== id);
     this.data.installments = this.data.installments.filter(i => planIds.indexOf(i.id) === -1);

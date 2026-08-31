@@ -219,7 +219,7 @@ Object.assign(window.BlackBook, {
       if (!lines.length) { alert('Add at least one line item.'); return; }
       const invDate = this.parseDateInput(document.getElementById('invoice-date').value) || this.today();
       const invDue = this.parseDateInput(document.getElementById('invoice-due').value);
-      if (document.getElementById('invoice-due').value.trim() && !invDue) { alert('Enter a valid due date (DD.MM.YYYY).'); return; }
+      if (document.getElementById('invoice-due').value.trim() && !invDue) { alert('Enter a valid due date (DD/MM/YYYY).'); return; }
       const data = { dir: document.getElementById('invoice-dir').value, party: party, number: document.getElementById('invoice-number').value.trim(), date: invDate, dueDate: invDue || '', currency: document.getElementById('invoice-currency').value, note: document.getElementById('invoice-note').value.trim(), lines: lines };
       if (!this.data.invoices) this.data.invoices = [];
       if (id) {
@@ -240,7 +240,7 @@ Object.assign(window.BlackBook, {
   async deleteInvoice(id) {
     const v = this.data.invoices.find(x => x.id === id);
     if (!v) return;
-    if (!confirm('Delete invoice #' + (v.number || v.id) + ' for "' + v.party + '"?\nLinked payment transactions are removed too.')) return;
+    if (!(await this.confirmModal({ title: 'Delete Invoice', message: 'Delete invoice #' + (v.number || v.id) + ' for "' + v.party + '"?\nLinked payment transactions are removed too.' , confirmText: 'Delete' }))) return;
     const prefix = 'inv-' + id + '-p';
     this.data.transactions = this.data.transactions.filter(t => !String(t.pairId || '').startsWith(prefix));
     this.data.invoices = this.data.invoices.filter(x => x.id !== id);

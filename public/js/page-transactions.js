@@ -238,6 +238,8 @@ Object.assign(window.BlackBook, {
   editHoveredTransaction() { if (this.hoveredTxId) this.openEditTransaction(this.hoveredTxId); },
 
   async deleteTransaction(txId) {
+    const wrap = document.querySelector('.tx-list-wrap');
+    const scrollTop = wrap ? wrap.scrollTop : 0;
     const removed = this.data.transactions.find(t => t.id === txId);
     this.data.transactions = this.data.transactions.filter(t => t.id !== txId);
     const bp = (this.data.billPayments || []).find(p => p.txId === txId);
@@ -248,6 +250,8 @@ Object.assign(window.BlackBook, {
     }
     try { await this.save(); } catch (e) { if (removed) this.data.transactions.push(removed); }
     this.renderPage(this.currentPage);
+    const nw = document.querySelector('.tx-list-wrap');
+    if (nw) nw.scrollTop = scrollTop;
   },
 
   bulkToggle(id) {
@@ -259,11 +263,12 @@ Object.assign(window.BlackBook, {
       if (m && m[1] === id) r.classList.toggle('bulk-selected', on);
     });
     const wrap = document.querySelector('.tx-list-wrap');
-    if (wrap) { const sc = wrap.scrollTop; this.renderOverview(); wrap.scrollTop = sc; }
+    if (wrap) { const sc = wrap.scrollTop; this.renderOverview(); const nw = document.querySelector('.tx-list-wrap'); if (nw) nw.scrollTop = sc; }
   },
 
   bulkClear() {
     this._bulkSel = new Set();
+    this._bulkOnly = false;
     this.renderPage(this.currentPage);
   },
 
@@ -275,33 +280,149 @@ Object.assign(window.BlackBook, {
     accSel.innerHTML = '<option value="">-- keep current --</option>' + this.visibleAccounts().map(a => '<option value="' + a.id + '">' + this.escapeHtml(a.name) + '</option>').join('');
     catSel.value = ''; accSel.value = '';
     document.getElementById('bulk-count-title').textContent = 'Bulk Edit \u00b7 ' + this._bulkSel.size + ' transaction' + (this._bulkSel.size === 1 ? '' : 's');
+    const dates = Array.from(this._bulkSel).map(id => this.data.transactions.find(t => t.id === id)?.date).filter(Boolean);
+    const uniqueDates = [...new Set(dates)];
+    const dateInput = document.getElementById('bulk-date-smart');
+    const hintEl = document.getElementById('bulk-date-hint');
+    dateInput.value = '';
+    dateInput.onkeydown = (e) => { if (e.key === 'Enter') { e.preventDefault(); document.getElementById('bulk-edit-form').requestSubmit(); } };
+    if (uniqueDates.length === 1) {
+      dateInput.value = this.fmtDateInput(uniqueDates[0]);
+      hintEl.textContent = 'All selected share this date. Enter offset (-10) or new date (5/8/2025).';
+    } else if (uniqueDates.length > 1) {
+      hintEl.textContent = 'Multiple Dates (' + uniqueDates.length + ' different). Enter offset (-10) or new date (5/8/2025) to set all.';
+    } else {
+      hintEl.textContent = 'Enter offset (-10) or new date (5/8/2025).';
+    }
     this.openModal('bulk-edit-modal');
   },
 
   async submitBulkEdit() {
     const catId = document.getElementById('bulk-category').value;
     const accId = document.getElementById('bulk-account').value;
-    if (!catId && !accId) { alert('Choose a category or an account to apply.'); return; }
+    const smartDate = document.getElementById('bulk-date-smart').value;
+    const parsed = this.parseSmartDate(smartDate);
+    if (!catId && !accId && parsed.type === 'none') {
+      await this.confirmModal({ title: 'Bulk Edit', message: 'Choose a category, account, or date adjustment to apply.', danger: false });
+      return;
+    }
+    if (parsed.type === 'invalid') {
+      await this.confirmModal({ title: 'Bulk Edit', message: 'Invalid date format: ' + parsed.raw, danger: false });
+      return;
+    }
+    if (!this._bulkSel || this._bulkSel.size === 0) {
+      await this.confirmModal({ title: 'Bulk Edit', message: 'No transactions selected. Click rows to select, then press E.', danger: false });
+      return;
+    }
     let changed = 0;
     for (const t of this.data.transactions) {
       if (!this._bulkSel.has(t.id)) continue;
       if (catId) t.categoryId = catId;
       if (accId && !t.cardId) { t.accountId = accId; }
+      if (parsed.type === 'offset') {
+        t.date = this.shiftDate(t.date, parsed.value);
+      } else if (parsed.type === 'exact') {
+        t.date = parsed.value;
+      }
       changed++;
+    }
+    if (changed === 0) {
+      await this.confirmModal({ title: 'Bulk Edit', message: 'Selected transactions not found in data (' + this._bulkSel.size + ' selected).', danger: false });
+      return;
     }
     await this.save();
     this.closeModal('bulk-edit-modal');
     this.bulkClear();
-    alert('Updated ' + changed + ' transaction' + (changed === 1 ? '' : 's') + '.');
+    await this.confirmModal({ title: 'Bulk Edit', message: 'Updated ' + changed + ' transaction' + (changed === 1 ? '' : 's') + '.', danger: false });
   },
 
   async bulkDelete() {
     const n = this._bulkSel ? this._bulkSel.size : 0;
     if (!n) return;
-    if (!confirm('Delete ' + n + ' selected transaction' + (n === 1 ? '' : 's') + '?')) return;
+    if (!(await this.confirmModal({ title: 'Delete Transactions', message: 'Delete ' + n + ' selected transaction' + (n === 1 ? '' : 's') + '?' }))) return;
     this.data.transactions = this.data.transactions.filter(t => !this._bulkSel.has(t.id));
     await this.save();
     this.bulkClear();
+  },
+
+  openMergeModal() {
+    const ids = this._bulkSel ? Array.from(this._bulkSel) : [];
+    if (ids.length < 2) {
+      this.confirmModal({ title: 'Merge Transactions', message: 'Select at least 2 transactions to merge (click rows to select, then press M).', danger: false });
+      return;
+    }
+    const txs = this.data.transactions.filter(t => ids.includes(t.id));
+    const accMap = Object.fromEntries((this.data.accounts || []).map(a => [a.id, a]));
+    const catMap = Object.fromEntries((this.data.categories || []).map(c => [c.id, c]));
+    const curs = new Set(txs.map(t => t.currency || 'RSD'));
+    const accs = new Set(txs.map(t => t.cardId ? ('card:' + t.cardId) : (t.accountId || '')));
+    this._mergeIds = txs.map(t => t.id);
+    this._mergeCurrency = txs[0].currency || 'RSD';
+    this._mergeOk = curs.size === 1 && accs.size === 1;
+    this._mergeSelected = 0;
+    let list = '<div style="max-height:280px;overflow:auto;">';
+    txs.forEach((t, i) => {
+      const acc = t.cardId ? (this.data.creditCards || []).find(c => c.id === t.cardId) : accMap[t.accountId];
+      const cat = catMap[t.categoryId];
+      list += '<div class="merge-row' + (i === 0 ? ' merge-target' : '') + '" data-idx="' + i + '" onclick="BlackBook.selectMergeTarget(' + i + ')">' +
+        '<span class="merge-radio"></span>' +
+        '<span class="merge-date">' + this.escapeHtml(t.date) + '</span>' +
+        '<span class="merge-cat" style="color:' + (cat ? cat.color : 'var(--text-muted)') + '">' + this.escapeHtml(cat ? cat.name : 'Uncategorized') + '</span>' +
+        '<span class="merge-acct">' + this.escapeHtml(acc ? acc.name : '?') + '</span>' +
+        '<span class="merge-note">' + this.escapeHtml(t.note || '') + '</span>' +
+        '<span class="merge-amt">' + this.fmtAmount(t.amount, this._mergeCurrency) + '</span></div>';
+    });
+    list += '</div>';
+    document.getElementById('merge-list').innerHTML = list;
+    document.getElementById('merge-title').textContent = 'Merge Transactions \u00b7 ' + txs.length;
+    this.renderMergeSummary();
+    if (!this._mergeOk) {
+      document.getElementById('merge-summary').insertAdjacentHTML('beforeend', '<div style="color:var(--expense);margin-top:4px;">Cannot merge: transactions use different currencies or accounts/cards. Select a matching group.</div>');
+    }
+    this.openModal('merge-modal');
+  },
+
+  selectMergeTarget(idx) {
+    this._mergeSelected = idx;
+    document.querySelectorAll('#merge-list .merge-row').forEach((r, i) => r.classList.toggle('merge-target', i === idx));
+    this.renderMergeSummary();
+  },
+
+  renderMergeSummary() {
+    if (!this._mergeIds) return;
+    const txs = this.data.transactions.filter(t => this._mergeIds.includes(t.id));
+    const el = document.getElementById('merge-summary');
+    if (!el) return;
+    const sum = Math.round(txs.reduce((s, t) => s + (t.amount || 0), 0) * 100) / 100;
+    const notes = txs.map(t => (t.note || '').trim()).filter(Boolean);
+    const tgt = txs[this._mergeSelected];
+    const accMap = Object.fromEntries((this.data.accounts || []).map(a => [a.id, a]));
+    const catMap = Object.fromEntries((this.data.categories || []).map(c => [c.id, c]));
+    const acc = tgt.cardId ? (this.data.creditCards || []).find(c => c.id === tgt.cardId) : accMap[tgt.accountId];
+    const cat = catMap[tgt.categoryId];
+    el.innerHTML = 'Target: <b>' + this.escapeHtml(tgt.date) + '</b> ' + this.escapeHtml(cat ? cat.name : 'Uncategorized') +
+      ' / ' + this.escapeHtml(acc ? acc.name : '?') +
+      ' &middot; Combined total: <b>' + this.fmtAmount(sum, this._mergeCurrency) + '</b> (' + txs.length + ' into 1)' +
+      (notes.length ? ' &middot; Note: "' + this.escapeHtml(notes.join('; ')) + '"' : '');
+  },
+
+  async submitMerge() {
+    if (!this._mergeIds || this._mergeIds.length < 2) return;
+    if (!this._mergeOk) { alert('Cannot merge: transactions use different currencies or accounts.'); return; }
+    const txs = this.data.transactions.filter(t => this._mergeIds.includes(t.id));
+    const tgt = txs[this._mergeSelected];
+    if (!tgt) return;
+    const sum = Math.round(txs.reduce((s, t) => s + (t.amount || 0), 0) * 100) / 100;
+    const notes = txs.map(t => (t.note || '').trim()).filter(Boolean);
+    tgt.amount = sum;
+    tgt.note = notes.join('; ');
+    delete tgt.nativeAmount; delete tgt.nativeCurrency; delete tgt.baseAmount; delete tgt.feeAmount;
+    const keep = tgt.id;
+    this.data.transactions = this.data.transactions.filter(t => t.id === keep || !this._mergeIds.includes(t.id));
+    await this.save();
+    this.closeModal('merge-modal');
+    this.bulkClear();
+    alert('Merged ' + this._mergeIds.length + ' transactions into 1 (' + this.fmtAmount(sum, this._mergeCurrency) + ').');
   },
 
   bindModalSubmit() {
@@ -315,7 +436,7 @@ Object.assign(window.BlackBook, {
       const rawParsed = this.evalAmount(document.getElementById('tx-amount').value);
       if (isNaN(rawParsed)) { alert('Please enter a valid amount.'); return; }
       const txDate = this.parseDateInput(document.getElementById('tx-date').value);
-      if (!txDate) { alert('Enter a valid date (DD.MM.YYYY).'); return; }
+      if (!txDate) { alert('Enter a valid date (DD/MM/YYYY).'); return; }
       const rawAmt = Math.abs(Math.round(rawParsed * 100) / 100);
       const txType = document.getElementById('tx-type').value;
       const accountVal = document.getElementById('tx-account').value;
@@ -364,7 +485,11 @@ Object.assign(window.BlackBook, {
         txData.id = crypto.randomUUID(); this.data.transactions.push(txData);
       }
       this.syncViewToDate(txData.date);
+      const wrap = document.querySelector('.tx-list-wrap');
+      const scrollTop = wrap ? wrap.scrollTop : 0;
       await this.save(); this.closeModal('transaction-modal'); this.renderPage(this.currentPage);
+      const nw = document.querySelector('.tx-list-wrap');
+      if (nw) nw.scrollTop = scrollTop;
     });
   },
 

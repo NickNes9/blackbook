@@ -61,7 +61,7 @@ Object.assign(window.BlackBook, {
     else this.refreshProfilesList();
   },
   async deleteProfile(name) {
-    if (!confirm('Delete profile "' + name + '" and all of its data?')) return;
+    if (!(await this.confirmModal({ title: 'Delete Profile', message: 'Delete profile "' + name + '" and all of its data?', confirmText: 'Delete' }))) return;
     const res = await fetch('/api/profiles', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'delete', name: name }) });
     const out = await res.json();
     if (!res.ok) { alert(out.error || 'Failed'); return; }
@@ -227,6 +227,248 @@ Object.assign(window.BlackBook, {
     alert('Imported ' + imported + ' transaction' + (imported === 1 ? '' : 's') + (skipped ? ' \u00b7 skipped ' + skipped + ' unparseable row' + (skipped === 1 ? '' : 's') : '') + '.');
   },
 
+  openSpreadsheetImportModal(text) {
+    text = String(text || '').replace(/^\uFEFF/, '');
+    const rows = this.parseCsvText(text);
+    if (!rows.length) { alert('No rows found.'); return; }
+    this._sprRows = rows;
+    const maxCols = Math.max(...rows.map(r => r.length));
+    const hdr = (rows[0] || []).map(h => String(h == null ? '' : h).trim());
+    const colLabel = (i) => this.escapeHtml((hdr[i] ? hdr[i] : 'COL ' + (i + 1)).slice(0, 20));
+    const colOpts = (withNone, skipHdr) => {
+      let o = withNone ? '<option value="-">-- none --</option>' : '';
+      for (let i = 0; i < maxCols; i++) o += '<option value="' + i + '">COL ' + (i + 1) + (hdr[i] ? ' &middot; ' + colLabel(i) : '') + '</option>';
+      return o;
+    };
+    const lowHdr = hdr.map(h => h.toLowerCase());
+    const guess = (re) => lowHdr.findIndex(h => re.test(h));
+    const dIdx = guess(/^date$|^datum$|^data$|date|datum/);
+    const cIdx = guess(/detail|categor|kategor|naziv|type/);
+    const iIdx = guess(/info|note|desc|opis/);
+    document.getElementById('spreadsheet-col-date').innerHTML = colOpts(false);
+    document.getElementById('spreadsheet-col-category').innerHTML = colOpts(true);
+    document.getElementById('spreadsheet-col-info').innerHTML = colOpts(true);
+    document.getElementById('spreadsheet-col-date').value = String(dIdx >= 0 ? dIdx : 0);
+    if (cIdx >= 0) document.getElementById('spreadsheet-col-category').value = String(cIdx);
+    if (iIdx >= 0) document.getElementById('spreadsheet-col-info').value = String(iIdx);
+
+    const pv = rows.slice(0, 8);
+    document.getElementById('spreadsheet-preview').innerHTML = '<table class="csv-preview-table"><thead><tr>' +
+      Array.from({ length: maxCols }, (_, i) => '<th>' + colLabel(i) + '</th>').join('') +
+      '</tr></thead><tbody>' +
+      pv.map(r => '<tr>' + Array.from({ length: maxCols }, (_, i) => '<td>' + this.escapeHtml(String(r[i] == null ? '' : r[i]).slice(0, 22)) + '</td>').join('') + '</tr>').join('') +
+      '</tbody></table>';
+
+    const todayYr = parseInt(this.today().slice(0, 4), 10);
+    document.getElementById('spreadsheet-open-date').value = todayYr + '-01-01';
+
+    this._buildSpreadsheetAmountCols(rows, maxCols, dIdx, cIdx, iIdx);
+    this.bindSpreadsheetImportForm();
+    this.openModal('spreadsheet-import-modal');
+  },
+
+  bindSpreadsheetImportForm() {
+    const f = document.getElementById('spreadsheet-import-form');
+    if (!f || f._bound) return;
+    f._bound = true;
+    f.addEventListener('submit', async (e) => { e.preventDefault(); await this.doSpreadsheetImport(); });
+  },
+
+  _buildSpreadsheetAmountCols(rows, maxCols, dIdx, cIdx, iIdx) {
+    const excluded = new Set([dIdx]);
+    if (cIdx >= 0) excluded.add(cIdx);
+    if (iIdx >= 0) excluded.add(iIdx);
+    const candidates = [];
+    for (let c = 0; c < maxCols; c++) {
+      if (excluded.has(c)) continue;
+      let numeric = 0, total = 0;
+      for (let r = 1; r < rows.length; r++) {
+        const raw = rows[r][c];
+        if (raw == null || String(raw).trim() === '') continue;
+        total++;
+        if (!isNaN(this.parseCsvAmount(raw)) && !this.normalizeCsvDate(String(raw).trim(), 'auto')) numeric++;
+      }
+      if (total > 0 && numeric > 0) candidates.push(c);
+    }
+    this._sprAmountCols = candidates;
+    const wrap = document.getElementById('spreadsheet-amount-cols');
+    if (!candidates.length) { wrap.innerHTML = '<div class="text-muted" style="font-size:13px;padding:6px 0;">No amount columns detected.</div>'; return; }
+    wrap.innerHTML = candidates.map(c => {
+      const header = rows[0][c] != null ? String(rows[0][c]).trim() : ('COL ' + (c + 1));
+      const opts = this._spreadsheetAccountSelectOptions(header);
+      return '<div class="form-row-2col" style="align-items:center;">' +
+        '<div class="form-group" style="margin:0;"><label>COL ' + (c + 1) + ' &middot; ' + this.escapeHtml(header.slice(0, 24)) + '</label></div>' +
+        '<div class="form-group" style="margin:0;"><select class="input spreadsheet-amount-acc" data-col="' + c + '">' + opts + '</select></div></div>';
+    }).join('');
+  },
+
+  _spreadsheetAccountByHeader(header) {
+    const h = String(header == null ? '' : header).trim().toLowerCase();
+    if (!h) return null;
+    const accs = this.data.accounts;
+    for (const a of accs) {
+      const n = a.name.toLowerCase();
+      if (n && (h === n || h.includes(n) || n.includes(h))) return a.id;
+    }
+    if (/euro|eur|€/.test(h)) {
+      const e = accs.find(a => a.currency === 'EUR');
+      if (e) return e.id;
+    }
+    const r = accs.find(a => a.currency === 'RSD');
+    if (/rsd|din|bank|card|cash/.test(h) && r) return r.id;
+    return null;
+  },
+
+  _spreadsheetNewAccountForHeader(header) {
+    const h = String(header == null ? '' : header).trim().toLowerCase();
+    if (!h) return null;
+    if (/nine9|company card/.test(h)) return { name: 'Company Card', shortName: 'NC', currency: 'RSD', type: 'bank' };
+    if (/unknown|new|acc[0-9]|col/.test(h)) return null;
+    return { name: String(header).trim(), shortName: String(header).trim().slice(0, 2).toUpperCase(), currency: /eur|euro|€/.test(h) ? 'EUR' : 'RSD', type: 'bank' };
+  },
+
+  _spreadsheetAccountSelectOptions(header) {
+    const newAcc = this._spreadsheetNewAccountForHeader(header);
+    const matchedId = this._spreadsheetAccountByHeader(header);
+    let defVal = matchedId || (newAcc ? '__new__' : (this.data.accounts[0] ? this.data.accounts[0].id : '-'));
+    let o = '<option value="-">-- ignore column --</option>';
+    for (const a of this.data.accounts) {
+      o += '<option value="' + a.id + '"' + (a.id === defVal ? ' selected' : '') + '>' + this.escapeHtml(a.name) + ' (' + a.currency + ')</option>';
+    }
+    if (newAcc) o += '<option value="__new__"' + (defVal === '__new__' ? ' selected' : '') + '>&#43; Create new &ldquo;' + this.escapeHtml(newAcc.name) + '&rdquo;</option>';
+    return o;
+  },
+
+  async doSpreadsheetImport() {
+    const rows = this._sprRows || [];
+    if (!rows.length) return;
+    const getCol = (sel) => { const i = parseInt(sel, 10); return (sel !== '-' && !isNaN(i) && i >= 0) ? i : -1; };
+    const dateCol = getCol(document.getElementById('spreadsheet-col-date').value);
+    const catCol = getCol(document.getElementById('spreadsheet-col-category').value);
+    const infoCol = getCol(document.getElementById('spreadsheet-col-info').value);
+    const dateFmt = document.getElementById('spreadsheet-datefmt').value;
+    const openDateVal = document.getElementById('spreadsheet-open-date').value;
+    const openAsBalance = document.getElementById('spreadsheet-open-rows').checked;
+    const pairTransfers = document.getElementById('spreadsheet-pair-transfers').checked;
+    const amtCols = (this._sprAmountCols || []).slice();
+    if (!amtCols.length) { alert('No amount columns to import.'); return; }
+
+    const accSelMap = {};
+    document.querySelectorAll('.spreadsheet-amount-acc').forEach(sel => { accSelMap[parseInt(sel.dataset.col, 10)] = sel.value; });
+    if (!Object.values(accSelMap).some(v => v && v !== '-')) { alert('Map at least one amount column to an account.'); return; }
+
+    const targetYear = openDateVal ? parseInt(openDateVal.slice(0, 4), 10) : new Date().getFullYear();
+    const importedYear = this.data.settings && this.data.settings.importedYear;
+    if (importedYear === targetYear && !(await this.confirmModal({ title: 'Re-import', message: 'Data for ' + targetYear + ' was already imported. Running again may create duplicates. Continue?' }))) return;
+
+    if (!this.data.accounts) this.data.accounts = [];
+    if (!this.data.categories) this.data.categories = [];
+    const catMap = {};
+    for (const c of this.data.categories) catMap[String(c.name).trim().toLowerCase()] = c.id;
+    const transferCat = this.transferCategory();
+    const getCategory = (name) => {
+      let s = String(name == null ? '' : name).trim();
+      if (!s) s = 'Uncategorized';
+      const low = s.toLowerCase();
+      if (catMap[low]) return catMap[low];
+      for (const key of Object.keys(catMap)) if (key.length > 3 && (low.includes(key) || key.includes(low))) return catMap[key];
+      const cat = { id: crypto.randomUUID(), name: s, color: this.hslToHex(this.randomPastel()) };
+      this.data.categories.push(cat);
+      catMap[low] = cat.id;
+      return cat.id;
+    };
+    getCategory('Uncategorized');
+
+    const createdAcc = {};
+    const resolveAccount = (colHeader, selVal) => {
+      if (selVal === '__new__') {
+        const key = String(colHeader || '').trim().toLowerCase();
+        if (createdAcc[key]) return createdAcc[key];
+        const cfg = this._spreadsheetNewAccountForHeader(colHeader) || { name: 'New Account', shortName: 'NA', currency: 'RSD', type: 'bank' };
+        const acc = { id: crypto.randomUUID(), name: cfg.name, shortName: cfg.shortName, currency: cfg.currency, type: cfg.type, color: this.hslToHex(this.randomPastel()) };
+        this.data.accounts.push(acc);
+        createdAcc[key] = acc;
+        return acc;
+      }
+      return this.data.accounts.find(a => a.id === selVal) || null;
+    };
+
+    const newTx = (t) => {
+      t.id = crypto.randomUUID();
+      t.cardId = t.cardId || null;
+      this.data.transactions.push(t);
+    };
+    const normalized = (v) => Math.round((v >= 0 ? Math.abs(v) : -Math.abs(v)) * 100) / 100;
+
+    let imported = 0, skipped = 0, transfers = 0, opening = 0, corrections = 0;
+    for (let i = 1; i < rows.length; i++) {
+      const r = rows[i];
+      const rawDate = dateCol >= 0 ? String(r[dateCol] == null ? '' : r[dateCol]).trim() : '';
+      const date = rawDate ? this.normalizeCsvDate(rawDate, dateFmt) : '';
+      const details = catCol >= 0 ? String(r[catCol] == null ? '' : r[catCol]).trim() : '';
+      const info = infoCol >= 0 ? String(r[infoCol] == null ? '' : r[infoCol]).trim() : '';
+
+      const amts = {};
+      for (const c of amtCols) {
+        const v = this.parseCsvAmount(r[c]);
+        if (!isNaN(v) && v !== 0) amts[c] = v;
+      }
+      if (!Object.keys(amts).length) continue;
+
+      if (!date) {
+        if (!openAsBalance) { skipped++; continue; }
+        for (const c of Object.keys(amts)) {
+          const selVal = accSelMap[c];
+          if (!selVal || selVal === '-') continue;
+          const acc = resolveAccount(rows[0][c] != null ? String(rows[0][c]).trim() : '', selVal);
+          if (!acc) continue;
+          const isCorrection = /^\?+$/.test(info) || /corr/i.test(info) || info === '???';
+          newTx({ date: openDateVal, type: amts[c] >= 0 ? 'income' : 'expense', amount: normalized(amts[c]), currency: acc.currency || 'RSD', accountId: acc.id, categoryId: transferCat.id, note: isCorrection ? 'OPENING BALANCE CORRECTION' : 'OPENING BALANCE' });
+          if (isCorrection) corrections++; else opening++;
+          imported++;
+        }
+        continue;
+      }
+
+      const entries = [];
+      for (const c of Object.keys(amts)) {
+        const selVal = accSelMap[c];
+        if (!selVal || selVal === '-') continue;
+        const acc = resolveAccount(rows[0][c] != null ? String(rows[0][c]).trim() : '', selVal);
+        if (!acc) continue;
+        entries.push({ acc, amount: amts[c], currency: acc.currency || 'RSD' });
+      }
+      if (!entries.length) { skipped++; continue; }
+
+      const isTransfer = details && details.toLowerCase().replace(/\s+/g, '') === 'transfer';
+      if (isTransfer && pairTransfers && entries.length >= 2) {
+        const neg = entries.filter(e => e.amount < 0);
+        const pos = entries.filter(e => e.amount > 0);
+        if (neg.length === 1 && pos.length === 1) {
+          const pairId = 'pair-' + Date.now() + '-' + Math.floor(Math.random() * 10000);
+          const noteBase = 'Transfer ' + neg[0].acc.name + ' -> ' + pos[0].acc.name + (info ? ' \u00b7 ' + info : '');
+          newTx({ type: 'expense', amount: normalized(-Math.abs(neg[0].amount)), currency: neg[0].currency, accountId: neg[0].acc.id, categoryId: transferCat.id, date: date, note: noteBase, pairId: pairId });
+          newTx({ type: 'income', amount: normalized(Math.abs(pos[0].amount)), currency: pos[0].currency, accountId: pos[0].acc.id, categoryId: transferCat.id, date: date, note: noteBase, pairId: pairId });
+          transfers++; imported += 2;
+          continue;
+        }
+      }
+
+      for (const e of entries) {
+        const catId = isTransfer ? transferCat.id : getCategory(details || 'Uncategorized');
+        newTx({ date: date, type: e.amount >= 0 ? 'income' : 'expense', amount: normalized(e.amount), currency: e.currency, accountId: e.acc.id, categoryId: catId, note: info });
+        imported++;
+      }
+    }
+
+    if (!this.data.settings) this.data.settings = {};
+    this.data.settings.importedYear = targetYear;
+    await this.save();
+    this.closeModal('spreadsheet-import-modal');
+    this.renderPage(this.currentPage);
+    alert('Imported ' + imported + ' transaction' + (imported === 1 ? '' : 's') + ' \u00b7 ' + transfers + ' transfer pair' + (transfers === 1 ? '' : 's') + ' \u00b7 ' + opening + ' opening, ' + corrections + ' correction' + (skipped ? ' \u00b7 skipped ' + skipped : '') + '.');
+  },
+
   exportCsv() {
     const esc = (v) => '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"';
     const rows = [['date', 'type', 'amount', 'currency', 'account', 'card', 'category', 'note']];
@@ -245,7 +487,7 @@ Object.assign(window.BlackBook, {
   },
 
   async generateDemoData() {
-    if (!confirm('This will REPLACE all transactions and budgets, reset categories to the default set and regenerate colors. Continue?')) return;
+    if (!(await this.confirmModal({ title: 'Replace Data', message: 'This will REPLACE all transactions and budgets, reset categories to the default set and regenerate colors. Continue?', confirmText: 'Replace' }))) return;
     const today = new Date();
     const Y = today.getFullYear(), curM = today.getMonth(), curD = today.getDate();
     const rint = (min, max) => Math.round(min + Math.random() * (max - min));
@@ -534,6 +776,19 @@ Object.assign(window.BlackBook, {
         e.target.value = '';
       });
     }
+    const sprImportBtn = el.querySelector('#settings-import-spreadsheet-btn');
+    const sprImportFile = el.querySelector('#settings-import-spreadsheet-file');
+    if (sprImportBtn && sprImportFile) {
+      sprImportBtn.addEventListener('click', () => sprImportFile.click());
+      sprImportFile.addEventListener('change', (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = (ev) => this.openSpreadsheetImportModal(String(ev.target.result));
+        reader.readAsText(file);
+        e.target.value = '';
+      });
+    }
     const importBtn = el.querySelector('#settings-import-btn');
     const importFile = el.querySelector('#settings-import-file');
     if (importBtn && importFile) {
@@ -715,10 +970,10 @@ Object.assign(window.BlackBook, {
     const txCount = this.data.transactions.filter(t => t.accountId === id).length;
     let purgeTxs = false;
     if (txCount > 0) {
-      if (!confirm('"' + acc.name + '" has ' + txCount + ' transaction' + (txCount === 1 ? '' : 's') + '.\n\nOK = delete the account AND its transactions.\nCancel = do nothing.')) return;
+      if (!(await this.confirmModal({ title: 'Delete Account & Transactions', message: '"' + acc.name + '" has ' + txCount + ' transaction' + (txCount === 1 ? '' : 's') + '.\n\nConfirm = delete the account AND its transactions.\nCancel = do nothing.', confirmText: 'Delete' }))) return;
       purgeTxs = true;
     } else {
-      if (!confirm('Delete account "' + acc.name + '"?')) return;
+      if (!(await this.confirmModal({ title: 'Delete Account', message: 'Delete account "' + acc.name + '"?' , confirmText: 'Delete' }))) return;
     }
     this.data.accounts = this.data.accounts.filter(a => a.id !== id);
     if (purgeTxs) this.data.transactions = this.data.transactions.filter(t => t.accountId !== id);
@@ -735,10 +990,11 @@ Object.assign(window.BlackBook, {
     let accountsList = '';
     const visibleAccts = this.visibleAccounts();
     for (const a of visibleAccts) {
+      const typeLabel = (a.type || 'cash').toUpperCase();
       accountsList += '<div class="settings-row">' +
         '<span class="row-swatch" style="background:' + a.color + ';"></span>' +
         '<span class="settings-row-name">' + this.escapeHtml(a.name) + '</span>' +
-        '<span class="settings-row-meta">' + a.currency + ' &middot; ' + (a.type || 'cash') + '</span>' +
+        '<span class="settings-row-meta">' + a.currency + ' &middot; ' + typeLabel + '</span>' +
         '<button class="btn btn-sm btn-secondary" onclick="BlackBook.openEditAccount(\x27' + a.id + '\x27)">EDIT</button>' +
         '<button class="btn btn-sm btn-danger" onclick="BlackBook.deleteAccount(\x27' + a.id + '\x27)">DEL</button></div>';
     }
@@ -755,11 +1011,14 @@ Object.assign(window.BlackBook, {
     let categoriesList = '';
     const sortedCats = this.data.categories.slice().sort((a, b) => a.name.localeCompare(b.name));
     for (const c of sortedCats) {
+      const txCount = this.data.transactions.filter(t => t.categoryId === c.id).length;
+      const isProtected = c.name.toLowerCase() === 'transfer' || c.name.toLowerCase() === 'uncategorized';
       categoriesList += '<div class="settings-row">' +
         '<span class="row-swatch" style="background:' + c.color + ';"></span>' +
         '<span class="settings-row-name">' + this.escapeHtml(c.name) + '</span>' +
+        '<span class="settings-row-meta">' + txCount + ' transaction' + (txCount === 1 ? '' : 's') + '</span>' +
         '<button class="btn btn-sm btn-secondary" onclick="BlackBook.openEditCategory(\x27' + c.id + '\x27)">EDIT</button>' +
-        '<button class="btn btn-sm btn-danger" onclick="BlackBook.deleteCategory(\x27' + c.id + '\x27)">DEL</button></div>';
+        (isProtected ? '<button class="btn btn-sm btn-danger" onclick="BlackBook.deleteCategory(\x27' + c.id + '\x27)" disabled style="opacity:0.5;cursor:not-allowed;" title="Protected category">DEL</button>' : '<button class="btn btn-sm btn-danger" onclick="BlackBook.deleteCategory(\x27' + c.id + '\x27)">DEL</button>') + '</div>';
     }
     if (!this.data.categories.length) categoriesList = '<div style="padding:8px;color:var(--text-muted);font-size:13px;">No categories yet.</div>';
 
@@ -830,6 +1089,8 @@ Object.assign(window.BlackBook, {
       '<input type="file" id="settings-import-file" accept=".json" style="display:none;">' +
       '<button class="btn btn-secondary" id="settings-import-csv-btn">IMPORT CSV</button>' +
       '<input type="file" id="settings-import-csv-file" accept=".csv,.txt,text/csv,text/plain" style="display:none;">' +
+      '<button class="btn btn-secondary" id="settings-import-spreadsheet-btn">IMPORT SPREADSHEET</button>' +
+      '<input type="file" id="settings-import-spreadsheet-file" accept=".csv,.txt,text/csv,text/plain" style="display:none;">' +
       '<button class="btn btn-secondary" id="settings-generate-demo">GENERATE DEMO DATA</button>' +
       '<button class="btn btn-secondary" id="settings-export-pdf">EXPORT PDF (coming soon)</button></div></div>' +
 
@@ -893,13 +1154,18 @@ Object.assign(window.BlackBook, {
   async deleteCategory(id) {
     const cat = this.data.categories.find(c => c.id === id);
     if (!cat) return;
+    const isProtected = cat.name.toLowerCase() === 'transfer' || cat.name.toLowerCase() === 'uncategorized';
+    if (isProtected) {
+      await this.confirmModal({ title: 'Protected Category', message: '"' + cat.name + '" is a system category and cannot be deleted.', danger: false });
+      return;
+    }
     const txCount = this.data.transactions.filter(t => t.categoryId === id).length;
     let purgeTxs = false;
     if (txCount > 0) {
-      if (!confirm('"' + cat.name + '" is used by ' + txCount + ' transaction' + (txCount === 1 ? '' : 's') + '.\n\nOK = delete the category AND its transactions.\nCancel = do nothing.')) return;
+      if (!(await this.confirmModal({ title: 'Delete Category & Transactions', message: '"' + cat.name + '" is used by ' + txCount + ' transaction' + (txCount === 1 ? '' : 's') + '.\n\nConfirm = delete the category AND its transactions.\nCancel = do nothing.', confirmText: 'Delete' }))) return;
       purgeTxs = true;
     } else {
-      if (!confirm('Delete category "' + cat.name + '"?')) return;
+      if (!(await this.confirmModal({ title: 'Delete Category', message: 'Delete category "' + cat.name + '"?' , confirmText: 'Delete' }))) return;
     }
     this.data.categories = this.data.categories.filter(c => c.id !== id);
     if (purgeTxs) this.data.transactions = this.data.transactions.filter(t => t.categoryId !== id);

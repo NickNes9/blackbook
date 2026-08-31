@@ -15,15 +15,11 @@
       <span class="header-logo">BLACK BOOK</span>
       <span id="header-profile" class="header-profile"></span>
     </div>
-    <div class="header-center">
-      <div class="header-command">
-        <span class="header-command-prompt">&gt;</span>
-        <input id="header-command-input" class="header-command-input" placeholder="COMMAND: Search transactions, open pages...">
+<div class="header-center">
       </div>
     </div>
     <div class="header-right">
-      <span class="header-status"><span class="status-dot online"></span> ONLINE</span>
-      <span class="header-status" id="header-last-updated">LAST UPDATED --:--</span>
+      <span class="header-status save-status" id="save-indicator" title="Save status"><span class="save-label">SAVED</span></span>
     </div>
   </header>
 
@@ -61,7 +57,7 @@
         <input type="hidden" id="tx-type" value="expense">
         <div class="quick-entry-row">
           <select id="tx-account" class="input qe-account" required></select>
-          <input type="text" inputmode="numeric" id="tx-date" class="input qe-date" placeholder="DD.MM.YYYY" required autocomplete="off">
+          <input type="text" inputmode="numeric" id="tx-date" class="input qe-date" placeholder="DD/MM/YYYY" required autocomplete="off">
           <select id="tx-currency-select" class="input qe-currency"><option value="RSD">RSD</option><option value="EUR">EUR</option><option value="USD">USD</option><option value="XAU">XAU</option></select>
           <input type="text" inputmode="decimal" id="tx-amount" class="input qe-amount" placeholder="AMOUNT" required autocomplete="off">
         </div>
@@ -145,7 +141,7 @@
       </div>
       <form id="savings-entry-form">
         <input type="hidden" id="savings-entry-goal-id">
-        <div class="form-group"><label>Date</label><input type="text" inputmode="numeric" id="savings-entry-date" class="input" placeholder="DD.MM.YYYY" required autocomplete="off"></div>
+        <div class="form-group"><label>Date</label><input type="text" inputmode="numeric" id="savings-entry-date" class="input" placeholder="DD/MM/YYYY" required autocomplete="off"></div>
         <div class="form-group"><label>Amount (+ deposit / &minus; withdraw)</label><input type="number" step="0.01" id="savings-entry-amount" class="input" required></div>
         <div class="form-group"><label>Note</label><input type="text" id="savings-entry-note" class="input"></div>
         <div class="form-actions">
@@ -198,7 +194,7 @@
         <input type="hidden" id="ctx-card">
         <div class="form-group"><label>Amount (RSD)</label><input type="text" inputmode="decimal" id="ctx-amount" class="input" required placeholder="e.g. 12000" autocomplete="off"></div>
         <div class="form-row-2col">
-          <div class="form-group"><label>Date</label><input type="text" inputmode="numeric" id="ctx-date" class="input" placeholder="DD.MM.YYYY" required autocomplete="off"></div>
+          <div class="form-group"><label>Date</label><input type="text" inputmode="numeric" id="ctx-date" class="input" placeholder="DD/MM/YYYY" required autocomplete="off"></div>
           <div class="form-group"><label>Installments</label><select id="ctx-months" class="input"><option value="1">1</option><option value="2">2</option><option value="3">3</option><option value="6">6</option><option value="12">12</option></select></div>
         </div>
         <div class="form-group"><label>Note</label><input type="text" id="ctx-note" class="input" placeholder="What did you buy?"></div>
@@ -257,8 +253,8 @@
           <div class="form-group"><label>Currency</label><select id="debt-currency" class="input"><option value="RSD">RSD</option><option value="EUR">EUR</option><option value="USD">USD</option><option value="XAU">XAU (GOLD)</option></select></div>
         </div>
         <div class="form-row-2col">
-          <div class="form-group"><label>Date</label><input type="text" inputmode="numeric" id="debt-date" class="input" placeholder="DD.MM.YYYY" required autocomplete="off"></div>
-          <div class="form-group"><label>Due Date</label><input type="text" inputmode="numeric" id="debt-due" class="input" placeholder="DD.MM.YYYY" autocomplete="off"></div>
+          <div class="form-group"><label>Date</label><input type="text" inputmode="numeric" id="debt-date" class="input" placeholder="DD/MM/YYYY" required autocomplete="off"></div>
+          <div class="form-group"><label>Due Date</label><input type="text" inputmode="numeric" id="debt-due" class="input" placeholder="DD/MM/YYYY" autocomplete="off"></div>
         </div>
         <div class="form-group"><label>Already Paid</label><input type="text" inputmode="decimal" id="debt-paid" class="input" placeholder="0" autocomplete="off"></div>
         <div class="form-group"><label>Note</label><input type="text" id="debt-note" class="input" placeholder="What was it for?"></div>
@@ -307,8 +303,8 @@
           <div class="form-group"><label>Currency</label><select id="invoice-currency" class="input"><option value="RSD">RSD</option><option value="EUR">EUR</option><option value="USD">USD</option></select></div>
         </div>
         <div class="form-row-2col">
-          <div class="form-group"><label>Issue Date</label><input type="text" inputmode="numeric" id="invoice-date" class="input" placeholder="DD.MM.YYYY" required autocomplete="off"></div>
-          <div class="form-group"><label>Due Date</label><input type="text" inputmode="numeric" id="invoice-due" class="input" placeholder="DD.MM.YYYY" autocomplete="off"></div>
+          <div class="form-group"><label>Issue Date</label><input type="text" inputmode="numeric" id="invoice-date" class="input" placeholder="DD/MM/YYYY" required autocomplete="off"></div>
+          <div class="form-group"><label>Due Date</label><input type="text" inputmode="numeric" id="invoice-due" class="input" placeholder="DD/MM/YYYY" autocomplete="off"></div>
         </div>
         <div class="form-group"><label>Line Items</label>
           <div id="inv-lines"></div>
@@ -338,7 +334,7 @@
         <input type="hidden" id="ipay-id">
         <div class="form-row-2col">
           <div class="form-group"><label>Amount (invoice currency)</label><input type="text" inputmode="decimal" id="ipay-amount" class="input" required autocomplete="off"></div>
-          <div class="form-group"><label>Date</label><input type="text" inputmode="numeric" id="ipay-date" class="input" placeholder="DD.MM.YYYY" autocomplete="off"></div>
+          <div class="form-group"><label>Date</label><input type="text" inputmode="numeric" id="ipay-date" class="input" placeholder="DD/MM/YYYY" autocomplete="off"></div>
         </div>
         <div class="form-row-2col">
           <div class="form-group"><label>Account</label><select id="ipay-account" class="input"></select></div>
@@ -363,12 +359,52 @@
       <form id="bulk-edit-form">
         <div class="form-group"><label>Set Category</label><select id="bulk-category" class="input"></select></div>
         <div class="form-group"><label>Set Account</label><select id="bulk-account" class="input"></select></div>
-        <div class="form-group" style="font-size:12px;color:var(--text-muted);">Leave a field on "-- keep current --" to leave it unchanged.</div>
+        <div class="form-group">
+          <label>Date Adjustment</label>
+          <input type="text" id="bulk-date-smart" class="input" placeholder="Offset: -10 or 10  |  Exact: 5/8/2025 or 5.8.2025 or 05-08-2025" autocomplete="off">
+          <span id="bulk-date-hint" style="font-size:11px;color:var(--text-muted);display:block;margin-top:4px;"></span>
+        </div>
+        <div class="form-group" style="font-size:12px;color:var(--text-muted);">Leave a field on "-- keep current --" or empty to leave it unchanged.</div>
         <div class="form-actions">
           <button type="button" class="btn btn-secondary" onclick="BlackBook.closeModal('bulk-edit-modal')">Cancel</button>
           <button type="submit" class="btn btn-primary">Apply</button>
         </div>
       </form>
+    </div>
+  </div>
+
+  <!-- Merge Transactions Modal -->
+  <div id="merge-modal" class="modal hidden">
+    <div class="modal-backdrop"></div>
+    <div class="modal-content wide">
+      <div class="modal-header">
+        <h2 id="merge-title">Merge Transactions</h2>
+        <button class="modal-close" onclick="BlackBook.closeModal('merge-modal')">&times;</button>
+      </div>
+      <div style="font-size:12px;color:var(--text-muted);margin-bottom:8px;">Pick the transaction to keep (target) &mdash; its date, account, category, currency and type are kept. Amounts are summed.</div>
+      <div id="merge-list"></div>
+      <div id="merge-summary" style="font-size:13px;color:var(--text-dim);margin:8px 0;"></div>
+      <div class="form-actions">
+        <button type="button" class="btn btn-secondary" onclick="BlackBook.closeModal('merge-modal'); BlackBook.bulkClear();">Cancel</button>
+        <button type="button" class="btn btn-primary" onclick="BlackBook.submitMerge()">Merge</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Confirm Modal -->
+  <div id="confirm-modal" class="modal hidden">
+    <div class="modal-backdrop" onclick="BlackBook._resolveConfirm(false)"></div>
+    <div class="modal-content" style="max-width:420px;">
+      <div class="modal-header">
+        <h2 id="confirm-title">Confirm</h2>
+        <button class="modal-close" onclick="BlackBook._resolveConfirm(false)">&times;</button>
+      </div>
+      <div id="confirm-message" class="confirm-message"></div>
+      <div class="confirm-hint"><span class="hotkey"><kbd>Y</kbd>/<kbd>Enter</kbd></span> confirm &middot; <span class="hotkey"><kbd>N</kbd>/<kbd>Esc</kbd></span> cancel</div>
+      <div class="form-actions">
+        <button type="button" class="btn btn-secondary" id="confirm-cancel" onclick="BlackBook._resolveConfirm(false)">Cancel</button>
+        <button type="button" class="btn btn-danger" id="confirm-ok" onclick="BlackBook._resolveConfirm(true)">Confirm</button>
+      </div>
     </div>
   </div>
 
@@ -404,6 +440,40 @@
         </div>
         <div class="form-actions">
           <button type="button" class="btn btn-secondary" onclick="BlackBook.closeModal('csv-import-modal')">Cancel</button>
+          <button type="submit" class="btn btn-primary">Import</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Spreadsheet Multi-Account Import Modal -->
+  <div id="spreadsheet-import-modal" class="modal hidden">
+    <div class="modal-backdrop"></div>
+    <div class="modal-content wide">
+      <div class="modal-header">
+        <h2>Import Spreadsheet</h2>
+        <button class="modal-close" onclick="BlackBook.closeModal('spreadsheet-import-modal')">&times;</button>
+      </div>
+      <form id="spreadsheet-import-form">
+        <div id="spreadsheet-preview"></div>
+        <div class="form-row-2col">
+          <div class="form-group"><label>Date Column</label><select id="spreadsheet-col-date" class="input"></select></div>
+          <div class="form-group"><label>Date Format</label><select id="spreadsheet-datefmt" class="input"><option value="auto">auto-detect</option><option value="ymd">YYYY-MM-DD</option><option value="dmy">DD.MM.YYYY / DD-MM-YY</option><option value="mdy">MM/DD/YYYY</option></select></div>
+        </div>
+        <div class="form-row-2col">
+          <div class="form-group"><label>Category / Details Column</label><select id="spreadsheet-col-category" class="input"></select></div>
+          <div class="form-group"><label>Info / Note Column</label><select id="spreadsheet-col-info" class="input"></select></div>
+        </div>
+        <div class="form-row-2col">
+          <div class="form-group"><label>Opening Balance Date</label><input type="date" id="spreadsheet-open-date" class="input" value=""></div>
+          <div class="form-group"><label>&nbsp;</label><label style="display:flex;flex-direction:column;gap:6px;font-size:13px;">
+            <span><input type="checkbox" id="spreadsheet-open-rows" checked> Row with no date = opening balance on the date above</span>
+            <span><input type="checkbox" id="spreadsheet-pair-transfers" checked> Pair TRANSFER rows as transfers</span>
+          </label></div>
+        </div>
+        <div class="form-group"><label>Amount Columns &rarr; Accounts</label><div id="spreadsheet-amount-cols"></div></div>
+        <div class="form-actions">
+          <button type="button" class="btn btn-secondary" onclick="BlackBook.closeModal('spreadsheet-import-modal')">Cancel</button>
           <button type="submit" class="btn btn-primary">Import</button>
         </div>
       </form>
@@ -468,7 +538,7 @@
           <div class="form-group"><label id="tr-out-label">Amount out</label><input type="number" step="0.01" id="tr-amount" class="input" required></div>
           <div class="form-group"><label id="tr-in-label">Amount in</label><input type="number" step="0.01" id="tr-amount-in" class="input" required></div>
         </div>
-        <div class="form-group"><label>Date</label><input type="text" inputmode="numeric" id="tr-date" class="input" placeholder="DD.MM.YYYY" autocomplete="off"></div>
+        <div class="form-group"><label>Date</label><input type="text" inputmode="numeric" id="tr-date" class="input" placeholder="DD/MM/YYYY" autocomplete="off"></div>
         <div class="form-group"><label>Note (optional)</label><input type="text" id="tr-note" class="input"></div>
         <div class="form-actions">
           <button type="button" class="btn btn-secondary" onclick="BlackBook.closeModal('transfer-modal')">Cancel</button>
@@ -496,11 +566,13 @@
     <span class="hotkey"><kbd>T</kbd> TRANSFER</span>
     <span class="hotkey"><kbd>D</kbd> TODAY</span>
     <span class="hotkey"><kbd>E</kbd> EDIT</span>
+    <span class="hotkey"><kbd>M</kbd> MERGE</span>
+    <span class="hotkey"><kbd>B</kbd> FILTER SELECTED</span>
+    <span class="hotkey"><kbd>DEL</kbd> DELETE</span>
     <span class="hotkey"><kbd>H</kbd> GRAPH</span>
     <span class="hotkey"><kbd>TAB</kbd> ACCOUNT</span>
     <span class="hotkey"><kbd>1–8</kbd> PAGES</span>
-    <span class="hotkey"><kbd>/</kbd> COMMAND</span>
-    <span class="hotkey"><kbd>ESC</kbd> CLOSE</span>
+    <span class="hotkey"><kbd>Space</kbd> COMMAND</span>
   </footer>
 
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>

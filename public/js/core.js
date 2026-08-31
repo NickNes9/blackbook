@@ -65,9 +65,12 @@ window.BlackBook = {
       Chart.defaults.color = '#777777';
     }
     this.bindNav();
+    this.bindSidebarToggle();
     this.bindKeyboard();
     this.bindGlobalSelectWheel();
+    this.bindOutsideDeselect();
     this.bindDateWheel();
+    this.bindMonthWheel();
     this.bindModalSubmit();
     this.bindBillModalSubmit();
     this.bindSavingsGoalForm();
@@ -75,7 +78,7 @@ window.BlackBook = {
     this.bindBudgetForm();
     this.bindTransferForm();
 
-    document.querySelector('#transaction-modal .modal-backdrop').addEventListener('click', () => this.closeModal('transaction-modal'));
+    document.querySelector('#transaction-modal .modal-backdrop').addEventListener('click', () => { document.getElementById('transaction-form').requestSubmit(); });
     document.querySelector('#bill-modal .modal-backdrop').addEventListener('click', () => this.closeModal('bill-modal'));
     document.querySelector('#savings-modal .modal-backdrop').addEventListener('click', () => this.closeModal('savings-modal'));
     document.querySelector('#savings-entry-modal .modal-backdrop').addEventListener('click', () => this.closeModal('savings-entry-modal'));
@@ -148,15 +151,33 @@ window.BlackBook = {
   },
 
   connectWebSocket() {
-    const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const ws = new WebSocket(protocol + '//' + location.host);
-    ws.onclose = () => {};
-    ws.onerror = () => {};
+    this._wsRetry = this._wsRetry || 0;
+    if (this._ws) { try { this._ws.close(); } catch (e) {} this._ws = null; }
+    try {
+      const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+      const ws = new WebSocket(protocol + '//' + location.host);
+      this._ws = ws;
+      ws.onopen = () => { this._wsRetry = 0; };
+      ws.onclose = () => { this._ws = null; this.scheduleWsReconnect(); };
+      ws.onerror = () => { try { ws.close(); } catch (e) {} };
+    } catch (e) {
+      this.scheduleWsReconnect();
+    }
+  },
+
+  scheduleWsReconnect() {
+    if (this._wsRetry > 10) return;
+    const delay = Math.min(1000 * Math.pow(2, this._wsRetry), 15000);
+    this._wsRetry++;
+    clearTimeout(this._wsReconnectTimer);
+    this._wsReconnectTimer = setTimeout(() => this.connectWebSocket(), delay);
   },
 
   bindKeyboard() {
     document.addEventListener('keydown', (e) => {
       if (e.key === 'Escape') {
+        const confirmEl = document.getElementById('confirm-modal');
+        if (confirmEl && !confirmEl.classList.contains('hidden')) { e.preventDefault(); this._resolveConfirm(false); return; }
         const palette = document.getElementById('command-overlay');
         if (!palette.classList.contains('hidden')) {
           this.closeCommandPalette();
@@ -175,6 +196,12 @@ window.BlackBook = {
         !document.getElementById('settings-category-modal').classList.contains('hidden') ||
         !document.getElementById('transfer-modal').classList.contains('hidden');
       const paletteOpen = !document.getElementById('command-overlay').classList.contains('hidden');
+      const confirmOpen = !document.getElementById('confirm-modal').classList.contains('hidden');
+      if (confirmOpen) {
+        if (e.key === 'y' || e.key === 'Y' || e.key === 'Enter') { e.preventDefault(); this._resolveConfirm(true); return; }
+        if (e.key === 'n' || e.key === 'N' || e.key === 'Escape') { e.preventDefault(); this._resolveConfirm(false); return; }
+        return;
+      }
       if (e.ctrlKey && (e.key === 'k' || e.key === 'K')) {
         e.preventDefault();
         if (paletteOpen) this.closeCommandPalette();
@@ -187,8 +214,25 @@ window.BlackBook = {
       if (e.key === 'a' || e.key === 'A') { e.preventDefault(); this.openNewTransaction(); }
       if (e.key === 't' || e.key === 'T') { e.preventDefault(); this.openTransferModal(); }
       if (e.key === 'd' || e.key === 'D') { e.preventDefault(); this.gotoToday(); }
-      if (e.key === '/') { e.preventDefault(); document.getElementById('header-command-input').focus(); }
-      if (e.key === 'e' || e.key === 'E') { e.preventDefault(); this.editHoveredTransaction(); }
+      if (e.key === ' ') { e.preventDefault(); if (paletteOpen) this.closeCommandPalette(); else this.openCommandPalette(); return; }
+      if (e.key === 'e' || e.key === 'E') {
+        e.preventDefault();
+        if (this._bulkSel && this._bulkSel.size) this.openBulkEdit();
+        else this.editHoveredTransaction();
+      }
+      if (e.key === 'm' || e.key === 'M') {
+        e.preventDefault();
+        this.openMergeModal();
+      }
+      if (e.key === 'b' || e.key === 'B') {
+        e.preventDefault();
+        if (this._bulkSel && this._bulkSel.size) this.toggleBulkOnly();
+      }
+      if (e.key === 'Delete' || e.key === 'Del') {
+        e.preventDefault();
+        if (this._bulkSel && this._bulkSel.size) this.bulkDelete();
+        else if (this.hoveredTxId) this.deleteTransaction(this.hoveredTxId);
+      }
       if (e.key === 'h' || e.key === 'H') {
         e.preventDefault();
         if (this.currentPage === 'overview') { this.toggleOverviewGraph(); return; }
@@ -261,9 +305,16 @@ window.BlackBook = {
     else this.renderSettings();
   },
 
+  cyclePage(dir) {
+    const pages = this.pageList().filter(p => this.isPageEnabled(p));
+    if (!pages.length) return;
+    const idx = pages.indexOf(this.currentPage);
+    const next = pages[(idx + dir + pages.length) % pages.length];
+    this.navigateTo(next);
+  },
+
   navigateTo(page) {
-    const known = this.pageList();
-    if (!known.includes(page) || !this.isPageEnabled(page)) page = this.firstEnabledPage();
+    const known = this.pageList();    if (!known.includes(page) || !this.isPageEnabled(page)) page = this.firstEnabledPage();
     if (this.overviewPieChart) { this.overviewPieChart.destroy(); this.overviewPieChart = null; }
     if (this.overviewLineChart) { this.overviewLineChart.destroy(); this.overviewLineChart = null; }
     if (this.billsChart) { this.billsChart.destroy(); this.billsChart = null; }
@@ -279,6 +330,41 @@ window.BlackBook = {
     document.querySelectorAll('.sidebar-nav-item').forEach(b => b.classList.toggle('active', b.dataset.page === page));
     window.scrollTo(0, 0);
     this.renderPage(page);
+  },
+
+  bindSidebarToggle() {
+    const mark = document.querySelector('.header-logo-mark');
+    if (!mark) return;
+    mark.addEventListener('click', (e) => {
+      e.stopPropagation();
+      this.toggleSidebar();
+    });
+    try {
+      if (localStorage.getItem('bb-sidebar-collapsed') === '1') {
+        document.body.classList.add('sb-collapsed');
+      }
+    } catch (err) {}
+  },
+
+  toggleSidebar() {
+    const collapsed = document.body.classList.toggle('sb-collapsed');
+    try {
+      localStorage.setItem('bb-sidebar-collapsed', collapsed ? '1' : '0');
+    } catch (err) {}
+  },
+
+  fitElems(selector, minPx) {
+    const min = minPx || 8;
+    document.querySelectorAll(selector).forEach((el) => {
+      el.style.fontSize = '';
+      const base = parseFloat(getComputedStyle(el).fontSize);
+      if (isNaN(base) || el.scrollWidth <= el.clientWidth + 1) return;
+      let size = base;
+      while (size > min && el.scrollWidth > el.clientWidth + 1) {
+        size -= 0.5;
+        el.style.fontSize = size + 'px';
+      }
+    });
   },
 
   renderPage(page) {
@@ -297,8 +383,24 @@ window.BlackBook = {
     }
   },
 
+  setSaveState(state) {
+    const ind = document.getElementById('save-indicator');
+    if (!ind) return;
+    ind.classList.toggle('saving', state === 'saving');
+    const label = ind.querySelector('.save-label');
+    const dot = ind.querySelector('.save-dot');
+    if (label) label.textContent = state === 'saving' ? 'SAVING\u2026' : 'SAVED';
+  },
+
   async save() {
-    await fetch('/api/save', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(this.profile ? { profile: this.profile, data: this.data } : this.data) });
+    this._pendingSaves = (this._pendingSaves || 0) + 1;
+    this.setSaveState('saving');
+    try {
+      await fetch('/api/save', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(this.profile ? { profile: this.profile, data: this.data } : this.data) });
+    } finally {
+      this._pendingSaves = (this._pendingSaves || 0) - 1;
+      if (this._pendingSaves <= 0) { this._pendingSaves = 0; this.setSaveState('saved'); }
+    }
   },
 
   toRsd(amount, currency) {
@@ -317,7 +419,7 @@ window.BlackBook = {
     for (const code of ['EUR', 'USD', 'XAU']) {
       if (!s.rates[code]) {
         s.rates[code] = code === 'EUR'
-          ? { rate: legacyEur, source: legacyEur ? (s.eurToRsdRateSource || 'manual') : null, updated: s.eurToRsdRateUpdated || null }
+          ? { rate: legacyEur, source: legacyEur ? (s.eurToRsdRateSource || 'auto') : null, updated: s.eurToRsdRateUpdated || null }
           : { rate: null, source: null, updated: null };
       }
     }
@@ -332,24 +434,46 @@ window.BlackBook = {
   fmtDateInput(iso) {
     const p = String(iso || '').split('-');
     if (p.length !== 3 || p[0].length !== 4) return '';
-    return parseInt(p[2], 10) + '.' + parseInt(p[1], 10) + '.' + p[0];
+    return parseInt(p[2], 10) + '/' + parseInt(p[1], 10) + '/' + p[0];
   },
 
   parseDateInput(str) {
     let s = String(str || '').trim().replace(/\s+/g, '');
     if (!s) return null;
+    const original = s;
     s = s.replace(/[-/.]/g, '.').replace(/\.+/g, '.').replace(/^\.|\.$/g, '');
     let d, m, y;
-    if (/^\d{4}\.\d{1,2}\.\d{1,2}$/.test(s)) { const q = s.split('.'); y = parseInt(q[0], 10); m = parseInt(q[1], 10); d = parseInt(q[2], 10); }
-    else {
-      const q = s.split('.');
-      if (q.length !== 3 || !q.every(x => /^\d+$/.test(x))) return null;
-      d = parseInt(q[0], 10); m = parseInt(q[1], 10); y = parseInt(q[2], 10);
+    if (/^\d{4}\.\d{1,2}\.\d{1,2}$/.test(s)) {
+      const q = s.split('.'); y = parseInt(q[0], 10); m = parseInt(q[1], 10); d = parseInt(q[2], 10);
+    } else if (/^\d{1,2}\.\d{1,2}\.\d{2,4}$/.test(s)) {
+      const q = s.split('.'); d = parseInt(q[0], 10); m = parseInt(q[1], 10); y = parseInt(q[2], 10);
       if (y < 100) y += 2000;
+    } else if (/^\d{1,2}\.\d{1,2}$/.test(s)) {
+      const q = s.split('.'); d = parseInt(q[0], 10); m = parseInt(q[1], 10); y = new Date().getFullYear();
+    } else {
+      return null;
     }
     const dt = new Date(y, m - 1, d);
     if (dt.getFullYear() !== y || dt.getMonth() !== m - 1 || dt.getDate() !== d) return null;
     return y + '-' + String(m).padStart(2, '0') + '-' + String(d).padStart(2, '0');
+  },
+
+  parseSmartDate(input) {
+    const s = String(input || '').trim();
+    if (!s) return { type: 'none' };
+    const asNum = parseInt(s, 10);
+    if (!isNaN(asNum) && /^[+-]?\d+$/.test(s)) {
+      return { type: 'offset', value: asNum };
+    }
+    const asDate = this.parseDateInput(s);
+    if (asDate) return { type: 'exact', value: asDate };
+    return { type: 'invalid', raw: s };
+  },
+
+  shiftDate(isoDate, dayOffset) {
+    const d = new Date(isoDate + 'T00:00:00');
+    d.setDate(d.getDate() + dayOffset);
+    return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
   },
 
   sortedCategories() {
@@ -367,6 +491,30 @@ window.BlackBook = {
 
   openModal(id) { document.getElementById(id).classList.remove('hidden'); },
   closeModal(id) { document.getElementById(id).classList.add('hidden'); },
+
+  confirmModal(opts) {
+    return new Promise((resolve) => {
+      opts = opts || {};
+      document.getElementById('confirm-title').textContent = opts.title || 'Confirm';
+      const msg = document.getElementById('confirm-message');
+      msg.textContent = (opts.message == null ? 'Are you sure?' : String(opts.message));
+      const okBtn = document.getElementById('confirm-ok');
+      okBtn.textContent = opts.confirmText || 'Confirm';
+      okBtn.className = 'btn ' + (opts.danger === false ? 'btn-primary' : 'btn-danger');
+      document.getElementById('confirm-cancel').textContent = opts.cancelText || 'Cancel';
+      this._confirmResolve = resolve;
+      this.openModal('confirm-modal');
+      setTimeout(() => okBtn.focus(), 30);
+    });
+  },
+
+  _resolveConfirm(val) {
+    if (!this._confirmResolve) return;
+    const r = this._confirmResolve;
+    this._confirmResolve = null;
+    this.closeModal('confirm-modal');
+    r(val);
+  },
 
   fmtRsd(amount) {
     return amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' RSD';
@@ -847,6 +995,17 @@ window.BlackBook = {
     return !!t && tx.categoryId === t.id;
   },
 
+  bindOutsideDeselect() {
+    if (this._outsideDeselectBound) return;
+    this._outsideDeselectBound = true;
+    document.addEventListener('pointerdown', (e) => {
+      if (!this._bulkSel || !this._bulkSel.size) return;
+      if (e.target.closest('.tx-list-wrap')) return;
+      if (e.target.closest('.bulk-filter-chip')) return;
+      this.bulkClear();
+    });
+  },
+
   bindGlobalSelectWheel() {
     if (this._selectWheelBound) return;
     this._selectWheelBound = true;
@@ -867,7 +1026,7 @@ window.BlackBook = {
       const el = e.target;
       if (!el || el.tagName !== 'INPUT' || el.type !== 'text' || el.readOnly || el.disabled) return;
       const ph = (el.placeholder || '').toUpperCase();
-      if (ph.indexOf('DD.MM.YYYY') === -1 && ph.indexOf('YYYY') === -1) return;
+      if (ph.indexOf('DD/MM/YYYY') === -1 && ph.indexOf('DD.MM.YYYY') === -1 && ph.indexOf('YYYY') === -1) return;
       if (!el.value.trim()) { e.preventDefault(); el.value = this.fmtDateInput(this.today()); return; }
       const parsed = this.parseDateInput(el.value);
       if (!parsed) return;
@@ -879,6 +1038,31 @@ window.BlackBook = {
       el.dispatchEvent(new Event('input', { bubbles: true }));
       el.dispatchEvent(new Event('change', { bubbles: true }));
     }, { passive: false });
+  },
+
+  bindMonthWheel() {
+    if (this._monthWheelBound) return;
+    this._monthWheelBound = true;
+    const onWheel = (e) => {
+      const target = e.target.closest && e.target.closest('.month-picker, .account-chips, .app-sidebar');
+      if (!target) return;
+      const dir = e.deltaY < 0 ? 1 : -1;
+      if (target.matches('.account-chips')) { e.preventDefault(); this.cycleAccount(-dir); return; }
+      if (target.matches('.app-sidebar')) { e.preventDefault(); this.cyclePage(-dir); return; }
+      const mp = target;
+      const checkOverYear = () => {
+        const yearBtn = mp.querySelector('.mp-year');
+        if (!yearBtn) return false;
+        const yr = yearBtn.getBoundingClientRect();
+        return e.clientY >= yr.top && e.clientY <= yr.bottom &&
+               e.clientX >= yr.left && e.clientX <= yr.right;
+      };
+      e.preventDefault();
+      if (checkOverYear()) this.shiftYear(dir);
+      else this.arrowPeriod(dir);
+      mp._lastWheel = Date.now();
+    };
+    document.addEventListener('wheel', onWheel, { passive: false });
   },
 
   transferCategoryObj() {
@@ -963,6 +1147,7 @@ window.BlackBook = {
   chartAccountsTx() {
     let txs = this.data.transactions.slice();
     if (this.activeFilters.accounts.length) txs = txs.filter(t => this.activeFilters.accounts.includes(t.accountId));
+    if (this._bulkSel && this._bulkSel.size && this._bulkOnly) txs = txs.filter(t => this._bulkSel.has(t.id));
     return txs;
   },
 };
