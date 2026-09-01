@@ -269,9 +269,11 @@ input[type="checkbox"]:checked {
   flex: 0 0 auto;
   vertical-align: middle;
   cursor: pointer;
+  transition: transform 0.25s ease;
 }
 
 .header-logo-mark:hover { opacity: 0.7; }
+body.sb-collapsed .header-logo-mark { transform: rotate(-90deg); }
 
 .header-logo {
   font-size:15px;
@@ -1077,6 +1079,7 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
 
 .amt-income { color: var(--income); }
 .amt-expense { color: var(--expense); }
+.amt-transfer { color: #71717a; }
 .amt-medium { font-weight: 700; }
 .amt-heavy { font-weight: 800; font-size:16px; }
 
@@ -1150,6 +1153,13 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
 .chart-panel canvas {
   width: 100% !important;
   height: 100% !important;
+}
+
+/* ===== PAGE TOOLBAR ===== */
+.page-toolbar {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 10px;
 }
 
 /* ===== MONTH SUMMARY ===== */

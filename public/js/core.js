@@ -33,6 +33,7 @@ window.BlackBook = {
     if (!this.data.debts) this.data.debts = [];
     if (!this.data.invoices) this.data.invoices = [];
     if (this.migrateCreditCards()) await this.save();
+    if (this.migrateTransfers()) await this.save();
     let signFixed = false;
     for (const t of (this.data.transactions || [])) {
       if (!t || typeof t.amount !== 'number') continue;
@@ -551,6 +552,11 @@ window.BlackBook = {
   accountBalance(accountId) {
     let total = 0;
     for (const tx of this.data.transactions) {
+      if (tx.type === 'transfer') {
+        if (tx.fromAccountId === accountId) total -= this.toRsd(tx.amount, tx.currency);
+        if (tx.toAccountId === accountId) total += this.toRsd(tx.amountIn || tx.amount, tx.currencyIn || tx.currency);
+        continue;
+      }
       if (tx.accountId !== accountId) continue;
       total += this.toRsd(tx.amount, tx.currency);
     }
@@ -562,6 +568,26 @@ window.BlackBook = {
     let total = 0;
     let currency = (acc && acc.currency) || 'RSD';
     for (const tx of this.data.transactions) {
+      if (tx.type === 'transfer') {
+        if (tx.fromAccountId === accountId) {
+          let amt = tx.amount;
+          if (tx.currency && acc && acc.currency && tx.currency !== acc.currency) {
+            const converted = this.convertBetweenCurrencies(tx.amount, tx.currency, acc.currency);
+            if (converted != null && !isNaN(converted)) amt = converted;
+          }
+          total -= amt;
+        }
+        if (tx.toAccountId === accountId) {
+          let amt = tx.amountIn || tx.amount;
+          const cur = tx.currencyIn || tx.currency;
+          if (cur && acc && acc.currency && cur !== acc.currency) {
+            const converted = this.convertBetweenCurrencies(amt, cur, acc.currency);
+            if (converted != null && !isNaN(converted)) amt = converted;
+          }
+          total += amt;
+        }
+        continue;
+      }
       if (tx.accountId !== accountId) continue;
       let amt = tx.amount;
       if (tx.currency && acc && acc.currency && tx.currency !== acc.currency) {
@@ -630,17 +656,16 @@ window.BlackBook = {
         '<div class="command-syntax">pay internet &nbsp;&middot;&nbsp; toggle bill paid this month</div>' +
         '<div class="command-syntax">bg shop 20000 &nbsp;/&nbsp; bg shop clear &nbsp;&middot;&nbsp; budget</div>' +
         '<div class="command-syntax">dep hawaii 5000 &nbsp;/&nbsp; wd hawaii 2000 &nbsp;&middot;&nbsp; savings move</div>' +
-        '<div class="command-syntax">csv &nbsp;&middot;&nbsp; demo &nbsp;&middot;&nbsp; profile &lt;name&gt;</div></div>';
+        '<div class="command-syntax">csv &nbsp;&middot;&nbsp; profile &lt;name&gt;</div></div>';
       results.innerHTML = html;
       return;
     }
 
     const lq0 = query.trim().toLowerCase();
     const kw = lq0.split(/\s+/)[0];
-    if (kw === 'csv' || kw === 'demo' || kw === 'json' || kw === 'profiles') {
+    if (kw === 'csv' || kw === 'json' || kw === 'profiles') {
       const actionsMap = {
         csv: ['Export transactions as CSV', () => this.exportCsv()],
-        demo: ['Generate demo data (replaces everything)', () => this.generateDemoData()],
         json: ['Export full backup JSON', () => { const blob = new Blob([JSON.stringify(this.data, null, 2)], { type: 'application/json' }); const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'blackbook-backup-' + this.today() + '.json'; a.click(); }],
         profiles: ['Show profiles in settings', () => { this.closeCommandPalette(); this.navigateTo('settings'); }]
       };
@@ -957,6 +982,41 @@ window.BlackBook = {
     return changed;
   },
 
+  migrateTransfers() {
+    const paired = this.data.transactions.filter(t => t.pairId && t.pairId.startsWith('pair-') && t.type !== 'transfer');
+    if (!paired.length) return false;
+    const pairs = {};
+    for (const tx of paired) {
+      if (!pairs[tx.pairId]) pairs[tx.pairId] = [];
+      pairs[tx.pairId].push(tx);
+    }
+    const convertedIds = new Set();
+    const unified = [];
+    for (const [pairId, txs] of Object.entries(pairs)) {
+      const expense = txs.find(t => t.type === 'expense');
+      const income = txs.find(t => t.type === 'income');
+      if (!expense || !income) continue;
+      unified.push({
+        id: 'tx-' + pairId,
+        type: 'transfer',
+        amount: Math.abs(expense.amount),
+        amountIn: Math.abs(income.amount),
+        currency: expense.currency,
+        currencyIn: income.currency,
+        fromAccountId: expense.accountId,
+        toAccountId: income.accountId,
+        categoryId: expense.categoryId,
+        date: expense.date,
+        note: (expense.note || '').replace(/^Transfer\s+/, ''),
+        pairId: pairId
+      });
+      convertedIds.add(pairId);
+    }
+    this.data.transactions = this.data.transactions.filter(t => !convertedIds.has(t.pairId));
+    this.data.transactions.push(...unified);
+    return true;
+  },
+
   visibleAccounts() { return this.data.accounts.filter(a => !a.hidden && a.type !== 'credit' && a.type !== 'creditcard'); },
   allSpendAccounts() { return this.data.accounts.filter(a => !a.hidden); },
 
@@ -990,7 +1050,9 @@ window.BlackBook = {
   },
 
   isTransfer(tx) {
-    if (!tx || !tx.categoryId) return false;
+    if (!tx) return false;
+    if (tx.type === 'transfer') return true;
+    if (!tx.categoryId) return false;
     const t = this.data.categories.find(c => c.name.toLowerCase() === 'transfer');
     return !!t && tx.categoryId === t.id;
   },
@@ -1146,7 +1208,12 @@ window.BlackBook = {
 
   chartAccountsTx() {
     let txs = this.data.transactions.slice();
-    if (this.activeFilters.accounts.length) txs = txs.filter(t => this.activeFilters.accounts.includes(t.accountId));
+    if (this.activeFilters.accounts.length) {
+      txs = txs.filter(t => {
+        if (t.type === 'transfer') return this.activeFilters.accounts.includes(t.fromAccountId) || this.activeFilters.accounts.includes(t.toAccountId);
+        return this.activeFilters.accounts.includes(t.accountId);
+      });
+    }
     if (this._bulkSel && this._bulkSel.size && this._bulkOnly) txs = txs.filter(t => this._bulkSel.has(t.id));
     return txs;
   },

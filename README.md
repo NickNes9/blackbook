@@ -15,8 +15,7 @@ A local-first personal finance console. Terminal aesthetic with light/dark theme
 - **Themes** — dark (default) and light, device-level toggle in Settings; customizable highlight, income and expense colors used across UI *and* charts
 - **Math in amount fields** — type `50+20*3`, `(2+3)*4` or `12,5` anywhere an amount is accepted
 - **Profiles** — isolated data sets (default + named profiles) stored as separate files, per-profile page visibility
-- **Command palette** — `/` or `Ctrl-K`: search transactions, pages, quick commands (`t 500 cash bank`, `pay electricity`, `bg groceries 20000`, `csv`, `demo`, …)
-- **Demo data generator** — realistic sample year for trying things out
+- **Command palette** — `/` or `Ctrl-K`: search transactions, pages, quick commands (`t 500 cash bank`, `pay electricity`, `bg groceries 20000`, `csv`, …)
 
 ## Keyboard
 
