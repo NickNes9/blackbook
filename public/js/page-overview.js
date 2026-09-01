@@ -57,7 +57,10 @@ Object.assign(window.BlackBook, {
     const a = this.data.accounts.find(x => x.id === this.selectedAccount);
     if (!a) return '';
     const { amount: bal, currency } = this.accountBalanceNative(a.id);
-    const txCount = this.data.transactions.filter(t => t.accountId === a.id).length;
+    const txCount = this.data.transactions.filter(t => {
+      if (t.type === 'transfer') return t.fromAccountId === a.id || t.toAccountId === a.id;
+      return t.accountId === a.id;
+    }).length;
     return '<div class="account-detail">' +
       '<div class="account-detail-header"><span class="account-detail-name">' + this.escapeHtml(a.name) + '</span>' +
       '<span class="account-detail-type">' + this.escapeHtml(a.currency) + ' ' + this.escapeHtml(a.type || 'cash') + '</span>' +
@@ -200,13 +203,19 @@ Object.assign(window.BlackBook, {
   categoryFilterHtml() {
     const y = this.vy(), m = this.vm();
     const used = new Set();
+    let hasTransfers = false;
     for (const tx of this.data.transactions) {
       const { y: ty, m: tm } = this.ymOf(tx.date);
       if (ty !== y || tm !== m) continue;
+      if (tx.type === 'transfer') { hasTransfers = true; continue; }
       if (!tx.categoryId) continue;
       used.add(tx.categoryId);
     }
     let html = '<div class="cat-filter"><div class="cat-filter-chip' + (this.selectedCategory === null && !this._ovInc && !this._ovExp ? ' selected' : '') + '" onclick="BlackBook.selectCategory(null)">ALL</div>';
+    if (hasTransfers) {
+      const sel = this.selectedCategory === '__TRANSFER__';
+      html += '<div class="cat-filter-chip' + (sel ? ' selected' : '') + '" style="--cc:#71717a;' + (sel ? 'background:#71717a;color:var(--on-fill);' : '') + '" onclick="BlackBook.selectCategory(\'__TRANSFER__\')">Transfer</div>';
+    }
     const sorted = (this.data.categories || []).filter(c => used.has(c.id)).sort((a, b) => a.name.localeCompare(b.name));
     for (const c of sorted) {
       const sel = this.selectedCategory === c.id;
@@ -217,7 +226,12 @@ Object.assign(window.BlackBook, {
 
   recentTransactionsHtml() {
     let txs = this.data.transactions.slice().sort((a, b) => b.date.localeCompare(a.date));
-    if (this.selectedAccount) txs = txs.filter(t => t.accountId === this.selectedAccount);
+    if (this.selectedAccount) {
+      txs = txs.filter(t => {
+        if (t.type === 'transfer') return t.fromAccountId === this.selectedAccount || t.toAccountId === this.selectedAccount;
+        return t.accountId === this.selectedAccount;
+      });
+    }
     if (this.selectedCategory) {
       if (this.selectedCategory === '__TRANSFER__') {
         txs = txs.filter(t => this.isTransfer(t));
@@ -235,19 +249,32 @@ Object.assign(window.BlackBook, {
     const categories = Object.fromEntries(this.data.categories.map(c => [c.id, c]));
     let rows = '';
     for (const tx of txs) {
-      const card = tx.cardId ? cards[tx.cardId] : null;
-      const acc = card
-        ? { color: card.color || '#71717a', shortName: card.shortName || '?', name: card.name }
-        : (accounts[tx.accountId] || { color: '#52525b', shortName: 'TR', name: 'Transfer' });
-      const cat = categories[tx.categoryId] || { color: '#555555', name: '?' };
-      const rsd = this.toRsd(tx.amount, tx.currency);
-      const amtClass = tx.type === 'income' ? 'amt-income' : 'amt-expense';
-      let wtClass = '';
-      if (Math.abs(rsd) > 10000) wtClass = ' amt-heavy'; else if (Math.abs(rsd) > 5000) wtClass = ' amt-medium';
-      const txCur = tx.currency || 'RSD';
-      const accCur = card ? 'RSD' : ((accounts[tx.accountId] || {}).currency || 'RSD');
-      const txAmtDisplay = this.fmtDualCurrency(tx.amount, txCur, accCur, tx.nativeAmount, tx.nativeCurrency);
-      rows += '<div class="tx-row' + (this._bulkSel && this._bulkSel.has(tx.id) ? ' bulk-selected' : '') + '" onclick="BlackBook.bulkToggle(\x27' + tx.id + '\x27)" onmouseenter="BlackBook.hoveredTxId=\x27' + tx.id + '\x27" onmouseleave="BlackBook.hoveredTxId=null"><div class="tx-acct-stripe" style="background:' + acc.color + '"><span class="tx-acct-label">' + this.escapeHtml((acc.shortName || '?').toUpperCase()) + '</span></div><span class="tx-date">' + this.fmtDateInput(tx.date) + '</span><span class="tx-cat" style="color:' + cat.color + '">' + this.escapeHtml(cat.name) + '</span><span class="tx-note">' + this.escapeHtml(tx.note || '') + '</span><span class="tx-actions" onclick="event.stopPropagation()"><button class="btn btn-sm btn-secondary" onclick="BlackBook.openEditTransaction(\x27' + tx.id + '\x27)">EDIT</button><button class="btn btn-sm btn-danger" onclick="BlackBook.deleteTransaction(\x27' + tx.id + '\x27)">DEL</button></span><span class="tx-amt ' + amtClass + wtClass + '">' + txAmtDisplay + '</span></div>';
+      if (tx.type === 'transfer') {
+        const fromAcc = accounts[tx.fromAccountId] || { color: '#52525b', shortName: '?', name: '?' };
+        const toAcc = accounts[tx.toAccountId] || { color: '#52525b', shortName: '?', name: '?' };
+        let shownAcc = toAcc;
+        if (this.selectedAccount && (tx.fromAccountId === this.selectedAccount || tx.toAccountId === this.selectedAccount)) {
+          shownAcc = tx.fromAccountId === this.selectedAccount ? toAcc : fromAcc;
+        }
+        const shownLabel = (shownAcc.shortName || shownAcc.name || '?').toUpperCase();
+        const amtDisplay = this.fmtDualCurrency(tx.amount, tx.currency, tx.currency, null, null);
+        const amtInDisplay = tx.amountIn != null ? this.fmtDualCurrency(tx.amountIn, tx.currencyIn || tx.currency, tx.currencyIn || tx.currency, null, null) : amtDisplay;
+        rows += '<div class="tx-row tx-row-transfer' + (this._bulkSel && this._bulkSel.has(tx.id) ? ' bulk-selected' : '') + '" onclick="BlackBook.bulkToggle(\x27' + tx.id + '\x27, event.shiftKey)" onmouseenter="BlackBook.hoveredTxId=\x27' + tx.id + '\x27" onmouseleave="BlackBook.hoveredTxId=null"><div class="tx-acct-stripe" style="background:' + shownAcc.color + '"><span class="tx-acct-label">' + this.escapeHtml(shownLabel) + '</span></div><span class="tx-date">' + this.fmtDateInput(tx.date) + '</span><span class="tx-cat" style="color:#71717a">Transfer</span><span class="tx-note">' + this.escapeHtml(tx.note || '') + '</span><span class="tx-actions" onclick="event.stopPropagation()"><button class="btn btn-sm btn-secondary" onclick="BlackBook.openEditTransfer(\x27' + tx.id + '\x27)">EDIT</button><button class="btn btn-sm btn-danger" onclick="BlackBook.deleteTransaction(\x27' + tx.id + '\x27)">DEL</button></span><span class="tx-amt amt-transfer">' + amtDisplay + ' &#8594; ' + amtInDisplay + '</span></div>';
+      } else {
+        const card = tx.cardId ? cards[tx.cardId] : null;
+        const acc = card
+          ? { color: card.color || '#71717a', shortName: card.shortName || '?', name: card.name }
+          : (accounts[tx.accountId] || { color: '#52525b', shortName: 'TR', name: 'Transfer' });
+        const cat = categories[tx.categoryId] || { color: '#555555', name: '?' };
+        const rsd = this.toRsd(tx.amount, tx.currency);
+        const amtClass = tx.type === 'income' ? 'amt-income' : 'amt-expense';
+        let wtClass = '';
+        if (Math.abs(rsd) > 10000) wtClass = ' amt-heavy'; else if (Math.abs(rsd) > 5000) wtClass = ' amt-medium';
+        const txCur = tx.currency || 'RSD';
+        const accCur = card ? 'RSD' : ((accounts[tx.accountId] || {}).currency || 'RSD');
+        const txAmtDisplay = this.fmtDualCurrency(tx.amount, txCur, accCur, tx.nativeAmount, tx.nativeCurrency);
+        rows += '<div class="tx-row' + (this._bulkSel && this._bulkSel.has(tx.id) ? ' bulk-selected' : '') + '" onclick="BlackBook.bulkToggle(\x27' + tx.id + '\x27, event.shiftKey)" onmouseenter="BlackBook.hoveredTxId=\x27' + tx.id + '\x27" onmouseleave="BlackBook.hoveredTxId=null"><div class="tx-acct-stripe" style="background:' + acc.color + '"><span class="tx-acct-label">' + this.escapeHtml((acc.shortName || '?').toUpperCase()) + '</span></div><span class="tx-date">' + this.fmtDateInput(tx.date) + '</span><span class="tx-cat" style="color:' + cat.color + '">' + this.escapeHtml(cat.name) + '</span><span class="tx-note">' + this.escapeHtml(tx.note || '') + '</span><span class="tx-actions" onclick="event.stopPropagation()"><button class="btn btn-sm btn-secondary" onclick="BlackBook.openEditTransaction(\x27' + tx.id + '\x27)">EDIT</button><button class="btn btn-sm btn-danger" onclick="BlackBook.deleteTransaction(\x27' + tx.id + '\x27)">DEL</button></span><span class="tx-amt ' + amtClass + wtClass + '">' + txAmtDisplay + '</span></div>';
+      }
     }
     return '<div class="tx-list">' + rows + '</div>';
   },

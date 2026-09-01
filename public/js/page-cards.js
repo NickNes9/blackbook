@@ -41,7 +41,8 @@ Object.assign(window.BlackBook, {
     const el = document.getElementById('page-cards');
     if (!el) return;
     if (!this.data.creditCards) this.data.creditCards = [];
-    let html = '<div class="month-picker"></div>';
+    let html = '<div class="month-picker" style="justify-content:flex-end;">' +
+      '<button class="btn btn-primary" onclick="BlackBook.openNewCardTx()" title="Add a new transaction on a credit card">+ NEW PURCHASE</button></div>';
     html += this.cardsSummaryHtml();
     html += '<div class="list-sep"></div>';
     html += '<div class="page-scroll-wrap">' + this.cardsListHtml() + '</div>';
@@ -65,7 +66,7 @@ Object.assign(window.BlackBook, {
 
   cardsListHtml() {
     const cards = this.data.creditCards || [];
-    if (!cards.length) return '<div class="empty-state"><div class="empty-state-text">No credit cards yet. Click + NEW CARD to add one.</div></div>';
+    if (!cards.length) return '<div class="empty-state"><div class="empty-state-text">No credit cards yet. Add one on the Settings page.</div></div>';
     return cards.map(c => this.cardBlockHtml(c)).join('');
   },
 
@@ -75,12 +76,9 @@ Object.assign(window.BlackBook, {
     let html = '<div class="card-block">' +
       '<div class="savings-header">' +
       '<span class="savings-name"><span class="cat-dot" style="background:' + (card.color || '#71717a') + ';"></span> ' + this.escapeHtml(card.name) + '</span>' +
-      '<span class="savings-actions">' +
-      '<button class="btn btn-sm btn-primary" onclick="BlackBook.openNewCardTx(\x27' + card.id + '\x27)" title="Add a transaction on this card">New</button>' +
-      '<button class="btn btn-sm btn-secondary" onclick="BlackBook.openEditAccount(\x27card:' + card.id + '\x27)">EDIT</button>' +
-       '<button class="btn btn-sm btn-danger" onclick="BlackBook.deleteCard(\x27' + card.id + '\x27)">DEL</button></span></div>' +
+      '</div>' +
       '<div class="bill-meta-line" style="display:block;margin-bottom:6px;">INT ' + (card.ratePct != null ? card.ratePct : 5) + '% &middot; DUE DAY ' + (card.dueDay || 15) + ' &middot; DEBT ' + this.fmtRsd(debt) + '</div>';
-    if (!plans.length) html += '<div class="empty-state" style="padding:14px;"><div class="empty-state-text">No purchases yet. Click New to add a transaction on this card.</div></div>';
+    if (!plans.length) html += '<div class="empty-state" style="padding:14px;"><div class="empty-state-text">No purchases yet. Click + NEW to add a transaction.</div></div>';
     else html += plans.map(p => this.planBlockHtml(p)).join('');
     return html + '</div>';
   },
@@ -91,15 +89,16 @@ Object.assign(window.BlackBook, {
     const closed = this.instIsClosed(inst);
     const paidEntries = this.instPaidEntries(inst);
     const paidCount = closed ? inst.months : paidEntries.length;
-    const pct = Math.min(Math.round(paidCount / inst.months * 100), 100);
+    const outstanding = this.instOutstanding(inst);
+    const grandTotal = this.instGrandTotal(inst);
+    const pct = grandTotal > 0 ? Math.min(Math.round((grandTotal - outstanding) / grandTotal * 100), 100) : 0;
     const advance = inst.advance || 0;
     let html = '<div class="plan-card"' + (closed ? ' style="opacity:0.55;"' : '') + '>';
     html += '<div class="savings-header">' +
       '<span class="savings-name">' + this.escapeHtml(inst.name) + '</span>' +
       '<span class="savings-actions">' +
       '<span class="inst-count-badge"' + (closed ? ' style="border-color:' + color + ';color:var(--on-fill);background:' + color + ';"' : '') + '>' + paidCount + '/' + inst.months + ' PAID</span>' +
-      '<span class="inst-custom"><input type="text" inputmode="decimal" id="cust-' + inst.id + '" class="input inst-custom-input" placeholder="AMOUNT" autocomplete="off">' +
-      (closed ? '' : '<button class="btn btn-sm btn-primary" onclick="BlackBook.customPayInstallments(\x27' + inst.id + '\x27)" title="Pay the amount entered - fills installments in order">PAY</button>') + '</span>' +
+      (closed ? '' : '<button class="btn btn-sm btn-primary" onclick="BlackBook.openPayInstallment(\x27' + inst.id + '\x27)" title="Pay toward this plan">PAY</button>') +
       '<button class="btn btn-sm btn-danger" onclick="BlackBook.deleteInstallment(\x27' + inst.id + '\x27)">DEL</button></span></div>';
     html += '<div class="savings-progress-text"><span>' + (closed ? '&#10003; FULLY PAID OFF' :
       'LEFT ' + this.fmtRsd(this.instOutstanding(inst)) + ' of ' + this.fmtRsd(this.instGrandTotal(inst))) + '</span><span>' + pct + '%</span></div>' +
@@ -178,17 +177,47 @@ Object.assign(window.BlackBook, {
     this.data.transactions.unshift({ id: 'tx-' + pairId, type: 'expense', amount: -amount, currency: acc.currency || 'RSD', accountId: fundingAccId, categoryId: catId, date: date, note: note, pairId: pairId });
   },
 
-  async customPayInstallments(instId) {
+  openPayInstallment(instId) {
     const inst = this.data.installments.find(i => i.id === instId);
     if (!inst) return;
-    const inputEl = document.getElementById('cust-' + instId);
-    const rawVal = inputEl ? String(inputEl.value || '').trim() : '';
-    if (!rawVal) { alert('Enter an amount first.'); return; }
+    const outstanding = this.instOutstanding(inst);
+    const html = '<div class="modal-backdrop" onclick="BlackBook.closeModal(\'pay-installment-modal\')"></div>' +
+      '<div class="modal-content" style="max-width:360px;">' +
+      '<div class="modal-header"><span class="modal-title">Pay ' + this.escapeHtml(inst.name) + '</span><button class="modal-close" onclick="BlackBook.closeModal(\'pay-installment-modal\')">&times;</button></div>' +
+      '<div style="padding:14px;">' +
+      '<div style="font-size:13px;color:var(--text-muted);margin-bottom:10px;">Outstanding: ' + this.fmtRsd(outstanding) + '</div>' +
+      '<label style="font-size:12px;color:var(--text-muted);">AMOUNT</label>' +
+      '<input type="text" inputmode="decimal" id="pay-inst-amount" class="input" style="width:100%;margin-top:4px;" placeholder="Enter amount" autofocus>' +
+      '<div style="display:flex;gap:8px;margin-top:14px;justify-content:flex-end;">' +
+      '<button class="btn btn-sm btn-secondary" onclick="BlackBook.closeModal(\'pay-installment-modal\')">CANCEL</button>' +
+      '<button class="btn btn-sm btn-primary" onclick="BlackBook.submitPayInstallment(\x27' + instId + '\x27)">PAY</button>' +
+      '</div></div></div>';
+    const wrapper = document.createElement('div');
+    wrapper.id = 'pay-installment-modal';
+    wrapper.className = 'modal-wrap';
+    wrapper.innerHTML = html;
+    document.body.appendChild(wrapper);
+    const inp = document.getElementById('pay-inst-amount');
+    if (inp) { inp.focus(); inp.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); this.submitPayInstallment(instId); } }); }
+  },
+
+  async submitPayInstallment(instId) {
+    const inp = document.getElementById('pay-inst-amount');
+    const rawVal = inp ? String(inp.value || '').trim() : '';
+    this.closeModal('pay-installment-modal');
+    if (!rawVal) { await this.confirmModal({ title: 'Pay Installment', message: 'Enter an amount first.', danger: false }); return; }
+    await this.customPayInstallments(instId, rawVal);
+  },
+
+  async customPayInstallments(instId, rawVal) {
+    const inst = this.data.installments.find(i => i.id === instId);
+    if (!inst) return;
+    if (!rawVal) { await this.confirmModal({ title: 'Pay Installment', message: 'Enter an amount first.', danger: false }); return; }
     const paidEntries = this.instPaidEntries(inst);
     const outstanding = this.instOutstanding(inst);
-    if (!(outstanding > 0)) { alert('Nothing left to pay on this plan.'); return; }
+    if (!(outstanding > 0)) { await this.confirmModal({ title: 'Pay Installment', message: 'Nothing left to pay on this plan.', danger: false }); return; }
     let amt = this.evalAmount(rawVal);
-    if (!(amt > 0)) { alert('Enter a valid amount.'); return; }
+    if (!(amt > 0)) { await this.confirmModal({ title: 'Pay Installment', message: 'Enter a valid amount.', danger: false }); return; }
     let rem = amt, cleared = 0;
     for (let s = 1; s <= inst.months; s++) {
       if (paidEntries.some(e => e.seq === s)) continue;
@@ -224,19 +253,31 @@ Object.assign(window.BlackBook, {
     this.renderPage(this.currentPage === 'cards' ? 'cards' : this.currentPage);
   },
 
+  openNewCreditCard() {
+    this.openNewAccount();
+    const typeSel = document.getElementById('settings-account-type');
+    if (typeSel) { typeSel.value = 'creditcard'; this.updateCreditFieldsVisibility(); }
+    document.getElementById('settings-account-modal-title').textContent = 'New Credit Card';
+  },
+
   openNewCardTx(cardId) {
-    const card = this.cardById(cardId);
-    if (!card) return;
-    document.getElementById('ctx-card').value = cardId;
+    const cards = this.data.creditCards || [];
+    if (!cards.length) { alert('Add a credit card on the Settings page first.'); return; }
+    const sorted = cards.slice().sort((a, b) => a.name.localeCompare(b.name));
+    let cur = cardId || sorted[0].id;
+    if (!sorted.some(c => c.id === cur)) cur = sorted[0].id;
+    const sel = document.getElementById('ctx-card');
+    if (sel) sel.innerHTML = sorted.map(c => '<option value="' + c.id + '"' + (c.id === cur ? ' selected' : '') + '>' + this.escapeHtml(c.name) + '</option>').join('');
+    const card = this.cardById(cur);
     document.getElementById('ctx-amount').value = '';
     document.getElementById('ctx-date').value = this.fmtDateInput(this.today());
     document.getElementById('ctx-note').value = '';
     document.getElementById('ctx-months').value = '1';
-    const sel = document.getElementById('ctx-category');
-    const sorted = this.data.categories.slice().sort((a, b) => a.name.localeCompare(b.name));
+    const catSel = document.getElementById('ctx-category');
+    const cats = this.data.categories.slice().sort((a, b) => a.name.localeCompare(b.name));
     const def = this.data.settings.defaultCategoryId;
-    sel.innerHTML = sorted.map(c => '<option value="' + c.id + '"' + (c.id === (def || sorted[0].id) ? ' selected' : '') + '>' + this.escapeHtml(c.name) + '</option>').join('');
-    document.getElementById('card-tx-title').textContent = 'New \u2014 ' + card.name;
+    catSel.innerHTML = cats.map(c => '<option value="' + c.id + '"' + (c.id === (def || cats[0].id) ? ' selected' : '') + '>' + this.escapeHtml(c.name) + '</option>').join('');
+    document.getElementById('card-tx-title').textContent = 'New \u2014 ' + (card ? card.name : 'Credit Card');
     this.bindCardTxForm();
     this.openModal('card-tx-modal');
     setTimeout(() => document.getElementById('ctx-amount').focus(), 50);
@@ -246,6 +287,11 @@ Object.assign(window.BlackBook, {
     const f = document.getElementById('card-tx-form');
     if (!f || f._bound) return;
     f._bound = true;
+    const cardSel = document.getElementById('ctx-card');
+    if (cardSel) cardSel.addEventListener('change', () => {
+      const c = this.cardById(cardSel.value);
+      document.getElementById('card-tx-title').textContent = c ? 'New \u2014 ' + c.name : 'New Transaction';
+    });
     f.addEventListener('submit', async (e) => {
       e.preventDefault();
       const cardId = document.getElementById('ctx-card').value;

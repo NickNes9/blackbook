@@ -446,10 +446,13 @@ Object.assign(window.BlackBook, {
         const pos = entries.filter(e => e.amount > 0);
         if (neg.length === 1 && pos.length === 1) {
           const pairId = 'pair-' + Date.now() + '-' + Math.floor(Math.random() * 10000);
-          const noteBase = 'Transfer ' + neg[0].acc.name + ' -> ' + pos[0].acc.name + (info ? ' \u00b7 ' + info : '');
-          newTx({ type: 'expense', amount: normalized(-Math.abs(neg[0].amount)), currency: neg[0].currency, accountId: neg[0].acc.id, categoryId: transferCat.id, date: date, note: noteBase, pairId: pairId });
-          newTx({ type: 'income', amount: normalized(Math.abs(pos[0].amount)), currency: pos[0].currency, accountId: pos[0].acc.id, categoryId: transferCat.id, date: date, note: noteBase, pairId: pairId });
-          transfers++; imported += 2;
+          const noteBase = neg[0].acc.name + ' → ' + pos[0].acc.name + (info ? ' · ' + info : '');
+          newTx({
+            id: 'tx-' + pairId, type: 'transfer', amount: normalized(Math.abs(neg[0].amount)), amountIn: normalized(Math.abs(pos[0].amount)),
+            currency: neg[0].currency, currencyIn: pos[0].currency, fromAccountId: neg[0].acc.id, toAccountId: pos[0].acc.id,
+            categoryId: transferCat.id, date: date, note: noteBase, pairId: pairId
+          });
+          transfers++; imported++;
           continue;
         }
       }
@@ -484,211 +487,6 @@ Object.assign(window.BlackBook, {
     a.href = URL.createObjectURL(blob);
     a.download = 'blackbook-transactions-' + this.today() + '.csv';
     a.click();
-  },
-
-  async generateDemoData() {
-    if (!(await this.confirmModal({ title: 'Replace Data', message: 'This will REPLACE all transactions and budgets, reset categories to the default set and regenerate colors. Continue?', confirmText: 'Replace' }))) return;
-    const today = new Date();
-    const Y = today.getFullYear(), curM = today.getMonth(), curD = today.getDate();
-    const rint = (min, max) => Math.round(min + Math.random() * (max - min));
-    const chance = (p) => Math.random() < p;
-    const DEMO_CATS = [
-      'Transfer', 'Salary', 'Side Income', 'Rent', 'Utilities', 'Internet & Phone',
-      'Insurance', 'Subscriptions', 'Groceries', 'Dining Out', 'Cafe & Drinks',
-      'Transport', 'Car', 'Healthcare', 'Pharmacy', 'Clothes', 'Entertainment',
-      'Hobbies', 'Travel', 'Fitness', 'Gifts', 'Family', 'Home', 'Electronics',
-      'Personal Care', 'Credit Card', 'Savings', 'Fees'
-    ];
-    this.data.categories = DEMO_CATS.map((name, i) => {
-      let sn = name.replace(/[^A-Za-z]/g, '').slice(0, 3).toUpperCase();
-      return { id: 'cat-demo-' + i, name: name, shortName: sn, color: this.hslToHex('hsl(' + Math.round((i * 137.508) % 360) + ', 65%, 62%)') };
-    });
-    const snTaken = new Set();
-    for (const c of this.data.categories) {
-      if (!snTaken.has(c.shortName)) { snTaken.add(c.shortName); continue; }
-      let suffix = 'A';
-      while (snTaken.has(c.shortName.slice(0, 3) + suffix)) suffix = String.fromCharCode(suffix.charCodeAt(0) + 1);
-      c.shortName = c.shortName.slice(0, 3) + suffix;
-      snTaken.add(c.shortName);
-    }
-    const cat = {};
-    for (const c of this.data.categories) cat[c.name] = c.id;
-    for (let i = 0; i < this.data.accounts.length; i++) {
-      this.data.accounts[i].color = this.hslToHex('hsl(' + Math.round((i * 137.508 + 47) % 360) + ', 60%, 58%)');
-    }
-    if (!this.data.accounts.length) {
-      this.data.accounts.push({ id: 'acc-cash', name: 'Cash', shortName: 'CSH', type: 'cash', currency: 'RSD', color: '#e0b04c' }, { id: 'acc-card', name: 'Card', shortName: 'CRD', type: 'bank', currency: 'RSD', color: '#5c8ae0' });
-    }
-    for (const a of this.data.accounts) {
-      if (!a.shortName) a.shortName = String(a.name).replace(/[^A-Za-z]/g, '').slice(0, 3).toUpperCase() || 'ACC';
-    }
-
-    const BUDGET_AMOUNTS = { 'Rent': 40000, 'Utilities': 9000, 'Internet & Phone': 5000, 'Subscriptions': 2500, 'Groceries': 60000, 'Dining Out': 20000, 'Cafe & Drinks': 8000, 'Transport': 6000, 'Car': 15000, 'Entertainment': 10000, 'Hobbies': 8000, 'Clothes': 12000, 'Healthcare': 8000, 'Pharmacy': 4000, 'Fitness': 4000, 'Personal Care': 4000, 'Gifts': 6000, 'Family': 8000, 'Home': 5000, 'Electronics': 8000, 'Travel': 20000 };
-    this.data.budgets = Object.entries(BUDGET_AMOUNTS).filter(([n]) => cat[n]).map(([n, amount]) => ({ id: crypto.randomUUID(), categoryId: cat[n], amount: amount }));
-
-    this.data.bills = [
-      { id: 'bill-demo-ele', name: 'Electricity', amount: 6500, currency: 'RSD', dueDay: 15, categoryId: cat['Utilities'], active: true, autopay: false },
-      { id: 'bill-demo-int', name: 'Internet', amount: 2999, currency: 'RSD', dueDay: 10, categoryId: cat['Internet & Phone'], active: true, autopay: true },
-      { id: 'bill-demo-phone', name: 'Phone', amount: 1450, currency: 'RSD', dueDay: 20, categoryId: cat['Internet & Phone'], active: true, autopay: true },
-      { id: 'bill-demo-sub', name: 'Netflix', amount: 1200, currency: 'RSD', dueDay: 5, categoryId: cat['Subscriptions'], active: true, autopay: true }
-    ];
-    this.data.billPayments = [];
-    for (let m = 0; m <= curM; m++) {
-      const mk = Y + '-' + String(m + 1).padStart(2, '0');
-      if (m === curM) continue;
-      for (const b of this.data.bills) {
-        const entry = { billId: b.id, month: mk, paid: true };
-        if (b.id === 'bill-demo-ele') entry.amount = rint(4500, 9500);
-        this.data.billPayments.push(entry);
-      }
-    }
-
-    this.data.savingsGoals = [
-      { id: crypto.randomUUID(), name: 'New car', targetAmount: 600000, currency: 'RSD', entries: [] },
-      { id: crypto.randomUUID(), name: 'Emergency fund', targetAmount: 300000, currency: 'RSD', entries: [] }
-    ];
-    for (let m = 0; m < curM; m++) {
-      const dstr = Y + '-' + String(m + 1).padStart(2, '0') + '-20';
-      this.data.savingsGoals[0].entries.push({ date: dstr, amount: rint(15000, 30000), note: 'Deposit' });
-      if (chance(0.8)) this.data.savingsGoals[1].entries.push({ date: dstr, amount: rint(8000, 15000), note: 'Deposit' });
-    }
-
-    const cardId = 'card-demo-visa';
-    this.data.creditCards = [{ id: cardId, name: 'Visa Gold', color: '#b45309', ratePct: 5, dueDay: 15 }];
-    let pSy = Y, pSm = curM - 3;
-    if (pSm < 0) { pSm += 12; pSy--; }
-    const planId = 'inst-demo-mac';
-    const planStart = pSy + '-' + String(pSm + 1).padStart(2, '0');
-    this.data.installments = [{ id: planId, cardId: cardId, name: 'MacBook Pro', total: 144000, months: 6, startMonth: planStart, dueDay: 15, ratePct: 5, paid: [], advance: 0 }];
-
-    this.data.debts = [
-      { id: 'debt-demo-1', person: 'Marko', type: 'in', amount: 25000, amountPaid: 10000, currency: 'RSD', date: null, dueDate: null, note: 'Lent for laptop repair', _borrowedAgo: 1, _dueIn: 2 },
-      { id: 'debt-demo-2', person: 'Ana', type: 'out', amount: 40000, amountPaid: 0, currency: 'RSD', date: null, dueDate: null, note: 'Shared vacation costs', _borrowedAgo: 2, _dueIn: -1 },
-      { id: 'debt-demo-3', person: 'Jovana', type: 'in', amount: 12000, amountPaid: 12000, currency: 'RSD', date: null, dueDate: null, note: 'Concert tickets', _borrowedAgo: 5, _dueIn: 4 }
-    ];
-    const monthShift = (back) => {
-      const t = Y * 12 + curM - back;
-      return Math.floor(t / 12) + '-' + String((t % 12) + 1).padStart(2, '0');
-    };
-    for (const d of this.data.debts) {
-      d.date = monthShift(d._borrowedAgo) + '-05';
-      d.dueDate = monthShift(-d._dueIn) + '-01';
-      delete d._borrowedAgo; delete d._dueIn;
-    }
-    const accIds = this.data.accounts.map(a => a.id);
-    const pickAcc = () => accIds[Math.floor(Math.random() * accIds.length)];
-
-    const NOTES = {
-      'Rent': ['Apartment rent', 'Monthly rent'],
-      'Utilities': ['Electricity', 'Water', 'Heating', 'Gas bill'],
-      'Internet & Phone': ['Internet bill', 'Phone plan', 'ISP bill'],
-      'Insurance': ['Car insurance', 'Health insurance', 'Apartment insurance'],
-      'Subscriptions': ['Netflix', 'Spotify', 'Cloud storage', 'News subscription'],
-      'Groceries': ['Lidl run', 'Maxi groceries', 'Supermarket run', 'Corner shop', 'Farmers market'],
-      'Dining Out': ['Lunch out', 'Pizza night', 'Dinner downtown', 'Burger place', 'Sushi date'],
-      'Cafe & Drinks': ['Morning coffee', 'Beers with friends', 'Energy drink', 'Smoothie', 'Espresso bar'],
-      'Transport': ['Bus ticket', 'Monthly tram pass', 'Taxi ride', 'City parking'],
-      'Car': ['Fuel', 'Oil change', 'Car wash', 'New tires', 'Registration'],
-      'Healthcare': ['Dentist', 'Checkup', 'Lab tests', 'Physiotherapy'],
-      'Pharmacy': ['Pharmacy run', 'Prescription', 'Cold medicine', 'Vitamins'],
-      'Clothes': ['Jeans', 'Sneakers', 'T-shirts pack', 'Winter jacket', 'Hoodie'],
-      'Entertainment': ['Cinema night', 'Concert ticket', 'Bowling', 'Board game evening'],
-      'Hobbies': ['Steam sale', 'Bookstore', 'Guitar strings', 'Craft supplies'],
-      'Travel': ['Weekend trip', 'Hotel stay', 'Airplane tickets', 'Airbnb booking'],
-      'Fitness': ['Gym membership', 'Protein powder', 'Running shoes', 'Yoga class'],
-      'Gifts': ['Birthday gift', 'Gift for mom', 'Anniversary present', 'Flowers'],
-      'Family': ['Family dinner', 'Helped out at home', 'Kids school fund'],
-      'Home': ['IKEA haul', 'Cleaning supplies', 'Light bulbs', 'Kitchen stuff'],
-      'Electronics': ['USB cable', 'Phone charger', 'Mechanical keyboard', 'Monitor stand'],
-      'Personal Care': ['Haircut', 'Toiletries', 'Skincare', 'Barber'],
-      'Salary': ['Salary', 'Monthly salary'],
-      'Side Income': ['Freelance project', 'Sold old phone', 'Cashback bonus'],
-      'Credit Card': ['Credit card payment'], 'Transfer': ['Account transfer']
-    };
-    const SPENDS = [
-      { c: 'Groceries', min: 1500, max: 7000, w: 3 },
-      { c: 'Dining Out', min: 900, max: 4200, w: 2 },
-      { c: 'Cafe & Drinks', min: 400, max: 2200, w: 2 },
-      { c: 'Transport', min: 300, max: 1800, w: 1.5 },
-      { c: 'Car', min: 2500, max: 7500, w: 1 },
-      { c: 'Hobbies', min: 1200, max: 5500, w: 1 },
-      { c: 'Entertainment', min: 1000, max: 5000, w: 1 },
-      { c: 'Subscriptions', min: 500, max: 2500, w: 0.9 },
-      { c: 'Pharmacy', min: 600, max: 2500, w: 0.8 },
-      { c: 'Personal Care', min: 800, max: 3500, w: 0.6 },
-      { c: 'Home', min: 900, max: 6500, w: 0.5 },
-      { c: 'Gifts', min: 1000, max: 6000, w: 0.5 },
-      { c: 'Family', min: 2000, max: 9000, w: 0.5 },
-      { c: 'Fitness', min: 1500, max: 4500, w: 0.5 },
-      { c: 'Clothes', min: 1800, max: 8000, w: 0.7 },
-      { c: 'Electronics', min: 1500, max: 12000, w: 0.4 },
-      { c: 'Healthcare', min: 2200, max: 14000, w: 0.4 },
-      { c: 'Travel', min: 12000, max: 42000, w: 0.15 }
-    ];
-    const weightedPick = () => {
-      const total = SPENDS.reduce((s, x) => s + x.w, 0);
-      let r = Math.random() * total;
-      for (const s of SPENDS) { r -= s.w; if (r <= 0) return s; }
-      return SPENDS[0];
-    };
-    let seq = 0;
-    const mkTx = (dateStr, type, amount, categoryId, note) => ({
-      id: 'demo-' + Date.now() + '-' + (seq++), type: type, amount: amount, currency: 'RSD',
-      accountId: pickAcc(), categoryId: categoryId, date: dateStr, note: note
-    });
-
-    const txs = [];
-    for (let m = 0; m <= curM; m++) {
-      const maxDay = m === curM ? Math.max(curD, 2) : 28;
-      const day = (d) => Math.min(d, maxDay);
-      const ds = (d) => Y + '-' + String(m + 1).padStart(2, '0') + '-' + String(day(d)).padStart(2, '0');
-      const note = (cname) => { const arr = NOTES[cname] || [cname]; return arr[Math.floor(Math.random() * arr.length)]; };
-
-      txs.push(mkTx(ds(5), 'expense', -(rint(37000, 39500)), cat['Rent'], note('Rent')));
-      txs.push(mkTx(ds(rint(8, 14)), 'expense', -(rint(3500, 8600)), cat['Utilities'], note('Utilities')));
-      txs.push(mkTx(ds(15), 'expense', -(rint(2900, 4500)), cat['Internet & Phone'], note('Internet & Phone')));
-      if (chance(0.5)) txs.push(mkTx(ds(10), 'expense', -(rint(4000, 7000)), cat['Insurance'], note('Insurance')));
-      if (chance(0.7)) txs.push(mkTx(ds(3), 'expense', -(rint(1200, 2400)), cat['Subscriptions'], note('Subscriptions')));
-      if (chance(0.25)) txs.push(mkTx(ds(12), 'income', rint(8000, 25000), cat['Side Income'], note('Side Income')));
-      if (chance(0.35)) {
-        txs.push(mkTx(ds(12), 'income', rint(30000, 45000), cat['Salary'], 'Salary advance'));
-        txs.push(mkTx(ds(26), 'income', rint(60000, 78000), cat['Salary'], 'Salary'));
-      } else {
-        txs.push(mkTx(ds(25), 'income', rint(92000, 118000), cat['Salary'], 'Salary'));
-      }
-      const nSpends = rint(8, 16);
-      for (let k = 0; k < nSpends; k++) {
-        const s = weightedPick();
-        txs.push(mkTx(ds(rint(1, 28)), 'expense', -(rint(s.min, s.max)), cat[s.c], note(s.c)));
-      }
-      if (accIds.length >= 2 && chance(0.7)) {
-        const amt = rint(5000, 20000);
-        const pairId = 'demo-pair-' + Date.now() + '-' + m;
-        const fromId = accIds[0] === accIds[1] || chance(0.5) ? accIds[0] : accIds[1];
-        const toId = fromId === accIds[0] ? (accIds[1] || accIds[0]) : accIds[0];
-        const dstr = ds(rint(10, 24));
-        txs.push({ id: 'demo-' + Date.now() + '-' + (seq++), type: 'expense', amount: -amt, currency: 'RSD', accountId: fromId, categoryId: cat['Transfer'], date: dstr, note: 'Account transfer', pairId: pairId });
-        txs.push({ id: 'demo-' + Date.now() + '-' + (seq++), type: 'income', amount: amt, currency: 'RSD', accountId: toId, categoryId: cat['Transfer'], date: dstr, note: 'Account transfer', pairId: pairId });
-      }
-    }
-    const plan = this.data.installments[0];
-    txs.push({ id: 'demo-' + Date.now() + '-' + (seq++), type: 'expense', amount: -(plan.total), currency: 'RSD', accountId: null, cardId: cardId, categoryId: cat['Electronics'], date: plan.startMonth + '-05', note: 'MacBook Pro' });
-    const fundingId = accIds[0] || null;
-    for (let s = 1; s <= plan.months; s++) {
-      const mkS = this.mkOfSeq(plan, s);
-      const [pyy, pmm] = mkS.split('-').map(Number);
-      if (pyy * 12 + (pmm - 1) < Y * 12 + curM) {
-        plan.paid.push({ seq: s, via: 'tx' });
-        const dueAmt = this.instDueAmount(plan, s);
-        const pairId = 'inst-' + planId + '-s' + s;
-        txs.push({ id: 'demo-' + Date.now() + '-' + (seq++), type: 'expense', amount: -dueAmt, currency: 'RSD', accountId: fundingId, categoryId: cat['Credit Card'], date: mkS + '-' + String(plan.dueDay).padStart(2, '0'), note: 'Installment MacBook Pro ' + s + '/6' + (s === 1 ? ' (incl interest)' : ''), pairId: pairId });
-      }
-    }
-    txs.sort((a, b) => (a.date < b.date ? 1 : -1));
-    this.data.transactions = txs;
-    await this.save();
-    this.renderSettings();
-    alert('Generated ' + txs.length + ' transactions plus budgets, bills, savings goals, a credit card with installments and sample debts.');
   },
 
   ratesTableHtml() {
@@ -761,8 +559,6 @@ Object.assign(window.BlackBook, {
     }
     const exportCsvBtn = el.querySelector('#settings-export-csv');
     if (exportCsvBtn) exportCsvBtn.addEventListener('click', () => this.exportCsv());
-    const demoBtn = el.querySelector('#settings-generate-demo');
-    if (demoBtn) demoBtn.addEventListener('click', () => this.generateDemoData());
     const csvImportBtn = el.querySelector('#settings-import-csv-btn');
     const csvImportFile = el.querySelector('#settings-import-csv-file');
     if (csvImportBtn && csvImportFile) {
@@ -967,7 +763,10 @@ Object.assign(window.BlackBook, {
   async deleteAccount(id) {
     const acc = this.data.accounts.find(a => a.id === id);
     if (!acc) return;
-    const txCount = this.data.transactions.filter(t => t.accountId === id).length;
+    const txCount = this.data.transactions.filter(t => {
+      if (t.type === 'transfer') return t.fromAccountId === id || t.toAccountId === id;
+      return t.accountId === id;
+    }).length;
     let purgeTxs = false;
     if (txCount > 0) {
       if (!(await this.confirmModal({ title: 'Delete Account & Transactions', message: '"' + acc.name + '" has ' + txCount + ' transaction' + (txCount === 1 ? '' : 's') + '.\n\nConfirm = delete the account AND its transactions.\nCancel = do nothing.', confirmText: 'Delete' }))) return;
@@ -976,7 +775,12 @@ Object.assign(window.BlackBook, {
       if (!(await this.confirmModal({ title: 'Delete Account', message: 'Delete account "' + acc.name + '"?' , confirmText: 'Delete' }))) return;
     }
     this.data.accounts = this.data.accounts.filter(a => a.id !== id);
-    if (purgeTxs) this.data.transactions = this.data.transactions.filter(t => t.accountId !== id);
+    if (purgeTxs) {
+      this.data.transactions = this.data.transactions.filter(t => {
+        if (t.type === 'transfer') return t.fromAccountId !== id && t.toAccountId !== id;
+        return t.accountId !== id;
+      });
+    }
     if (this.selectedAccount === id) this.selectedAccount = null;
     if (this.data.settings.defaultAccountId === id) this.data.settings.defaultAccountId = null;
     this.data.installments = (this.data.installments || []).filter(i => i.accountId !== id);
@@ -1091,7 +895,6 @@ Object.assign(window.BlackBook, {
       '<input type="file" id="settings-import-csv-file" accept=".csv,.txt,text/csv,text/plain" style="display:none;">' +
       '<button class="btn btn-secondary" id="settings-import-spreadsheet-btn">IMPORT SPREADSHEET</button>' +
       '<input type="file" id="settings-import-spreadsheet-file" accept=".csv,.txt,text/csv,text/plain" style="display:none;">' +
-      '<button class="btn btn-secondary" id="settings-generate-demo">GENERATE DEMO DATA</button>' +
       '<button class="btn btn-secondary" id="settings-export-pdf">EXPORT PDF (coming soon)</button></div></div>' +
 
       '<div class="settings-footer">BLACK BOOK v0.1.0 &middot; Created by Nikola Ne&scaron;i&#263;</div>';

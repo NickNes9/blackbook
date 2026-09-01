@@ -125,11 +125,56 @@ Object.assign(window.BlackBook, {
     toSel.value = toSel.options[0].value === document.getElementById('tr-from').value ? toSel.options[1].value : toSel.options[0].value;
     document.getElementById('tr-amount').value = '';
     document.getElementById('tr-amount-in').value = '';
-    document.getElementById('tr-note').value = '';
+    this._transferNoteBase = null;
+    this.updateTransferNote();
     document.getElementById('tr-date').value = this.fmtDateInput(this.today());
     this.updateTransferCurrencyLabels();
     this.openModal('transfer-modal');
     setTimeout(() => document.getElementById('tr-amount').focus(), 50);
+  },
+
+  openEditTransfer(txId) {
+    const tx = this.data.transactions.find(t => t.id === txId);
+    if (!tx || tx.type !== 'transfer') return this.openEditTransaction(txId);
+    const vis = this.visibleAccounts();
+    const opts = vis.map(a => '<option value="' + a.id + '">' + this.escapeHtml(a.name) + ' (' + (a.currency || 'RSD') + ')</option>').join('');
+    document.getElementById('tr-from').innerHTML = opts;
+    document.getElementById('tr-to').innerHTML = opts;
+    document.getElementById('tr-from').value = tx.fromAccountId;
+    document.getElementById('tr-to').value = tx.toAccountId;
+    document.getElementById('tr-amount').value = Math.abs(tx.amount);
+    document.getElementById('tr-amount-in').value = tx.amountIn != null ? Math.abs(tx.amountIn) : '';
+    const noteRaw = tx.note || '';
+    document.getElementById('tr-note').value = noteRaw;
+    this._transferNoteBase = this.transferNoteBase();
+    document.getElementById('tr-date').value = this.fmtDateInput(tx.date);
+    this._editingTransferId = txId;
+    this.updateTransferCurrencyLabels();
+    this.openModal('transfer-modal');
+    setTimeout(() => document.getElementById('tr-amount').focus(), 50);
+  },
+
+  transferNoteBase() {
+    const f = document.getElementById('tr-from');
+    const t = document.getElementById('tr-to');
+    const fromAcc = f ? this.data.accounts.find(a => a.id === f.value) : null;
+    const toAcc = t ? this.data.accounts.find(a => a.id === t.value) : null;
+    return (fromAcc ? fromAcc.name : '?') + ' → ' + (toAcc ? toAcc.name : '?');
+  },
+
+  updateTransferNote() {
+    const noteEl = document.getElementById('tr-note');
+    if (!noteEl) return;
+    const base = this.transferNoteBase();
+    if (this._transferNoteBase) {
+      const cur = noteEl.value;
+      if (cur.indexOf(this._transferNoteBase) === 0) {
+        noteEl.value = base + cur.slice(this._transferNoteBase.length);
+      }
+    } else {
+      noteEl.value = base;
+    }
+    this._transferNoteBase = base;
   },
 
   updateTransferCurrencyLabels() {
@@ -162,14 +207,23 @@ Object.assign(window.BlackBook, {
     if (amountIn == null || isNaN(amountIn)) amountIn = this.convertBetweenCurrencies(amountOut, curF, curT);
     if (amountIn == null || isNaN(amountIn)) amountIn = amountOut;
     const pairId = 'pair-' + Date.now() + '-' + Math.floor(Math.random() * 10000);
-    const noteBase = 'Transfer ' + fromAcc.name + ' \u2192 ' + toAcc.name + (noteExtra ? ' \u00b7 ' + noteExtra : '');
+    const noteBase = fromAcc.name + ' → ' + toAcc.name;
+    const note = noteExtra
+      ? (noteExtra.indexOf(noteBase) === 0 ? noteExtra : noteBase + ' · ' + noteExtra)
+      : noteBase;
     this.data.transactions.unshift({
-      id: 'tx-' + Date.now() + '-a', type: 'expense', amount: -Math.abs(Math.round(amountOut * 100) / 100), currency: curF,
-      accountId: fromId, categoryId: cat.id, date: date, note: noteBase, pairId: pairId
-    });
-    this.data.transactions.unshift({
-      id: 'tx-' + Date.now() + '-b', type: 'income', amount: Math.abs(Math.round(amountIn * 100) / 100), currency: curT,
-      accountId: toId, categoryId: cat.id, date: date, note: noteBase, pairId: pairId
+      id: 'tx-' + pairId,
+      type: 'transfer',
+      amount: Math.round(Math.abs(amountOut) * 100) / 100,
+      amountIn: Math.round(Math.abs(amountIn) * 100) / 100,
+      currency: curF,
+      currencyIn: curT,
+      fromAccountId: fromId,
+      toAccountId: toId,
+      categoryId: cat.id,
+      date: date,
+      note: note,
+      pairId: pairId
     });
     await this.save();
     return true;
@@ -189,6 +243,7 @@ Object.assign(window.BlackBook, {
     ['tr-from', 'tr-to'].forEach(id => {
       document.getElementById(id).addEventListener('change', () => {
         this.updateTransferCurrencyLabels();
+        this.updateTransferNote();
         if (amtOut.value) amtOut.dispatchEvent(new Event('input'));
       });
     });
@@ -201,8 +256,31 @@ Object.assign(window.BlackBook, {
       const amountIn = amountInRaw === '' ? null : this.evalAmount(amountInRaw);
       const date = this.parseDateInput(document.getElementById('tr-date').value) || this.today();
       const noteExtra = document.getElementById('tr-note').value.trim();
-      const ok = await this.doTransfer(from, to, amountOut, noteExtra, date, amountIn);
-      if (!ok) return;
+      if (this._editingTransferId) {
+        const tx = this.data.transactions.find(t => t.id === this._editingTransferId);
+        if (tx) {
+          const fromAcc = this.data.accounts.find(a => a.id === from);
+          const toAcc = this.data.accounts.find(a => a.id === to);
+          const curF = fromAcc ? (fromAcc.currency || 'RSD') : 'RSD';
+          const curT = toAcc ? (toAcc.currency || 'RSD') : 'RSD';
+          let finalAmountIn = amountIn;
+          if (finalAmountIn == null || isNaN(finalAmountIn)) finalAmountIn = this.convertBetweenCurrencies(amountOut, curF, curT);
+          if (finalAmountIn == null || isNaN(finalAmountIn)) finalAmountIn = amountOut;
+          tx.fromAccountId = from;
+          tx.toAccountId = to;
+          tx.amount = Math.round(Math.abs(amountOut) * 100) / 100;
+          tx.amountIn = Math.round(Math.abs(finalAmountIn) * 100) / 100;
+          tx.currency = curF;
+          tx.currencyIn = curT;
+          tx.date = date;
+          tx.note = noteExtra || (fromAcc ? fromAcc.name : '?') + ' → ' + (toAcc ? toAcc.name : '?');
+          await this.save();
+          this._editingTransferId = null;
+        }
+      } else {
+        const ok = await this.doTransfer(from, to, amountOut, noteExtra, date, amountIn);
+        if (!ok) return;
+      }
       this.closeModal('transfer-modal');
       this.syncViewToDate(date);
       this.renderPage(this.currentPage);
@@ -212,6 +290,7 @@ Object.assign(window.BlackBook, {
   openEditTransaction(txId) {
     const tx = this.data.transactions.find(t => t.id === txId);
     if (!tx) return;
+    if (tx.type === 'transfer') { this.openEditTransfer(txId); return; }
     document.getElementById('tx-id').value = tx.id;
     document.getElementById('tx-date').value = this.fmtDateInput(tx.date);
     document.getElementById('tx-type').value = tx.type;
@@ -254,13 +333,25 @@ Object.assign(window.BlackBook, {
     if (nw) nw.scrollTop = scrollTop;
   },
 
-  bulkToggle(id) {
+  bulkToggle(id, shiftKey) {
     if (!this._bulkSel) this._bulkSel = new Set();
-    const on = !this._bulkSel.has(id);
-    if (on) this._bulkSel.add(id); else this._bulkSel.delete(id);
+    if (shiftKey && this._lastBulkTxId && this._lastBulkTxId !== id) {
+      const rows = Array.from(document.querySelectorAll('.tx-row'));
+      const ids = rows.map(r => { const m = (r.getAttribute('onclick') || '').match(/'([^']+)'/); return m ? m[1] : null; }).filter(Boolean);
+      const fromIdx = ids.indexOf(this._lastBulkTxId);
+      const toIdx = ids.indexOf(id);
+      if (fromIdx !== -1 && toIdx !== -1) {
+        const start = Math.min(fromIdx, toIdx), end = Math.max(fromIdx, toIdx);
+        for (let i = start; i <= end; i++) this._bulkSel.add(ids[i]);
+      }
+    } else {
+      const on = !this._bulkSel.has(id);
+      if (on) this._bulkSel.add(id); else this._bulkSel.delete(id);
+    }
+    this._lastBulkTxId = id;
     document.querySelectorAll('.tx-row').forEach(r => {
       const m = (r.getAttribute('onclick') || '').match(/'([^']+)'/);
-      if (m && m[1] === id) r.classList.toggle('bulk-selected', on);
+      if (m) r.classList.toggle('bulk-selected', this._bulkSel.has(m[1]));
     });
     const wrap = document.querySelector('.tx-list-wrap');
     if (wrap) { const sc = wrap.scrollTop; this.renderOverview(); const nw = document.querySelector('.tx-list-wrap'); if (nw) nw.scrollTop = sc; }

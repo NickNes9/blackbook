@@ -4,6 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>BLACK BOOK</title>
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg">
   <script>try { var t = localStorage.getItem('bb-theme'); if (t === 'light') document.documentElement.setAttribute('data-theme', 'light'); } catch (e) {}</script>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/hack-font@3/build/web/hack.css">
   <link rel="stylesheet" href="/style.css">
@@ -191,7 +192,7 @@
         <button class="modal-close" onclick="BlackBook.closeModal('card-tx-modal')">&times;</button>
       </div>
       <form id="card-tx-form">
-        <input type="hidden" id="ctx-card">
+        <div class="form-group"><label>Credit Card</label><select id="ctx-card" class="input"></select></div>
         <div class="form-group"><label>Amount (RSD)</label><input type="text" inputmode="decimal" id="ctx-amount" class="input" required placeholder="e.g. 12000" autocomplete="off"></div>
         <div class="form-row-2col">
           <div class="form-group"><label>Date</label><input type="text" inputmode="numeric" id="ctx-date" class="input" placeholder="DD/MM/YYYY" required autocomplete="off"></div>
