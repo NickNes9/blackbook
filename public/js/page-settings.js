@@ -22,13 +22,12 @@ Object.assign(window.BlackBook, {
       const res = await fetch('/api/profiles');
       profiles = (await res.json()).profiles || [];
     } catch (e) {}
-    let html = '<div class="settings-row"><span class="row-swatch" style="background:var(--accent);"></span><span class="settings-row-name">DEFAULT' + (!this.profile ? ' &#10003;' : '') + '</span><span class="settings-row-meta">' + (this.profile ? 'switch to default data set' : 'active') + '</span>' +
+    let html = '<div class="settings-row"><span class="settings-row-name">DEFAULT' + (!this.profile ? ' &#10003;' : '') + '</span><span class="settings-row-meta">' + (this.profile ? 'switch to default data set' : 'active') + '</span>' +
       (!this.profile ? '<button class="btn btn-sm btn-secondary" onclick="BlackBook.renameProfile(\'\')">RENAME</button>' : '<button class="btn btn-sm btn-secondary" onclick="BlackBook.switchProfile(\'\')">OPEN</button>') + '</div>';
     if (!profiles.length) html += '<div style="padding:8px;color:var(--text-muted);font-size:13px;">No extra profiles yet.</div>';
     for (const p of profiles) {
       const active = p.name === this.profile;
       html += '<div class="settings-row">' +
-        '<span class="row-swatch" style="background:' + this.billColor({ name: p.name }) + ';"></span>' +
         '<span class="settings-row-name">' + this.escapeHtml(p.name).toUpperCase() + (active ? ' &#10003;' : '') + '</span>' +
         '<span class="settings-row-meta">' + (active ? 'active profile' : '') + '</span>' +
         (!active ? '<button class="btn btn-sm btn-secondary" onclick="BlackBook.switchProfile(\x27' + this.escapeHtml(p.name) + '\x27)">OPEN</button>' : '') +
@@ -412,13 +411,16 @@ Object.assign(window.BlackBook, {
         const idVal = document.getElementById('settings-account-id').value;
         const name = document.getElementById('settings-account-name').value.trim();
         const shortName = document.getElementById('settings-account-shortname').value.trim().slice(0, 3);
-        const color = document.getElementById('settings-account-color').value;
         const currency = document.getElementById('settings-account-currency').value;
         const type = document.getElementById('settings-account-type').value;
         if (!name) return;
+        const colorEl = document.getElementById('settings-account-color');
+        const hexEl = document.getElementById('settings-account-color-hex');
+        const isAuto = hexEl && hexEl.dataset.auto === '1';
+        const colorVal = isAuto ? null : this.normalizeHex(hexEl ? hexEl.value : colorEl.value);
         if (idVal.startsWith('card:') || (!idVal && type === 'creditcard')) {
           const rateVal = parseFloat(String(document.getElementById('settings-account-rate').value).replace(',', '.'));
-          const cardData = { name: name, shortName: shortName, color: color, ratePct: isNaN(rateVal) ? 5 : rateVal, dueDay: parseInt(document.getElementById('settings-account-due-day').value, 10) || 15 };
+          const cardData = { name: name, shortName: shortName, ratePct: isNaN(rateVal) ? 5 : rateVal, dueDay: parseInt(document.getElementById('settings-account-due-day').value, 10) || 15, color: colorVal };
           if (!this.data.creditCards) this.data.creditCards = [];
           if (idVal.startsWith('card:')) {
             const card = this.cardById(idVal.slice(5));
@@ -430,6 +432,7 @@ Object.assign(window.BlackBook, {
           const extra = {};
           const feeVal = parseFloat(String(document.getElementById('settings-account-fee').value).replace(',', '.'));
           extra.foreignFee = isNaN(feeVal) ? 0 : feeVal;
+          extra.color = colorVal;
           if (type === 'creditcard') {
             const rateVal = parseFloat(String(document.getElementById('settings-account-rate').value).replace(',', '.'));
             extra.ratePct = isNaN(rateVal) ? 5 : rateVal;
@@ -437,9 +440,9 @@ Object.assign(window.BlackBook, {
           }
           if (idVal) {
             const acc = this.data.accounts.find(a => a.id === idVal);
-            if (acc) Object.assign(acc, { name: name, shortName: shortName, color: color, currency: currency, type: type, foreignFee: extra.foreignFee, description: document.getElementById('settings-account-description').value.trim() || undefined });
+            if (acc) Object.assign(acc, { name: name, shortName: shortName, currency: currency, type: type, foreignFee: extra.foreignFee, color: extra.color, description: document.getElementById('settings-account-description').value.trim() || undefined });
           } else {
-            this.data.accounts.push(Object.assign({ id: crypto.randomUUID(), name: name, shortName: shortName, color: color, currency: currency, type: type, description: document.getElementById('settings-account-description').value.trim() || undefined }, extra));
+            this.data.accounts.push(Object.assign({ id: crypto.randomUUID(), name: name, shortName: shortName, currency: currency, type: type, color: extra.color, description: document.getElementById('settings-account-description').value.trim() || undefined }, extra));
           }
         }
         await this.save();
@@ -457,8 +460,11 @@ Object.assign(window.BlackBook, {
         e.preventDefault();
         const id = document.getElementById('settings-category-id').value;
         const name = document.getElementById('settings-category-name').value.trim();
-        const color = document.getElementById('settings-category-color').value;
         if (!name) return;
+        const colorEl = document.getElementById('settings-category-color');
+        const hexEl = document.getElementById('settings-category-color-hex');
+        const isAuto = hexEl && hexEl.dataset.auto === '1';
+        const color = isAuto ? null : this.normalizeHex(hexEl ? hexEl.value : colorEl.value);
         if (id) {
           const cat = this.data.categories.find(c => c.id === id);
           if (cat) { cat.name = name; cat.color = color; }
@@ -483,7 +489,15 @@ Object.assign(window.BlackBook, {
     document.getElementById('settings-account-name').value = '';
     document.getElementById('settings-account-description').value = '';
     document.getElementById('settings-account-shortname').value = '';
-    document.getElementById('settings-account-color').value = this.nextCategoryColor();
+    const accColor = this.nextCategoryColor();
+    const colorEl = document.getElementById('settings-account-color');
+    colorEl.value = accColor;
+    colorEl.disabled = false;
+    const hexEl = document.getElementById('settings-account-color-hex');
+    if (hexEl) { hexEl.value = accColor; hexEl.dataset.auto = '1'; }
+    const resetBtn = document.getElementById('settings-account-color-reset');
+    if (resetBtn) { resetBtn.dataset.name = ''; resetBtn.dataset.kind = 'account'; }
+    this.bindColorPicker('settings-account-color', 'settings-account-color-hex', 'settings-account-color-reset');
     document.getElementById('settings-account-currency').value = 'RSD';
     document.getElementById('settings-account-fee').value = '0';
     document.getElementById('settings-account-type').value = 'cash';
@@ -502,7 +516,14 @@ Object.assign(window.BlackBook, {
     document.getElementById('settings-account-name').value = acc.name;
     document.getElementById('settings-account-description').value = acc.description || '';
     document.getElementById('settings-account-shortname').value = acc.shortName || '';
-    document.getElementById('settings-account-color').value = acc.color;
+    const colorEl = document.getElementById('settings-account-color');
+    colorEl.value = this.accountColor(acc);
+    colorEl.disabled = false;
+    const hexEl = document.getElementById('settings-account-color-hex');
+    if (hexEl) { hexEl.value = this.accountColor(acc); hexEl.dataset.auto = acc.color ? '0' : '1'; }
+    const resetBtn = document.getElementById('settings-account-color-reset');
+    if (resetBtn) { resetBtn.dataset.name = (acc.name || acc.shortName || acc.id || ''); resetBtn.dataset.kind = 'account'; }
+    this.bindColorPicker('settings-account-color', 'settings-account-color-hex', 'settings-account-color-reset');
     document.getElementById('settings-account-currency').value = acc.currency;
     document.getElementById('settings-account-fee').value = acc.foreignFee != null ? acc.foreignFee : 0;
     document.getElementById('settings-account-type').value = (acc.type === 'credit' ? 'creditcard' : (acc.type || 'cash'));
@@ -520,7 +541,14 @@ Object.assign(window.BlackBook, {
     document.getElementById('settings-account-name').value = card.name;
     document.getElementById('settings-account-description').value = '';
     document.getElementById('settings-account-shortname').value = card.shortName || '';
-    document.getElementById('settings-account-color').value = card.color || '#71717a';
+    const colorEl = document.getElementById('settings-account-color');
+    colorEl.value = this.cardColor(card);
+    colorEl.disabled = false;
+    const hexEl = document.getElementById('settings-account-color-hex');
+    if (hexEl) { hexEl.value = this.cardColor(card); hexEl.dataset.auto = card.color ? '0' : '1'; }
+    const resetBtn = document.getElementById('settings-account-color-reset');
+    if (resetBtn) { resetBtn.dataset.name = (card.name || card.id || ''); resetBtn.dataset.kind = 'card'; }
+    this.bindColorPicker('settings-account-color', 'settings-account-color-hex', 'settings-account-color-reset');
     document.getElementById('settings-account-currency').value = 'RSD';
     document.getElementById('settings-account-type').value = 'creditcard';
     document.getElementById('settings-account-rate').value = card.ratePct != null ? card.ratePct : 5;
@@ -580,7 +608,7 @@ Object.assign(window.BlackBook, {
       const canUp = arrIdx > 0;
       const canDown = arrIdx < this.data.accounts.length - 1;
       accountsList += '<div class="settings-row">' +
-        '<span class="row-swatch" style="background:' + a.color + ';"></span>' +
+        '<span class="row-swatch" style="background:' + this.accountColor(a) + ';"></span>' +
         '<div class="settings-row-name-wrap"><span class="settings-row-name">' + this.escapeHtml(a.name) + '</span>' + (a.description ? '<span class="settings-row-desc">' + this.escapeHtml(a.description) + '</span>' : '') + '</div>' +
         '<span class="settings-row-meta">' + a.currency + ' &middot; ' + typeLabel + '</span>' +
         '<span class="settings-row-order">' +
@@ -592,7 +620,7 @@ Object.assign(window.BlackBook, {
     }
     for (const c of (this.data.creditCards || [])) {
       accountsList += '<div class="settings-row">' +
-        '<span class="row-swatch" style="background:' + (c.color || '#71717a') + ';"></span>' +
+        '<span class="row-swatch" style="background:' + this.cardColor(c) + ';"></span>' +
         '<span class="settings-row-name">' + this.escapeHtml(c.name) + '</span>' +
         '<span class="settings-row-meta">CREDIT CARD &middot; INT ' + (c.ratePct != null ? c.ratePct : 5) + '%</span>' +
         '<button class="btn btn-sm btn-secondary" onclick="BlackBook.openEditAccount(\x27card:' + c.id + '\x27)">EDIT</button>' +
@@ -606,7 +634,7 @@ Object.assign(window.BlackBook, {
       const txCount = this.data.transactions.filter(t => t.categoryId === c.id).length;
       const isProtected = c.name.toLowerCase() === 'transfer' || c.name.toLowerCase() === 'uncategorized' || c.name.toLowerCase() === 'invoice';
       categoriesList += '<div class="settings-row">' +
-        '<span class="row-swatch" style="background:' + c.color + ';"></span>' +
+        '<span class="row-swatch" style="background:' + this.categoryColor(c) + ';"></span>' +
         '<span class="settings-row-name">' + this.escapeHtml(c.name) + '</span>' +
         '<span class="settings-row-meta">' + txCount + ' transaction' + (txCount === 1 ? '' : 's') + '</span>' +
         '<button class="btn btn-sm btn-secondary" onclick="BlackBook.openEditCategory(\x27' + c.id + '\x27)">EDIT</button>' +
@@ -732,7 +760,14 @@ Object.assign(window.BlackBook, {
   openNewCategory() {
     document.getElementById('settings-category-id').value = '';
     document.getElementById('settings-category-name').value = '';
-    document.getElementById('settings-category-color').value = this.nextCategoryColor();
+    const colorEl = document.getElementById('settings-category-color');
+    colorEl.value = this.nextCategoryColor();
+    colorEl.disabled = false;
+    const hexEl = document.getElementById('settings-category-color-hex');
+    if (hexEl) { hexEl.value = colorEl.value; hexEl.dataset.auto = '1'; }
+    const resetBtn = document.getElementById('settings-category-color-reset');
+    if (resetBtn) resetBtn.dataset.name = '';
+    this.bindColorPicker('settings-category-color', 'settings-category-color-hex', 'settings-category-color-reset');
     document.getElementById('settings-category-modal-title').textContent = 'New Category';
     this.openModal('settings-category-modal');
   },
@@ -742,7 +777,14 @@ Object.assign(window.BlackBook, {
     if (!cat) return;
     document.getElementById('settings-category-id').value = cat.id;
     document.getElementById('settings-category-name').value = cat.name;
-    document.getElementById('settings-category-color').value = cat.color;
+    const colorEl = document.getElementById('settings-category-color');
+    colorEl.value = this.categoryColor(cat);
+    colorEl.disabled = false;
+    const hexEl = document.getElementById('settings-category-color-hex');
+    if (hexEl) { hexEl.value = this.categoryColor(cat); hexEl.dataset.auto = cat.color ? '0' : '1'; }
+    const resetBtn = document.getElementById('settings-category-color-reset');
+    if (resetBtn) resetBtn.dataset.name = cat.name || cat.id || '';
+    this.bindColorPicker('settings-category-color', 'settings-category-color-hex', 'settings-category-color-reset');
     document.getElementById('settings-category-modal-title').textContent = 'Edit Category';
     this.openModal('settings-category-modal');
   },

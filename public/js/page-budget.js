@@ -32,7 +32,7 @@ Object.assign(window.BlackBook, {
       '<span style="' + (totOn ? '' : 'opacity:0.5;') + '">TOTAL</span></div>';
     for (const cat of this.sortedCategories()) {
       if (cat.name.toLowerCase() === 'transfer') continue;
-      const color = cat.color || '#71717a';
+      const color = this.categoryColor(cat);
       const b = budgetMap[cat.id];
       const on = !(this._budgetCatOff && this._budgetCatOff[cat.id]);
       const name = b && b.name ? b.name : cat.name;
@@ -87,7 +87,7 @@ Object.assign(window.BlackBook, {
         label: 'TOTAL',
         data: spend.months.map(mk => this.round2(spend.total[mk] || 0)),
         borderColor: hc,
-        backgroundColor: 'transparent',
+        backgroundColor: hc,
         tension: 0.3,
         borderWidth: 2.5,
         pointRadius: 2
@@ -100,8 +100,8 @@ Object.assign(window.BlackBook, {
       datasets.push({
         label: b && b.name ? b.name : cat.name,
         data: spend.months.map(mk => this.round2(per[mk] || 0)),
-        borderColor: cat.color || '#71717a',
-        backgroundColor: 'transparent',
+        borderColor: this.categoryColor(cat),
+        backgroundColor: this.categoryColor(cat),
         tension: 0.3,
         borderWidth: 2,
         pointRadius: 3
@@ -115,7 +115,14 @@ Object.assign(window.BlackBook, {
         maintainAspectRatio: false,
         plugins: {
           legend: { display: false },
-          title: { display: false }
+          title: { display: false },
+          tooltip: {
+            usePointStyle: true,
+            boxPadding: 3,
+            callbacks: {
+              label: (c) => ' ' + c.dataset.label + ': ' + this.round2(c.parsed.y).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+            }
+          }
         },
         scales: {
           x: { ticks: { color: '#555555' }, grid: { color: '#141414' } },
@@ -159,7 +166,8 @@ Object.assign(window.BlackBook, {
     const sorted = this.sortedCategories();
     const withBudget = sorted.filter(c => !!budgetMap[c.id]);
     const withoutBudget = sorted.filter(c => !budgetMap[c.id]);
-    for (const cat of withBudget.concat(withoutBudget)) {
+    const allRows = withBudget.concat(withoutBudget);
+    for (const cat of allRows) {
       const budget = budgetMap[cat.id];
       const spent = catSpent[cat.id] || 0;
       const amount = budget ? budget.amount : 0;
@@ -167,25 +175,23 @@ Object.assign(window.BlackBook, {
       const remaining = amount - spentAbs;
       const over = !!budget && remaining < 0;
       const pct = amount > 0 ? Math.round(spentAbs / amount * 100) : 0;
-      const barClass = amount === 0 ? '' : (pct < 80 ? 'under' : pct <= 100 ? 'warning' : 'over');
-      const barWidth = Math.min(pct, 100);
-      const rightHtml = budget
-        ? '<div class="budget-big-spent ' + (over ? 'amount-negative' : 'amount-positive') + '">' + this.fmtRsd(spentAbs) + '</div>' +
-          '<div class="budget-big-budget">/ ' + this.fmtRsd(amount) + '</div>'
-        : '<div class="budget-big-spent" style="color:var(--text);">' + this.fmtRsd(spentAbs) + '</div>' +
-          '<div class="budget-left-small">NO LIMIT</div>';
+      const fillPct = Math.min(pct, 100);
+      const catColor = this.categoryColor(cat);
       const budgetName = budget && budget.name ? budget.name : cat.name;
-      html += '<div class="budget-card" style="cursor:pointer;" onclick="BlackBook.openBudgetModal(\x27' + cat.id + '\x27)">' +
-        '<div class="budget-header">' +
-        '<span style="display:flex;align-items:center;gap:8px;">' +
-        '<button class="btn btn-sm ' + (budget ? 'btn-secondary' : 'btn-primary') + '" style="min-width:64px;" onclick="event.stopPropagation();BlackBook.openBudgetModal(\x27' + cat.id + '\x27)">' + (budget ? 'EDIT' : 'SET') + '</button>' +
-        '<span style="color:' + cat.color + ';">' + this.escapeHtml(budgetName) + '</span>' +
-        (budget ? '<span class="budget-pct-inline">' + pct + '% used &middot; <span class="' + (over ? 'amount-negative' : 'amount-positive') + '">' + (over ? this.fmtRsd(Math.abs(remaining)) + ' OVER' : this.fmtRsd(remaining) + ' left') + '</span></span>' : '') +
+      const barValues = budget
+        ? '<span class="budget-bar-values' + (over ? ' amount-negative' : '') + '">' + this.fmtRsd(spentAbs) + '<span class="budget-bar-slash">/ ' + this.fmtRsd(amount) + '</span></span>'
+        : '<span class="budget-bar-values">' + this.fmtRsd(spentAbs) + '</span>';
+      const barBg = over ? 'rgba(248,113,113,0.15)' : 'var(--surface-raised)';
+      html += '<div class="budget-card">' +
+        '<div class="budget-headrow">' +
+        '<span class="budget-name-block">' +
+        '<span class="cat-dot" style="background:' + catColor + ';"></span>' +
+        '<span class="budget-name-text">' + this.escapeHtml(budgetName) + '</span>' +
         '</span>' +
-        '<span class="budget-right">' + rightHtml + '</span>' +
-        '</div>' +
-        (budget ? '<div class="budget-bar"><div class="budget-bar-fill ' + barClass + '" style="width:' + barWidth + '%;"></div></div>' : '') +
-        '</div>';
+        '<span class="bar-values-wrap"><div class="budget-bar' + (budget ? '' : ' budget-bar-none') + '" style="background:' + barBg + ';"><div class="budget-bar-fill' + (budget ? '' : ' budget-bar-fill-full') + ' ' + (over ? 'over' : '') + '" style="width:' + fillPct + '%;background:' + catColor + (over ? ';opacity:0.9' : '') + ';"></div><span class="budget-bar-values' + (over ? ' amount-negative' : '') + '">' + barValues + '</span></div></span>' +
+        '<span class="budget-pct' + (over ? ' over' : '') + '">' + (budget ? pct + '%' : '') + '</span>' +
+        '<button class="btn btn-sm ' + (budget ? 'btn-secondary' : 'btn-primary') + '" style="min-width:56px;flex-shrink:0;margin-left:auto;" onclick="BlackBook.openBudgetModal(\x27' + cat.id + '\x27)">' + (budget ? 'EDIT' : 'SET') + '</button>' +
+        '</div></div>';
     }
     return html || '<div class="empty-state"><div class="empty-state-text">No categories. Add categories in Settings first.</div></div>';
   },

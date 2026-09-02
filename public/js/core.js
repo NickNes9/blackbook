@@ -268,7 +268,7 @@ window.BlackBook = {
     return 'hsl(' + Math.round(h) + ', ' + Math.round(s) + '%, ' + Math.round(l) + '%)';
   },
 
-  _catPalette: ['#3791f0', '#f0483e', '#2fa35c', '#f5a236', '#8f5bd9', '#d9407a', '#2bb8c8', '#b8c22c', '#e0642f', '#4f7ad1', '#c2a028', '#2f9e8f', '#a83e9e', '#cf7a24', '#3cc27a', '#d95b8c', '#6a7cf0', '#bf6b3f'],
+  _catPalette: ['#f76d6d', '#f7876d', '#f79a6d', '#f7b06d', '#f7c36d', '#ecf76d', '#a7f76d', '#6df76d', '#6df798', '#6df7bb', '#6df7db', '#6ddbf7', '#6dbbf7', '#6d9af7', '#876df7', '#a76df7', '#ca6df7', '#ec6df7', '#f76ddb', '#f76dbb', '#f76d98', '#e47979', '#e49079', '#e4a179', '#e4b479', '#e4c879', '#dbe479', '#9ee479', '#79e493', '#79e4ac', '#79e4c4', '#79cae4', '#79b1e4', '#7997e4', '#8979e4', '#a179e4', '#ba79e4', '#d379e4', '#e479cb', '#e479b2', '#e47996', '#d58989', '#d59d89', '#d5ac89', '#d5bd89', '#d5cd89', '#c8d589', '#9fd589', '#89d597', '#89d5ab', '#89d5be', '#89c1d5', '#8aadca', '#8998d5', '#9689d5', '#ab89d5', '#bf89d5', '#d589c2', '#d589a9', '#d58996', '#cb9999', '#cbaa99', '#cbb899', '#cbc799', '#bdcb99', '#a2cb99', '#99cba4', '#99cbb5', '#99cbc3', '#99bacb', '#99a9c4', '#9999cb', '#a599cb', '#b699cb', '#c499cb', '#cb99bd', '#cb99a7', '#e8a6a6', '#e8b7a6', '#e8c6a6', '#e8d5a6', '#e0e8a6', '#b7e8a6', '#a6e8b2', '#a6e8c2', '#a6e2e8', '#a6c9e8', '#a6b2e8', '#b2a6e8', '#c2a6e8', '#d1a6e8', '#e8a6dc', '#e8a6c6', '#e8a6b0'],
 
   nextCategoryColor() {
     const used = new Set((this.data.categories || []).map(c => c.color).filter(Boolean));
@@ -278,11 +278,22 @@ window.BlackBook = {
     let i = this._paletteCursor || 0;
     for (let k = 0; k < 120; k++) {
       i++;
-      const col = this.hslToHex('hsl(' + Math.round((i * golden) % 360) + ', 65%, 62%)');
+      const col = this.hslToHex('hsl(' + Math.round((i * golden) % 360) + ', 68%, 70%)');
       if (!used.has(col)) { this._paletteCursor = i; return col; }
     }
-    return this.hslToHex('hsl(' + Math.round(Math.random() * 360) + ', 65%, 62%)');
+    return this.hslToHex('hsl(' + Math.round(Math.random() * 360) + ', 68%, 70%)');
   },
+
+  colorForName(name) {
+    const s = String(name || '?');
+    let h = 0;
+    for (let i = 0; i < s.length; i++) { h = (h * 31 + s.charCodeAt(i)) >>> 0; }
+    return this._catPalette[h % this._catPalette.length];
+  },
+
+  accountColor(acc) { if (acc && acc.color) return acc.color; return this.colorForName(acc && (acc.name || acc.shortName)); },
+  categoryColor(cat) { if (cat && cat.color) return cat.color; return this.colorForName(cat && (cat.name || '?')); },
+  cardColor(card) { if (card && card.color) return card.color; return this.colorForName(card && (card.name || card.shortName)); },
 
   hslToHex(hsl) {
     const m = hsl.match(/hsl\((\d+),\s*(\d+)%,\s*(\d+)%\)/);
@@ -983,6 +994,47 @@ window.BlackBook = {
     return 'rgba(' + ((n >> 16) & 255) + ',' + ((n >> 8) & 255) + ',' + (n & 255) + ',' + a + ')';
   },
 
+  normalizeHex(v) {
+    let s = String(v || '').trim();
+    if (!s) return null;
+    if (s[0] !== '#') s = '#' + s;
+    const m = /^#[0-9a-fA-F]{6}$/.exec(s);
+    if (!m) {
+      const s3 = /^#[0-9a-fA-F]{3}$/.exec(s);
+      if (s3) return '#' + s3[1][0] + s3[1][0] + s3[1][1] + s3[1][1] + s3[1][2] + s3[1][2];
+      return null;
+    }
+    return s.toLowerCase();
+  },
+
+  bindColorPicker(colorId, hexId, resetId, autoName) {
+    const color = document.getElementById(colorId);
+    const hex = document.getElementById(hexId);
+    const reset = document.getElementById(resetId);
+    if (!hex) return;
+    if (hex._bound) return;
+    hex._bound = true;
+    if (reset) {
+      reset.addEventListener('click', () => {
+        const c = this._catPalette[Math.floor(Math.random() * this._catPalette.length)];
+        if (color) color.value = c;
+        hex.value = c;
+        hex.dataset.auto = '1';
+      });
+    }
+    color.addEventListener('input', () => {
+      hex.dataset.auto = '0';
+      hex.value = color.value;
+    });
+    hex.addEventListener('input', () => {
+      const c = this.normalizeHex(hex.value);
+      if (c) { color.value = c; hex.value = c; hex.dataset.auto = '0'; }
+    });
+    hex.addEventListener('blur', () => {
+      if (!this.normalizeHex(hex.value)) hex.value = color.value;
+    });
+  },
+
   applyThemeColors() {
     const s = this.data && this.data.settings;
     if (!s) return;
@@ -1002,7 +1054,7 @@ window.BlackBook = {
       if ((a.type === 'credit' || a.type === 'creditcard') && !a.hidden) {
         this.data.creditCards.push({
           id: 'card-' + Math.random().toString(36).slice(2, 10),
-          name: a.name, color: a.color || '#71717a',
+          name: a.name,
           ratePct: a.ratePct != null ? a.ratePct : 5,
           dueDay: a.dueDay || 15,
           legacyAccountId: a.id
@@ -1071,11 +1123,66 @@ window.BlackBook = {
   },
 
   billColor(bill) {
-    const s = (bill.name || bill.id || '?').toUpperCase();
-    let h = 0;
-    for (let i = 0; i < s.length; i++) { h = ((h * 31) + s.charCodeAt(i)) >>> 0; }
-    return 'hsl(' + (h % 360) + ',65%,60%)';
+    if (bill && bill.color) return bill.color;
+    return this.colorForName(bill.name || bill.id);
   },
+
+  matchingUnpaidBill(tx) {
+    if (!tx || tx.type !== 'expense' || this.isTransfer(tx)) return null;
+    const { y, m } = this.ymOf(tx.date);
+    const mk = y + '-' + String(m + 1).padStart(2, '0');
+    const linkedTx = new Set((this.data.billPayments || []).map(p => p.txId).filter(Boolean));
+    if (linkedTx.has(tx.id)) return null;
+    const txRsd = this.toRsd(Math.abs(tx.amount || 0), tx.currency || 'RSD');
+    for (const bill of (this.data.bills || [])) {
+      if (bill.active === false) continue;
+      if (this.getBillPayment(bill.id, mk)) continue;
+      const from = this.billPayFrom(bill);
+      const matchAcc = from && from.startsWith('card:') ? tx.cardId === from.slice(5) : (tx.accountId === from);
+      if (!matchAcc) continue;
+      if (bill.categoryId && tx.categoryId && bill.categoryId !== tx.categoryId) continue;
+      if (bill.name && tx.note) {
+        const bn = String(bill.name).trim().toLowerCase();
+        const tn = String(tx.note).trim().toLowerCase();
+        if (tn !== bn && !tn.includes(bn) && !bn.includes(tn)) continue;
+      } else if (bill.name && !tx.note) {
+        continue;
+      }
+      if (bill.amount != null && txRsd > 0) {
+        const bar = this.toRsd(Math.abs(bill.amount), bill.currency || 'RSD');
+        const tolerance = Math.max(bar * 0.05, 1);
+        if (Math.abs(txRsd - bar) > tolerance) continue;
+      }
+      return bill;
+    }
+    return null;
+  },
+
+  linkedBillForTx(tx) {
+    if (!tx) return null;
+    const pay = (this.data.billPayments || []).find(p => p.txId === tx.id);
+    if (!pay) return null;
+    const bill = (this.data.bills || []).find(b => b.id === pay.billId);
+    return bill || null;
+  },
+
+  linkTxToBill(txId) {
+    const tx = this.data.transactions.find(t => t.id === txId);
+    const bill = this.matchingUnpaidBill(tx);
+    if (!tx || !bill) return;
+    const { y, m } = this.ymOf(tx.date);
+    const mk = y + '-' + String(m + 1).padStart(2, '0');
+    const existing = this.getBillPayment(bill.id, mk);
+    if (existing) {
+      if (existing.txId) return;
+    } else {
+      if (!this.data.billPayments) this.data.billPayments = [];
+      this.data.billPayments.push({ billId: bill.id, month: mk, paid: true, amount: Math.abs(tx.amount), txId: tx.id });
+    }
+    this.save();
+    this.renderPage(this.currentPage);
+  },
+
 
   transferCategory() {
     let cat = this.data.categories.find(c => c.name.toLowerCase() === 'transfer');
@@ -1233,6 +1340,7 @@ window.BlackBook = {
     if (this._monthWheelBound) return;
     this._monthWheelBound = true;
     const onWheel = (e) => {
+      if (e.target.closest && e.target.closest('.accounts-panel')) return;
       const target = e.target.closest && e.target.closest('.month-picker, .account-chips, .app-sidebar');
       if (!target) return;
       const dir = e.deltaY < 0 ? 1 : -1;
@@ -1269,14 +1377,30 @@ window.BlackBook = {
       const id = document.getElementById('bill-id').value;
       const rawAmt = String(document.getElementById('bill-amount').value).trim().replace(/\s+/g, '').replace(',', '.');
       const parsedAmt = this.evalAmount(rawAmt);
-      const billData = { name: document.getElementById('bill-name').value, amount: parsedAmt > 0 ? parsedAmt : null, currency: document.getElementById('bill-currency').value, dueDay: parseInt(document.getElementById('bill-dueDay').value), categoryId: document.getElementById('bill-category').value, active: document.getElementById('bill-active').value === 'true', autopay: document.getElementById('bill-autopay').checked, payAccountId: document.getElementById('bill-payfrom').value || null, color: document.getElementById('bill-color-auto').checked ? null : document.getElementById('bill-color').value };
+      const colorEl = document.getElementById('bill-color');
+      const hexEl = document.getElementById('bill-color-hex');
+      const resetBtn = document.getElementById('bill-color-reset');
+      let color = null;
+      const isAuto = hexEl && hexEl.dataset.auto === '1';
+      if (!isAuto && colorEl) color = this.normalizeHex(hexEl ? hexEl.value : colorEl.value);
+      const billData = { name: document.getElementById('bill-name').value, amount: parsedAmt > 0 ? parsedAmt : null, currency: document.getElementById('bill-currency').value, dueDay: parseInt(document.getElementById('bill-dueDay').value), categoryId: document.getElementById('bill-category').value, active: document.getElementById('bill-active').value === 'true', autopay: document.getElementById('bill-autopay').checked, payAccountId: document.getElementById('bill-payfrom').value || null, color: isAuto ? null : color };
       if (id) { const bill = this.data.bills.find(b => b.id === id); if (bill) Object.assign(bill, billData); }
       else { billData.id = crypto.randomUUID(); this.data.bills.push(billData); }
       await this.save(); this.closeModal('bill-modal'); this.renderPage(this.currentPage);
     });
   },
 
-  selectCategory(id) { this.selectedCategory = id; this.renderPage(this.currentPage); },
+  selectCategory(id, ev) {
+    if (ev && ev.altKey) {
+      this._ovInc = false;
+      this._ovExp = false;
+      this.selectedCategory = id;
+      this.renderPage(this.currentPage);
+      return;
+    }
+    this.selectedCategory = id;
+    this.renderPage(this.currentPage);
+  },
 
   // ==================== MONTH PICKER ====================
 
@@ -1362,7 +1486,7 @@ window.BlackBook = {
     const openDropdown = () => {
       const cats = sortedCats();
       dropdown.innerHTML = cats.length ? cats.map(c =>
-        '<div class="category-dropdown-item' + (c.id === hidden.value ? ' active' : '') + '" data-id="' + c.id + '"><span class="cat-dot" style="background:' + c.color + ';"></span>' + this.escapeHtml(c.name) + '</div>'
+        '<div class="category-dropdown-item' + (c.id === hidden.value ? ' active' : '') + '" data-id="' + c.id + '"><span class="cat-dot" style="background:' + this.categoryColor(c) + ';"></span>' + this.escapeHtml(c.name) + '</div>'
       ).join('') : '<div class="category-dropdown-empty">No categories yet</div>';
       const act = dropdown.querySelector('.category-dropdown-item.active');
       if (act) act.scrollIntoView({ block: 'nearest' });

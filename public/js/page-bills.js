@@ -8,7 +8,7 @@ Object.assign(window.BlackBook, {
     html += '<div class="cat-filter-chip' + (totOn ? ' selected' : '') + '" style="--cc:' + hc + ';' + (totOn ? 'background:' + hc + ';color:var(--on-fill);' : '') + '" onclick="BlackBook.toggleBillsTotal()" title="Monthly total line \u00b7 click to toggle">' +
       '<span style="' + (totOn ? '' : 'opacity:0.5;') + '">TOTAL</span></div>';
     for (const b of bills) {
-      const color = b.color || this.billColor(b);
+      const color = this.billColor(b);
       const on = b.active !== false;
       const amt = b.amount != null ? ' \u00b7 ' + this.fmtAmount(Math.abs(b.amount), b.currency || 'RSD') : '';
       html += '<div class="cat-filter-chip' + (on ? ' selected' : '') + '" style="--cc:' + color + ';' + (on ? 'background:' + color + ';color:var(--on-fill);' : '') + (on ? '' : 'opacity:0.55;') + '" onclick="BlackBook.toggleBillActive(\x27' + b.id + '\x27)" title="' + this.escapeHtml(b.name) + amt + ' \u00b7 click to show/hide in graph">' + this.escapeHtml(b.name) + '</div>';
@@ -88,7 +88,7 @@ Object.assign(window.BlackBook, {
     let bi = 0;
     for (const bill of this.data.bills) {
       const alt = bi % 2 === 1 ? ' alt' : '';
-      const color = bill.color || this.billColor(bill);
+      const color = this.billColor(bill);
       let yearTotal = 0;
       let yearHasPaid = false;
       for (let m = 0; m < 12; m++) {
@@ -164,10 +164,14 @@ Object.assign(window.BlackBook, {
     document.getElementById('bill-dueDay').value = '';
     document.getElementById('bill-active').value = 'true';
     document.getElementById('bill-autopay').checked = false;
-    document.getElementById('bill-color-auto').checked = true;
     const colorEl = document.getElementById('bill-color');
     colorEl.value = '#888888';
-    colorEl.disabled = true;
+    colorEl.disabled = false;
+    const hexEl = document.getElementById('bill-color-hex');
+    if (hexEl) { hexEl.value = '#888888'; hexEl.dataset.auto = '1'; }
+    const resetBtn = document.getElementById('bill-color-reset');
+    if (resetBtn) { resetBtn.dataset.name = ''; }
+    this.bindColorPicker('bill-color', 'bill-color-hex', 'bill-color-reset');
     const catInput = document.getElementById('bill-category-input');
     const catHidden = document.getElementById('bill-category');
     if (catInput && catHidden) {
@@ -194,10 +198,14 @@ Object.assign(window.BlackBook, {
     document.getElementById('bill-dueDay').value = bill.dueDay;
     document.getElementById('bill-active').value = String(bill.active);
     document.getElementById('bill-autopay').checked = !!bill.autopay;
-    document.getElementById('bill-color-auto').checked = !bill.color;
     const colorEl = document.getElementById('bill-color');
-    colorEl.value = bill.color || this.billColor(bill);
-    colorEl.disabled = !bill.color;
+    colorEl.value = this.billColor(bill);
+    colorEl.disabled = false;
+    const hexEl = document.getElementById('bill-color-hex');
+    if (hexEl) { hexEl.value = this.billColor(bill); hexEl.dataset.auto = bill.color ? '0' : '1'; }
+    const resetBtn = document.getElementById('bill-color-reset');
+    if (resetBtn) { resetBtn.dataset.name = bill.name || bill.id || ''; }
+    this.bindColorPicker('bill-color', 'bill-color-hex', 'bill-color-reset');
     const catInput = document.getElementById('bill-category-input');
     const catHidden = document.getElementById('bill-category');
     if (catInput && catHidden) {
@@ -209,10 +217,6 @@ Object.assign(window.BlackBook, {
     paySel.innerHTML = this.accountSelectOptions(bill.payAccountId || this.data.settings.defaultAccountId || '');
     document.getElementById('bill-modal-title').textContent = 'Edit Bill';
     this.openModal('bill-modal');
-  },
-
-  billColorAutoChanged() {
-    document.getElementById('bill-color').disabled = document.getElementById('bill-color-auto').checked;
   },
 
   updateBillAmountLabel() {
@@ -302,11 +306,52 @@ Object.assign(window.BlackBook, {
     return fallback ? fallback.id : null;
   },
 
+  billMatchTx(bill, monthKey) {
+    const amt = bill.amount != null ? Math.abs(bill.amount) : null;
+    const from = this.billPayFrom(bill);
+    const mp = monthKey.split('-');
+    const y = parseInt(mp[0]), m = parseInt(mp[1]);
+    const linked = new Set((this.data.billPayments || []).map(p => p.txId).filter(Boolean));
+    return (this.data.transactions || []).find(t => {
+      if (t.type !== 'expense' || this.isTransfer(t)) return false;
+      if (linked.has(t.id)) return false;
+      const d = new Date(t.date);
+      if (d.getFullYear() !== y || d.getMonth() !== m) return false;
+      const payAcc = from && from.startsWith('card:') ? t.cardId === from.slice(5) : (t.accountId === from);
+      if (!payAcc) return false;
+      if (bill.categoryId && t.categoryId && t.categoryId !== bill.categoryId) return false;
+      if (bill.name) {
+        const bn = String(bill.name).trim().toLowerCase();
+        const tn = String(t.note || '').trim().toLowerCase();
+        if (!tn || (tn !== bn && !tn.includes(bn) && !bn.includes(tn))) return false;
+      }
+      if (amt != null) {
+        const tAmt = this.toRsd(Math.abs(t.amount), t.currency || 'RSD');
+        const tolerance = Math.max(amt * 0.05, 1);
+        if (Math.abs(tAmt - amt) > tolerance) return false;
+      }
+      return true;
+    });
+  },
+
   attachBillTransaction(bill, pay) {
     if (pay.txId) return;
     const amt = pay.amount != null ? pay.amount : bill.amount;
     const from = this.billPayFrom(bill);
     if (amt == null || !from) return;
+    const existing = this.billMatchTx(bill, pay.month);
+    if (existing) {
+      pay.txId = existing.id;
+      const rsd = this.toRsd(Math.abs(existing.amount), existing.currency || 'RSD');
+      const actual = amt;
+      if (Math.abs(rsd - Math.abs(actual)) > 0.005 && existing.currency === 'RSD') {
+        existing.amount = -Math.round(Math.abs(actual) * 100) / 100;
+      }
+      pay.amount = Math.abs(existing.amount);
+      if (existing.baseAmount != null) pay.baseAmount = Math.abs(existing.baseAmount);
+      if (existing.feeAmount != null) pay.feeAmount = Math.abs(existing.feeAmount);
+      return;
+    }
     const mp = pay.month.split('-');
     const y = parseInt(mp[0]), m = parseInt(mp[1]);
     const day = Math.min(Math.max(parseInt(bill.dueDay) || 1, 1), new Date(y, m, 0).getDate());
@@ -355,7 +400,10 @@ Object.assign(window.BlackBook, {
 
   removeBillTransaction(pay) {
     if (!pay.txId) return;
-    this.data.transactions = (this.data.transactions || []).filter(t => t.id !== pay.txId);
+    const tx = this.data.transactions.find(t => t.id === pay.txId);
+    if (tx && String(tx.id).indexOf('bil-') === 0) {
+      this.data.transactions = (this.data.transactions || []).filter(t => t.id !== pay.txId);
+    }
     delete pay.txId;
   },
 
@@ -402,7 +450,7 @@ Object.assign(window.BlackBook, {
           return this.round2(s);
         }),
         borderColor: hc,
-        backgroundColor: 'transparent',
+        backgroundColor: hc,
         tension: 0.3,
         borderWidth: 2.5,
         pointRadius: 2
@@ -434,8 +482,8 @@ Object.assign(window.BlackBook, {
           const feeRes = this.calcForeignFee(native, fee, cur);
           return this.round2(Math.abs(this.toRsd(native, cur)) + feeRes.feeRsd);
         }),
-        borderColor: bill.color || this.billColor(bill),
-        backgroundColor: 'transparent',
+        borderColor: this.billColor(bill),
+        backgroundColor: this.billColor(bill),
         tension: 0.3,
         borderWidth: 2,
         pointRadius: 3
@@ -449,7 +497,14 @@ Object.assign(window.BlackBook, {
         maintainAspectRatio: false,
         plugins: {
           legend: { display: false },
-          title: { display: false }
+          title: { display: false },
+          tooltip: {
+            usePointStyle: true,
+            boxPadding: 3,
+            callbacks: {
+              label: (c) => ' ' + c.dataset.label + ': ' + this.round2(c.parsed.y).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+            }
+          }
         },
         scales: {
           x: { ticks: { color: '#555555' }, grid: { color: '#141414' } },

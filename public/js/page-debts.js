@@ -72,7 +72,7 @@ Object.assign(window.BlackBook, {
     const fill = d.type === 'in' ? 'var(--income)' : 'var(--accent)';
     const typeColor = d.type === 'in' ? 'var(--income)' : 'var(--expense)';
     const cat = d.categoryId ? this.data.categories.find(c => c.id === d.categoryId) : null;
-    const dotColor = cat ? cat.color : typeColor;
+    const dotColor = cat ? this.categoryColor(cat) : typeColor;
     let html = '<div class="savings-card debt-card"' + (settled ? ' style="opacity:0.55;"' : '') + '>';
     html += '<div class="savings-header">' +
       '<span class="savings-name"><span class="cat-dot" style="background:' + dotColor + ';"></span> ' + this.escapeHtml(d.person) + '</span>' +
@@ -87,7 +87,7 @@ Object.assign(window.BlackBook, {
       'DATE ' + (d.date || '?') +
       ' &middot; <span class="' + (overdue ? 'amount-negative" title="Overdue"' : '"') + '>DUE ' + (d.dueDate ? this.ordinalDay(new Date(d.dueDate).getDate()) + ' ' + new Date(d.dueDate).toLocaleString('en', { month: 'short' }).toUpperCase() + ' ' + new Date(d.dueDate).getFullYear() : '-') + '</span>' +
       (overdue ? ' &middot; <span class="amount-negative">OVERDUE</span>' : '') +
-      (cat ? ' &middot; <span style="color:' + cat.color + ';">' + this.escapeHtml(cat.name.toUpperCase()) + '</span>' : '') +
+      (cat ? ' &middot; <span style="color:' + this.categoryColor(cat) + ';">' + this.escapeHtml(cat.name.toUpperCase()) + '</span>' : '') +
       (d.note ? ' &middot; ' + this.escapeHtml(d.note) : '') + '</div>';
     html += '</div>';
     return html;

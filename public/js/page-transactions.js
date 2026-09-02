@@ -469,7 +469,7 @@ Object.assign(window.BlackBook, {
       list += '<div class="merge-row' + (i === 0 ? ' merge-target' : '') + '" data-idx="' + i + '" onclick="BlackBook.selectMergeTarget(' + i + ')">' +
         '<span class="merge-radio"></span>' +
         '<span class="merge-date">' + this.escapeHtml(t.date) + '</span>' +
-        '<span class="merge-cat" style="color:' + (cat ? cat.color : 'var(--text-muted)') + '">' + this.escapeHtml(cat ? cat.name : 'Uncategorized') + '</span>' +
+        '<span class="merge-cat" style="color:' + (cat ? BlackBook.categoryColor(cat) : 'var(--text-muted)') + '">' + this.escapeHtml(cat ? cat.name : 'Uncategorized') + '</span>' +
         '<span class="merge-acct">' + this.escapeHtml(acc ? acc.name : '?') + '</span>' +
         '<span class="merge-note">' + this.escapeHtml(t.note || '') + '</span>' +
         '<span class="merge-amt">' + this.fmtAmount(t.amount, this._mergeCurrency) + '</span></div>';
