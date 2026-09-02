@@ -383,7 +383,7 @@ Object.assign(window.BlackBook, {
       const amt = '<span class="chip-balance ' + (bal < 0 ? 'amount-negative' : 'amount-positive') + '">' + this.fmtAmount(bal, currency) + '</span>';
       return '<div class="account-chip' + (sel ? ' selected' : '') + compact + '" onclick="BlackBook.selectAccount(\x27' + a.id + '\x27)' + (titleAttr ? '" title="' + this.escapeHtml(titleAttr) : '') + '"><span class="chip-name">' + this.escapeHtml(label) + '</span>' + amt + '</div>';
     };
-    const overviewChip = '<div class="account-chip ov-chip' + (allSelected ? ' selected' : '') + '" onclick="BlackBook.selectAccount(null)" title="All accounts"><span class="chip-name">ALL</span></div>';
+    const overviewChip = '<div class="account-chip ov-chip' + (allSelected ? ' selected' : '') + '" onclick="BlackBook.selectAccount(null)" title="All accounts"><span class="ov-triangle"></span></div>';
     const squareChip = '<div class="account-chip account-mgr-square" onclick="BlackBook.toggleAccountsPanel(event)" title="Manage accounts"><span class="mgr-lines"><i></i><i></i><i></i></span></div>';
 
     let html;
