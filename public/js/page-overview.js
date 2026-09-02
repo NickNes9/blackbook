@@ -42,6 +42,42 @@ Object.assign(window.BlackBook, {
     return null;
   },
 
+  setOvSortBy(field) {
+    const wrap = document.querySelector('.tx-list-wrap');
+    const scrollTop = wrap ? wrap.scrollTop : 0;
+    if (this._ovSortBy === field) {
+      this._ovSortDir = this._ovSortDir === 'asc' ? 'desc' : 'asc';
+    } else {
+      this._ovSortBy = field;
+      this._ovSortDir = 'desc';
+    }
+    this.renderPage('overview');
+    const nw = document.querySelector('.tx-list-wrap');
+    if (nw) nw.scrollTop = scrollTop;
+  },
+
+  toggleOvSortDir() {
+    const wrap = document.querySelector('.tx-list-wrap');
+    const scrollTop = wrap ? wrap.scrollTop : 0;
+    this._ovSortDir = this._ovSortDir === 'asc' ? 'desc' : 'asc';
+    this.renderPage('overview');
+    const nw = document.querySelector('.tx-list-wrap');
+    if (nw) nw.scrollTop = scrollTop;
+  },
+
+  cycleOvSort() {
+    const wrap = document.querySelector('.tx-list-wrap');
+    const scrollTop = wrap ? wrap.scrollTop : 0;
+    const modes = ['date', 'value'];
+    const idx = modes.indexOf(this._ovSortBy);
+    this._ovSortBy = modes[(idx + 1) % modes.length];
+    // Ensure default direction is desc when cycling
+    if (!this._ovSortDir) this._ovSortDir = 'desc';
+    this.renderPage('overview');
+    const nw = document.querySelector('.tx-list-wrap');
+    if (nw) nw.scrollTop = scrollTop;
+  },
+
   async toggleOverviewGraph() {
     const wrap = document.querySelector('.tx-list-wrap');
     const scrollTop = wrap ? wrap.scrollTop : 0;
@@ -81,12 +117,15 @@ Object.assign(window.BlackBook, {
         if (tx.type === 'income') income += Math.abs(rsd); else expenses += Math.abs(rsd);
       }
     }
+    const sortLabel = this._ovSortBy === 'date' ? 'DATE' : this._ovSortBy === 'value' ? 'VALUE' : 'DATE';
     return '<div class="month-summary"><div class="month-summary-item"><span class="month-summary-label">INCOME</span><span class="month-summary-value amount-positive">' + this.fmtRsd(income) + '</span></div><div class="month-summary-item"><span class="month-summary-label">EXPENSES</span><span class="month-summary-value amount-negative">' + this.fmtRsd(expenses) + '</span></div><div class="month-summary-item"><span class="month-summary-label">NET</span><span class="month-summary-value ' + (income - expenses >= 0 ? 'amount-positive' : 'amount-negative') + '">' + this.fmtRsd(income - expenses) + '</span></div>' +
       '<span style="flex:1;"></span>' +
       '<span style="display:flex;gap:6px;align-items:center;">' +
       (this._bulkSel && this._bulkSel.size ? '<div class="cat-filter-chip bulk-filter-chip' + (this._bulkOnly ? ' selected' : '') + '" onclick="BlackBook.toggleBulkOnly()">SELECTED (' + this._bulkSel.size + ')</div>' : '') +
       '<div class="cat-filter-chip' + (this._ovInc ? ' selected' : '') + '" onclick="BlackBook.toggleOvType(\x27income\x27)" title="Filter the graph and the list to income only">INCOME</div>' +
       '<div class="cat-filter-chip' + (this._ovExp ? ' selected' : '') + '" onclick="BlackBook.toggleOvType(\x27expense\x27)" title="Filter the graph and the list to expenses only">EXPENSES</div>' +
+      '<button class="btn btn-sm btn-secondary ov-sort-cycle" onclick="BlackBook.cycleOvSort()" title="Cycle sort: Date → Value">' + sortLabel + '</button>' +
+      '<button class="btn btn-sm btn-secondary ov-sort-dir" onclick="BlackBook.toggleOvSortDir()" title="' + (this._ovSortDir === 'asc' ? 'Descending' : 'Ascending') + '">' + (this._ovSortDir === 'asc' ? '&#9650;' : '&#9660;') + '</button>' +
       '</span></div>';
   },
 
@@ -225,7 +264,18 @@ Object.assign(window.BlackBook, {
   },
 
   recentTransactionsHtml() {
-    let txs = this.data.transactions.slice().sort((a, b) => b.date.localeCompare(a.date));
+    let txs = this.data.transactions.slice();
+    
+    // Apply sorting
+    const sortBy = this._ovSortBy;
+    const sortDir = this._ovSortDir || 'desc';
+    const dirMult = sortDir === 'asc' ? 1 : -1;
+    if (sortBy === 'date') {
+      txs.sort((a, b) => dirMult * a.date.localeCompare(b.date));
+    } else if (sortBy === 'value') {
+      txs.sort((a, b) => dirMult * (Math.abs(this.toRsd(a.amount, a.currency)) - Math.abs(this.toRsd(b.amount, b.currency))));
+    }
+    
     if (this.selectedAccount) {
       txs = txs.filter(t => {
         if (t.type === 'transfer') return t.fromAccountId === this.selectedAccount || t.toAccountId === this.selectedAccount;
@@ -248,7 +298,9 @@ Object.assign(window.BlackBook, {
     const cards = Object.fromEntries((this.data.creditCards || []).map(c => [c.id, c]));
     const categories = Object.fromEntries(this.data.categories.map(c => [c.id, c]));
     let rows = '';
+    let rowNum = 0;
     for (const tx of txs) {
+      rowNum++;
       if (tx.type === 'transfer') {
         const fromAcc = accounts[tx.fromAccountId] || { color: '#52525b', shortName: '?', name: '?' };
         const toAcc = accounts[tx.toAccountId] || { color: '#52525b', shortName: '?', name: '?' };
@@ -259,7 +311,7 @@ Object.assign(window.BlackBook, {
         const shownLabel = (shownAcc.shortName || shownAcc.name || '?').toUpperCase();
         const amtDisplay = this.fmtDualCurrency(tx.amount, tx.currency, tx.currency, null, null);
         const amtInDisplay = tx.amountIn != null ? this.fmtDualCurrency(tx.amountIn, tx.currencyIn || tx.currency, tx.currencyIn || tx.currency, null, null) : amtDisplay;
-        rows += '<div class="tx-row tx-row-transfer' + (this._bulkSel && this._bulkSel.has(tx.id) ? ' bulk-selected' : '') + '" onclick="BlackBook.bulkToggle(\x27' + tx.id + '\x27, event.shiftKey)" onmouseenter="BlackBook.hoveredTxId=\x27' + tx.id + '\x27" onmouseleave="BlackBook.hoveredTxId=null"><div class="tx-acct-stripe" style="background:' + shownAcc.color + '"><span class="tx-acct-label">' + this.escapeHtml(shownLabel) + '</span></div><span class="tx-date">' + this.fmtDateInput(tx.date) + '</span><span class="tx-cat" style="color:#71717a">Transfer</span><span class="tx-note">' + this.escapeHtml(tx.note || '') + '</span><span class="tx-actions" onclick="event.stopPropagation()"><button class="btn btn-sm btn-secondary" onclick="BlackBook.openEditTransfer(\x27' + tx.id + '\x27)">EDIT</button><button class="btn btn-sm btn-danger" onclick="BlackBook.deleteTransaction(\x27' + tx.id + '\x27)">DEL</button></span><span class="tx-amt amt-transfer">' + amtDisplay + ' &#8594; ' + amtInDisplay + '</span></div>';
+        rows += '<div class="tx-row tx-row-transfer' + (this._bulkSel && this._bulkSel.has(tx.id) ? ' bulk-selected' : '') + '" onclick="BlackBook.bulkToggle(\x27' + tx.id + '\x27, event.shiftKey)" onmouseenter="BlackBook.hoveredTxId=\x27' + tx.id + '\x27" onmouseleave="BlackBook.hoveredTxId=null"><span class="tx-num">' + rowNum + '</span><div class="tx-acct-stripe" style="background:' + shownAcc.color + '"><span class="tx-acct-label">' + this.escapeHtml(shownLabel) + '</span></div><span class="tx-date">' + this.fmtDateInput(tx.date) + '</span><span class="tx-cat" style="color:#71717a">Transfer</span><span class="tx-note">' + this.escapeHtml(tx.note || '') + '</span><span class="tx-actions" onclick="event.stopPropagation()"><button class="btn btn-sm btn-secondary" onclick="BlackBook.openEditTransfer(\x27' + tx.id + '\x27)">EDIT</button><button class="btn btn-sm btn-danger" onclick="BlackBook.deleteTransaction(\x27' + tx.id + '\x27)">DEL</button></span><span class="tx-amt amt-transfer">' + amtDisplay + ' &#8594; ' + amtInDisplay + '</span></div>';
       } else {
         const card = tx.cardId ? cards[tx.cardId] : null;
         const acc = card
@@ -273,7 +325,8 @@ Object.assign(window.BlackBook, {
         const txCur = tx.currency || 'RSD';
         const accCur = card ? 'RSD' : ((accounts[tx.accountId] || {}).currency || 'RSD');
         const txAmtDisplay = this.fmtDualCurrency(tx.amount, txCur, accCur, tx.nativeAmount, tx.nativeCurrency);
-        rows += '<div class="tx-row' + (this._bulkSel && this._bulkSel.has(tx.id) ? ' bulk-selected' : '') + '" onclick="BlackBook.bulkToggle(\x27' + tx.id + '\x27, event.shiftKey)" onmouseenter="BlackBook.hoveredTxId=\x27' + tx.id + '\x27" onmouseleave="BlackBook.hoveredTxId=null"><div class="tx-acct-stripe" style="background:' + acc.color + '"><span class="tx-acct-label">' + this.escapeHtml((acc.shortName || '?').toUpperCase()) + '</span></div><span class="tx-date">' + this.fmtDateInput(tx.date) + '</span><span class="tx-cat" style="color:' + cat.color + '">' + this.escapeHtml(cat.name) + '</span><span class="tx-note">' + this.escapeHtml(tx.note || '') + '</span><span class="tx-actions" onclick="event.stopPropagation()"><button class="btn btn-sm btn-secondary" onclick="BlackBook.openEditTransaction(\x27' + tx.id + '\x27)">EDIT</button><button class="btn btn-sm btn-danger" onclick="BlackBook.deleteTransaction(\x27' + tx.id + '\x27)">DEL</button></span><span class="tx-amt ' + amtClass + wtClass + '">' + txAmtDisplay + '</span></div>';
+        const editFn = card ? 'openEditCardTx' : 'openEditTransaction';
+        rows += '<div class="tx-row' + (this._bulkSel && this._bulkSel.has(tx.id) ? ' bulk-selected' : '') + '" onclick="BlackBook.bulkToggle(\x27' + tx.id + '\x27, event.shiftKey)" onmouseenter="BlackBook.hoveredTxId=\x27' + tx.id + '\x27" onmouseleave="BlackBook.hoveredTxId=null"><span class="tx-num">' + rowNum + '</span><div class="tx-acct-stripe" style="background:' + acc.color + '"><span class="tx-acct-label">' + this.escapeHtml((acc.shortName || '?').toUpperCase()) + '</span></div><span class="tx-date">' + this.fmtDateInput(tx.date) + '</span><span class="tx-cat" style="color:' + cat.color + '">' + this.escapeHtml(cat.name) + '</span><span class="tx-note">' + this.escapeHtml(tx.note || '') + '</span><span class="tx-actions" onclick="event.stopPropagation()"><button class="btn btn-sm btn-secondary" onclick="BlackBook.' + editFn + '(\x27' + tx.id + '\x27)">EDIT</button><button class="btn btn-sm btn-danger" onclick="BlackBook.deleteTransaction(\x27' + tx.id + '\x27)">DEL</button></span><span class="tx-amt ' + amtClass + wtClass + '">' + txAmtDisplay + '</span></div>';
       }
     }
     return '<div class="tx-list">' + rows + '</div>';
@@ -336,7 +389,24 @@ Object.assign(window.BlackBook, {
     this.overviewLineChart = new Chart(canvas.getContext('2d'), {
       type: 'line',
       data: { labels: months, datasets: datasets },
-      options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false }, title: { display: false } }, scales: { x: { ticks: { color: '#555555' }, grid: { color: '#222222' } }, y: { ticks: { color: '#555555' }, grid: { color: '#222222' } } } }
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        layout: { padding: { left: 8, right: 8, top: 8, bottom: 8 } },
+        plugins: { legend: { display: false }, title: { display: false } },
+        scales: {
+          x: {
+            ticks: { color: '#888888', maxRotation: 0, autoSkip: false },
+            grid: { color: '#2a2a2a', drawBorder: false },
+            border: { display: false }
+          },
+          y: {
+            ticks: { color: '#888888', callback: (v) => v >= 1000 ? (v/1000).toFixed(0)+'k' : v },
+            grid: { color: '#2a2a2a', drawBorder: false },
+            border: { display: false }
+          }
+        }
+      }
     });
   }
 });

@@ -4,6 +4,7 @@ Object.assign(window.BlackBook, {
     const el = document.getElementById('page-settings');
     if (!el) return;
     el.innerHTML = this.settingsHtml();
+    this.upgradeAllSelects(el);
     this.bindSettingsEvents(el);
     this.bindSettingsModals();
     this.refreshProfilesList();
@@ -132,8 +133,8 @@ Object.assign(window.BlackBook, {
     return y + '-' + String(mo).padStart(2, '0') + '-' + String(d).padStart(2, '0');
   },
 
-  openCsvImportModal(text) {
-    this._csvRows = this.parseCsvText(text);
+  openCsvImportModal(textOrRows) {
+    this._csvRows = Array.isArray(textOrRows) ? textOrRows : this.parseCsvText(textOrRows);
     if (!this._csvRows.length) { alert('No rows found in CSV.'); return; }
     const maxCols = Math.max(...this._csvRows.slice(0, 20).map(r => r.length));
     const colOpts = Array.from({ length: maxCols }, (_, i) => '<option value="' + i + '">COL ' + (i + 1) + (this._csvRows[0][i] ? ' (' + this.escapeHtml(String(this._csvRows[0][i]).slice(0, 18)) + ')' : '') + '</option>').join('');
@@ -196,7 +197,10 @@ Object.assign(window.BlackBook, {
       for (const [name, id] of Object.entries(catMap)) {
         if (name.length > 3 && (s.includes(name) || name.includes(s))) return id;
       }
-      return null;
+      const cat = { id: crypto.randomUUID(), name: cell.trim(), color: this.nextCategoryColor() };
+      this.data.categories.push(cat);
+      catMap[s] = cat.id;
+      return cat.id;
     };
     let imported = 0, skipped = 0;
     for (let i = skipHeader ? 1 : 0; i < rows.length; i++) {
@@ -372,7 +376,7 @@ Object.assign(window.BlackBook, {
       const low = s.toLowerCase();
       if (catMap[low]) return catMap[low];
       for (const key of Object.keys(catMap)) if (key.length > 3 && (low.includes(key) || key.includes(low))) return catMap[key];
-      const cat = { id: crypto.randomUUID(), name: s, color: this.hslToHex(this.randomPastel()) };
+      const cat = { id: crypto.randomUUID(), name: s, color: this.nextCategoryColor() };
       this.data.categories.push(cat);
       catMap[low] = cat.id;
       return cat.id;
@@ -543,6 +547,14 @@ Object.assign(window.BlackBook, {
         await this.save();
       });
     }
+    const dateSeparatorInput = el.querySelector('#settings-date-separator');
+    if (dateSeparatorInput) {
+      dateSeparatorInput.addEventListener('change', async () => {
+        this.data.settings.dateSeparator = dateSeparatorInput.value;
+        this.renderSettings();
+        await this.save();
+      });
+    }
     const refreshAllBtn = el.querySelector('#settings-refresh-all-rates');
     if (refreshAllBtn) {
       refreshAllBtn.addEventListener('click', () => this.refreshAllRates());
@@ -566,22 +578,26 @@ Object.assign(window.BlackBook, {
       csvImportFile.addEventListener('change', (e) => {
         const file = e.target.files[0];
         if (!file) return;
-        const reader = new FileReader();
-        reader.onload = (ev) => this.openCsvImportModal(String(ev.target.result));
-        reader.readAsText(file);
-        e.target.value = '';
-      });
-    }
-    const sprImportBtn = el.querySelector('#settings-import-spreadsheet-btn');
-    const sprImportFile = el.querySelector('#settings-import-spreadsheet-file');
-    if (sprImportBtn && sprImportFile) {
-      sprImportBtn.addEventListener('click', () => sprImportFile.click());
-      sprImportFile.addEventListener('change', (e) => {
-        const file = e.target.files[0];
-        if (!file) return;
-        const reader = new FileReader();
-        reader.onload = (ev) => this.openSpreadsheetImportModal(String(ev.target.result));
-        reader.readAsText(file);
+        if (/\.(xlsx|xls)$/i.test(file.name || '')) {
+          if (typeof XLSX === 'undefined') { alert('Excel import needs the xlsx library (must be loaded from the CDN once). Convert the file to CSV instead.'); e.target.value = ''; return; }
+          const reader = new FileReader();
+          reader.onload = (ev) => {
+            try {
+              const wb = XLSX.read(new Uint8Array(ev.target.result), { type: 'array' });
+              const ws = wb.Sheets[wb.SheetNames[0]];
+              const rows = (XLSX.utils.sheet_to_json(ws, { header: 1, defval: '', raw: false }) || [])
+                .map(r => r.map(c => String(c == null ? '' : c).replace(/\uFEFF/g, '').trim()))
+                .filter(r => r.some(c => c !== ''));
+              if (!rows.length) { alert('No rows found in ' + file.name + '.'); return; }
+              this.openCsvImportModal(rows);
+            } catch (err) { alert('Could not read ' + file.name + ': ' + err.message); }
+          };
+          reader.readAsArrayBuffer(file);
+        } else {
+          const reader = new FileReader();
+          reader.onload = (ev) => this.openCsvImportModal(String(ev.target.result));
+          reader.readAsText(file);
+        }
         e.target.value = '';
       });
     }
@@ -614,10 +630,6 @@ Object.assign(window.BlackBook, {
         };
         reader.readAsText(file);
       });
-    }
-    const pdfBtn = el.querySelector('#settings-export-pdf');
-    if (pdfBtn) {
-      pdfBtn.addEventListener('click', () => alert('PDF export coming soon.'));
     }
     const defaultAcc = el.querySelector('#settings-default-account');
     if (defaultAcc) {
@@ -715,7 +727,7 @@ Object.assign(window.BlackBook, {
     document.getElementById('settings-account-id').value = '';
     document.getElementById('settings-account-name').value = '';
     document.getElementById('settings-account-shortname').value = '';
-    document.getElementById('settings-account-color').value = this.hslToHex(this.randomPastel());
+    document.getElementById('settings-account-color').value = this.nextCategoryColor();
     document.getElementById('settings-account-currency').value = 'RSD';
     document.getElementById('settings-account-fee').value = '0';
     document.getElementById('settings-account-type').value = 'cash';
@@ -760,6 +772,16 @@ Object.assign(window.BlackBook, {
     this.openModal('settings-account-modal');
   },
 
+  async moveAccount(id, dir) {
+    const arr = this.data.accounts;
+    const i = arr.findIndex(a => a.id === id);
+    const j = i + dir;
+    if (i < 0 || j < 0 || j >= arr.length) return;
+    const tmp = arr[i]; arr[i] = arr[j]; arr[j] = tmp;
+    await this.save();
+    this.renderSettings();
+  },
+
   async deleteAccount(id) {
     const acc = this.data.accounts.find(a => a.id === id);
     if (!acc) return;
@@ -795,10 +817,17 @@ Object.assign(window.BlackBook, {
     const visibleAccts = this.visibleAccounts();
     for (const a of visibleAccts) {
       const typeLabel = (a.type || 'cash').toUpperCase();
+      const arrIdx = this.data.accounts.findIndex(x => x.id === a.id);
+      const canUp = arrIdx > 0;
+      const canDown = arrIdx < this.data.accounts.length - 1;
       accountsList += '<div class="settings-row">' +
         '<span class="row-swatch" style="background:' + a.color + ';"></span>' +
         '<span class="settings-row-name">' + this.escapeHtml(a.name) + '</span>' +
         '<span class="settings-row-meta">' + a.currency + ' &middot; ' + typeLabel + '</span>' +
+        '<span class="settings-row-order">' +
+        '<button type="button" class="btn btn-sm btn-secondary" ' + (canUp ? 'onclick="BlackBook.moveAccount(\x27' + a.id + '\x27,-1)"' : 'disabled') + ' title="Move up">&uarr;</button>' +
+        '<button type="button" class="btn btn-sm btn-secondary" ' + (canDown ? 'onclick="BlackBook.moveAccount(\x27' + a.id + '\x27,1)"' : 'disabled') + ' title="Move down">&darr;</button>' +
+        '</span>' +
         '<button class="btn btn-sm btn-secondary" onclick="BlackBook.openEditAccount(\x27' + a.id + '\x27)">EDIT</button>' +
         '<button class="btn btn-sm btn-danger" onclick="BlackBook.deleteAccount(\x27' + a.id + '\x27)">DEL</button></div>';
     }
@@ -816,7 +845,7 @@ Object.assign(window.BlackBook, {
     const sortedCats = this.data.categories.slice().sort((a, b) => a.name.localeCompare(b.name));
     for (const c of sortedCats) {
       const txCount = this.data.transactions.filter(t => t.categoryId === c.id).length;
-      const isProtected = c.name.toLowerCase() === 'transfer' || c.name.toLowerCase() === 'uncategorized';
+      const isProtected = c.name.toLowerCase() === 'transfer' || c.name.toLowerCase() === 'uncategorized' || c.name.toLowerCase() === 'invoice';
       categoriesList += '<div class="settings-row">' +
         '<span class="row-swatch" style="background:' + c.color + ';"></span>' +
         '<span class="settings-row-name">' + this.escapeHtml(c.name) + '</span>' +
@@ -851,6 +880,13 @@ Object.assign(window.BlackBook, {
       '<div class="form-group"><label>Highlight Color</label><div style="display:flex;align-items:center;gap:8px;"><input type="color" id="settings-highlight-color" value="' + (this.data.settings.highlightColor || '#fa8c3c') + '" style="width:28px;height:28px;border:none;background:none;cursor:pointer;padding:0;"><span style="font-size:13px;color:var(--text-dim);">' + (this.data.settings.highlightColor || '#fa8c3c') + '</span></div></div>' +
       '<div class="form-group"><label>Income Color</label><div style="display:flex;align-items:center;gap:8px;"><input type="color" id="settings-income-color" value="' + (this.data.settings.incomeColor || '#4ade80') + '" style="width:28px;height:28px;border:none;background:none;cursor:pointer;padding:0;"><span style="font-size:13px;color:var(--text-dim);">' + (this.data.settings.incomeColor || '#4ade80') + '</span></div></div>' +
       '<div class="form-group"><label>Expense Color</label><div style="display:flex;align-items:center;gap:8px;"><input type="color" id="settings-expense-color" value="' + (this.data.settings.expenseColor || '#f87171') + '" style="width:28px;height:28px;border:none;background:none;cursor:pointer;padding:0;"><span style="font-size:13px;color:var(--text-dim);">' + (this.data.settings.expenseColor || '#f87171') + '</span></div></div>' +
+      '<div class="form-group"><label>Date Separator</label><select id="settings-date-separator" class="input">' +
+      '<option value="/"' + ((this.data.settings.dateSeparator || '/') === '/' ? ' selected' : '') + '>/ (' + this.fmtDateInput(this.today()).replace(/\//g, '/') + ')</option>' +
+      '<option value="-"' + ((this.data.settings.dateSeparator || '/') === '-' ? ' selected' : '') + '>- (' + this.fmtDateInput(this.today()).replace(/\//g, '-') + ')</option>' +
+      '<option value="."' + ((this.data.settings.dateSeparator || '/') === '.' ? ' selected' : '') + '>. (' + this.fmtDateInput(this.today()).replace(/\//g, '.') + ')</option>' +
+      '<option value=","' + ((this.data.settings.dateSeparator || '/') === ',' ? ' selected' : '') + '>, (' + this.fmtDateInput(this.today()).replace(/\//g, ',') + ')</option>' +
+      '<option value="|"' + ((this.data.settings.dateSeparator || '/') === '|' ? ' selected' : '') + '>| (' + this.fmtDateInput(this.today()).replace(/\//g, '|') + ')</option>' +
+      '</select></div>' +
       '</div></div>' +
 
       '<div class="settings-section">' +
@@ -891,11 +927,9 @@ Object.assign(window.BlackBook, {
       '<button class="btn btn-secondary" id="settings-export-csv">EXPORT CSV</button>' +
       '<button class="btn btn-secondary" id="settings-import-btn">IMPORT JSON</button>' +
       '<input type="file" id="settings-import-file" accept=".json" style="display:none;">' +
-      '<button class="btn btn-secondary" id="settings-import-csv-btn">IMPORT CSV</button>' +
-      '<input type="file" id="settings-import-csv-file" accept=".csv,.txt,text/csv,text/plain" style="display:none;">' +
-      '<button class="btn btn-secondary" id="settings-import-spreadsheet-btn">IMPORT SPREADSHEET</button>' +
-      '<input type="file" id="settings-import-spreadsheet-file" accept=".csv,.txt,text/csv,text/plain" style="display:none;">' +
-      '<button class="btn btn-secondary" id="settings-export-pdf">EXPORT PDF (coming soon)</button></div></div>' +
+      '<button class="btn btn-secondary" id="settings-import-csv-btn">IMPORT CSV/XLSX</button>' +
+      '<input type="file" id="settings-import-csv-file" accept=".csv,.txt,.xlsx,.xls,text/csv,text/plain,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel" style="display:none;">' +
+      '</div></div>' +
 
       '<div class="settings-footer">BLACK BOOK v0.1.0 &middot; Created by Nikola Ne&scaron;i&#263;</div>';
   },
@@ -939,7 +973,7 @@ Object.assign(window.BlackBook, {
   openNewCategory() {
     document.getElementById('settings-category-id').value = '';
     document.getElementById('settings-category-name').value = '';
-    document.getElementById('settings-category-color').value = this.hslToHex(this.randomPastel());
+    document.getElementById('settings-category-color').value = this.nextCategoryColor();
     document.getElementById('settings-category-modal-title').textContent = 'New Category';
     this.openModal('settings-category-modal');
   },
@@ -957,7 +991,7 @@ Object.assign(window.BlackBook, {
   async deleteCategory(id) {
     const cat = this.data.categories.find(c => c.id === id);
     if (!cat) return;
-    const isProtected = cat.name.toLowerCase() === 'transfer' || cat.name.toLowerCase() === 'uncategorized';
+    const isProtected = cat.name.toLowerCase() === 'transfer' || cat.name.toLowerCase() === 'uncategorized' || cat.name.toLowerCase() === 'invoice';
     if (isProtected) {
       await this.confirmModal({ title: 'Protected Category', message: '"' + cat.name + '" is a system category and cannot be deleted.', danger: false });
       return;
