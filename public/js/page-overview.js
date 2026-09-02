@@ -13,8 +13,21 @@ Object.assign(window.BlackBook, {
         : '<div class="list-sep"></div><div class="overview-charts"><div class="chart-panel overview-line-panel"><div class="chart-head-row"><span class="chart-title-text">INCOME VS EXPENSES</span><button class="btn btn-sm btn-secondary" onclick="BlackBook.toggleOverviewGraph()" title="Hide graph (H)">HIDE</button></div><canvas id="overview-line-chart"></canvas></div></div>');
     this.bindBarTooltip(el);
     this.bindAccountsPanelDismiss();
-    setTimeout(() => { if (this.visibleAccounts().length <= 5) { this.fitElems('.account-chip .chip-name'); this.fitElems('.account-chip .chip-balance'); } }, 20);
+    setTimeout(() => { this.sizeAccountSquares(); if (this.visibleAccounts().length <= 5) { this.fitElems('.account-chip .chip-name'); this.fitElems('.account-chip .chip-balance'); } }, 20);
     if (!hideGraph) setTimeout(() => { this.renderOverviewLineChart(); }, 50);
+  },
+
+  sizeAccountSquares() {
+    const chip = document.querySelector('.account-chip:not(.ov-chip):not(.account-mgr-square)');
+    const ov = document.querySelector('.account-chip.ov-chip');
+    const sq = document.querySelector('.account-chip.account-mgr-square');
+    if (!chip || !ov || !sq) return;
+    const side = Math.round(chip.getBoundingClientRect().height);
+    if (!(side > 0)) return;
+    [ov, sq].forEach(el => {
+      el.style.width = side + 'px';
+      el.style.height = side + 'px';
+    });
   },
 
   toggleOvType(t) {
@@ -369,8 +382,8 @@ Object.assign(window.BlackBook, {
       const amt = '<span class="chip-balance ' + (bal < 0 ? 'amount-negative' : 'amount-positive') + '">' + this.fmtAmount(bal, currency) + '</span>';
       return '<div class="account-chip' + (sel ? ' selected' : '') + compact + '" onclick="BlackBook.selectAccount(\x27' + a.id + '\x27)' + (titleAttr ? '" title="' + this.escapeHtml(titleAttr) : '') + '"><span class="chip-name">' + this.escapeHtml(label) + '</span>' + amt + '</div>';
     };
-    const overviewChip = '<div class="account-chip ov-chip' + (allSelected ? ' selected' : '') + (split ? ' chip-compact' : '') + '" onclick="BlackBook.selectAccount(null)"><span class="chip-name">OVERVIEW</span></div>';
-    const squareChip = '<div class="account-chip account-mgr-square" onclick="BlackBook.toggleAccountsPanel(event)" title="Manage accounts"><span class="chip-name">&vellip;</span></div>';
+    const overviewChip = '<div class="account-chip ov-chip' + (allSelected ? ' selected' : '') + '" onclick="BlackBook.selectAccount(null)" title="All accounts"><span class="chip-name">ALL</span></div>';
+    const squareChip = '<div class="account-chip account-mgr-square" onclick="BlackBook.toggleAccountsPanel(event)" title="Manage accounts"><span class="mgr-lines"><i></i><i></i><i></i></span></div>';
 
     let html;
     if (split) {
@@ -431,9 +444,10 @@ Object.assign(window.BlackBook, {
     const accts = this.data.accounts.filter(a => a.type !== 'credit' && a.type !== 'creditcard');
     const rows = accts.map((a, i) => {
       const dim = a.hidden ? ' ap-dim' : '';
+      const eyeSvg = '<svg class="ap-eye" viewBox="0 0 24 24" aria-hidden="true"><path fill-rule="evenodd" d="M12 4.5C6.5 4.5 1.8 9.5 0.3 12 1.8 14.5 6.5 19.5 12 19.5s10.2-5 11.7-7.5C22.2 9.5 17.5 4.5 12 4.5z M12 14.6a2.6 2.6 0 1 1 0-5.2 2.6 2.6 0 0 1 0 5.2z"/></svg>';
       const eye = a.hidden
-        ? '<button class="ap-btn ap-hidden" title="Show account" onclick="BlackBook.setAccountHidden(\x27' + a.id + '\x27,false)">&#128065;</button>'
-        : '<button class="ap-btn" title="Hide account" onclick="BlackBook.setAccountHidden(\x27' + a.id + '\x27,true)">&#128065;</button>';
+        ? '<button class="ap-btn ap-hidden" title="Show account" onclick="BlackBook.setAccountHidden(\x27' + a.id + '\x27,false)">' + eyeSvg + '</button>'
+        : '<button class="ap-btn" title="Hide account" onclick="BlackBook.setAccountHidden(\x27' + a.id + '\x27,true)">' + eyeSvg + '</button>';
       const up = i > 0 ? '<button class="ap-btn" title="Move up" onclick="BlackBook.moveAccount(\x27' + a.id + '\x27,-1)">&#9650;</button>' : '<span class="ap-btn" style="opacity:0.3">&#9650;</span>';
       const down = i < accts.length - 1 ? '<button class="ap-btn" title="Move down" onclick="BlackBook.moveAccount(\x27' + a.id + '\x27,1)">&#9660;</button>' : '<span class="ap-btn" style="opacity:0.3">&#9660;</span>';
       const desc = a.description ? '<div class="ap-desc">' + this.escapeHtml(a.description) + '</div>' : '';

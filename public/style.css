@@ -1504,18 +1504,40 @@ select:disabled {
   letter-spacing: 0.5px;
 }
 
-/* Permanent OVERVIEW tile */
-.account-chip.ov-chip { max-width: 150px; }
+/* Permanent ALL tile */
+.account-chip.ov-chip {
+  flex: 0 0 auto;
+  align-self: stretch;
+  aspect-ratio: 1;
+  padding: 0 4px;
+}
+.account-chip.ov-chip .chip-name {
+  letter-spacing: 2px;
+  font-size: 16px;
+}
 
 /* Account manager square at the end of the row */
 .account-chip.account-mgr-square {
   flex: 0 0 auto;
-  width: 44px;
-  max-height: 100%;
-  padding: 4px 0;
+  align-self: stretch;
+  aspect-ratio: 1;
+  padding: 0;
   border-left: 1px solid var(--divider);
 }
-.account-chip.account-mgr-square .chip-name { letter-spacing: 0; font-size: 22px; line-height: 1; }
+.account-mgr-square .mgr-lines {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  justify-content: center;
+  align-items: center;
+}
+.account-mgr-square .mgr-lines i {
+  display: block;
+  width: 20px;
+  height: 2px;
+  background: currentColor;
+  border-radius: 1px;
+}
 
 /* Account manager popover */
 .accounts-panel {
@@ -1559,6 +1581,7 @@ select:disabled {
 .ap-btn { background: none; border: none; cursor: pointer; color: var(--text-muted); font-size: 14px; padding: 2px 4px; line-height: 1; }
 .ap-btn:hover { color: var(--text); }
 .ap-btn.ap-hidden { color: var(--expense); }
+.ap-btn .ap-eye { width: 16px; height: 16px; display: block; }
 .ap-row.ap-dim .ap-name, .ap-row.ap-dim .ap-desc, .ap-row.ap-dim .ap-swatch { opacity: 0.4; }
 .ap-footer {
   display: flex;
