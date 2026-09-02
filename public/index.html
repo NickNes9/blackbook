@@ -478,40 +478,6 @@
     </div>
   </div>
 
-  <!-- Spreadsheet Multi-Account Import Modal -->
-  <div id="spreadsheet-import-modal" class="modal hidden">
-    <div class="modal-backdrop"></div>
-    <div class="modal-content wide">
-      <div class="modal-header">
-        <h2>Import Spreadsheet</h2>
-        <button class="modal-close" onclick="BlackBook.closeModal('spreadsheet-import-modal')">&times;</button>
-      </div>
-      <form id="spreadsheet-import-form">
-        <div id="spreadsheet-preview"></div>
-        <div class="form-row-2col">
-          <div class="form-group"><label>Date Column</label><select id="spreadsheet-col-date" class="input"></select></div>
-          <div class="form-group"><label>Date Format</label><select id="spreadsheet-datefmt" class="input"><option value="auto">auto-detect</option><option value="ymd">YYYY-MM-DD</option><option value="dmy">DD.MM.YYYY / DD-MM-YY</option><option value="mdy">MM/DD/YYYY</option></select></div>
-        </div>
-        <div class="form-row-2col">
-          <div class="form-group"><label>Category / Details Column</label><select id="spreadsheet-col-category" class="input"></select></div>
-          <div class="form-group"><label>Info / Note Column</label><select id="spreadsheet-col-info" class="input"></select></div>
-        </div>
-        <div class="form-row-2col">
-          <div class="form-group"><label>Opening Balance Date</label><input type="date" id="spreadsheet-open-date" class="input" value=""></div>
-          <div class="form-group"><label>&nbsp;</label><label style="display:flex;flex-direction:column;gap:6px;font-size:13px;">
-            <span><input type="checkbox" id="spreadsheet-open-rows" checked> Row with no date = opening balance on the date above</span>
-            <span><input type="checkbox" id="spreadsheet-pair-transfers" checked> Pair TRANSFER rows as transfers</span>
-          </label></div>
-        </div>
-        <div class="form-group"><label>Amount Columns &rarr; Accounts</label><div id="spreadsheet-amount-cols"></div></div>
-        <div class="form-actions">
-          <button type="button" class="btn btn-secondary" onclick="BlackBook.closeModal('spreadsheet-import-modal')">Cancel</button>
-          <button type="submit" class="btn btn-primary">Import</button>
-        </div>
-      </form>
-    </div>
-  </div>
-
   <!-- Settings Category Modal -->
   <div id="settings-category-modal" class="modal hidden">
     <div class="modal-backdrop"></div>
