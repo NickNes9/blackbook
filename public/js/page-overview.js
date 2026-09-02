@@ -13,7 +13,8 @@ Object.assign(window.BlackBook, {
         : '<div class="list-sep"></div><div class="overview-charts"><div class="chart-panel overview-line-panel"><div class="chart-head-row"><span class="chart-title-text">INCOME VS EXPENSES</span><button class="btn btn-sm btn-secondary" onclick="BlackBook.toggleOverviewGraph()" title="Hide graph (H)">HIDE</button></div><canvas id="overview-line-chart"></canvas></div></div>');
     this.bindBarTooltip(el);
     this.bindAccountsPanelDismiss();
-    setTimeout(() => { this.sizeAccountSquares(); if (this.visibleAccounts().length <= 5) { this.fitElems('.account-chip .chip-name'); this.fitElems('.account-chip .chip-balance'); } }, 20);
+    this.sizeAccountSquares();
+    setTimeout(() => { if (this.visibleAccounts().length <= 5) { this.fitElems('.account-chip .chip-name'); this.fitElems('.account-chip .chip-balance'); } }, 20);
     if (!hideGraph) setTimeout(() => { this.renderOverviewLineChart(); }, 50);
   },
 
@@ -444,7 +445,7 @@ Object.assign(window.BlackBook, {
     const accts = this.data.accounts.filter(a => a.type !== 'credit' && a.type !== 'creditcard');
     const rows = accts.map((a, i) => {
       const dim = a.hidden ? ' ap-dim' : '';
-      const eyeSvg = '<svg class="ap-eye" viewBox="0 0 24 24" aria-hidden="true"><path fill-rule="evenodd" d="M12 4.5C6.5 4.5 1.8 9.5 0.3 12 1.8 14.5 6.5 19.5 12 19.5s10.2-5 11.7-7.5C22.2 9.5 17.5 4.5 12 4.5z M12 14.6a2.6 2.6 0 1 1 0-5.2 2.6 2.6 0 0 1 0 5.2z"/></svg>';
+      const eyeSvg = '<svg class="ap-eye" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" fill-rule="evenodd" d="M12 4.5C6.5 4.5 1.8 9.5 0.3 12 1.8 14.5 6.5 19.5 12 19.5s10.2-5 11.7-7.5C22.2 9.5 17.5 4.5 12 4.5z M12 14.6a2.6 2.6 0 1 1 0-5.2 2.6 2.6 0 0 1 0 5.2z"/></svg>';
       const eye = a.hidden
         ? '<button class="ap-btn ap-hidden" title="Show account" onclick="BlackBook.setAccountHidden(\x27' + a.id + '\x27,false)">' + eyeSvg + '</button>'
         : '<button class="ap-btn" title="Hide account" onclick="BlackBook.setAccountHidden(\x27' + a.id + '\x27,true)">' + eyeSvg + '</button>';
