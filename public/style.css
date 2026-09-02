@@ -1579,11 +1579,11 @@ select:disabled {
 .ap-name { font-weight: 600; font-size: 13px; color: var(--text); }
 .ap-desc { font-size: 11px; color: var(--text-muted); }
 .ap-name-wrap { flex: 1; overflow: hidden; }
-.ap-actions { display: flex; gap: 4px; align-items: center; }
+.ap-actions { display: flex; gap: 4px; align-items: center; margin-left: auto; justify-content: flex-end; }
 .ap-btn { background: none; border: none; cursor: pointer; color: var(--text-muted); font-size: 14px; padding: 2px 4px; line-height: 1; }
 .ap-btn:hover { color: var(--text); }
 .ap-btn .ap-eye { width: 16px; height: 16px; display: block; color: var(--text-muted); }
-.ap-btn.ap-hidden .ap-eye { color: var(--text-muted); }
+.ap-btn.ap-hidden .ap-eye { color: #3f3f3f; }
 .ap-row.ap-dim .ap-name, .ap-row.ap-dim .ap-desc, .ap-row.ap-dim .ap-swatch { opacity: 0.4; }
 .ap-footer {
   display: flex;
