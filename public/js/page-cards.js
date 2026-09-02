@@ -75,7 +75,7 @@ Object.assign(window.BlackBook, {
     const debt = plans.reduce((s, p) => s + this.instOutstanding(p), 0);
     let html = '<div class="card-block">' +
       '<div class="savings-header">' +
-      '<span class="savings-name"><span class="cat-dot" style="background:' + (card.color || '#71717a') + ';"></span> ' + this.escapeHtml(card.name) + '</span>' +
+      '<span class="savings-name"><span class="cat-dot" style="background:' + this.cardColor(card) + ';"></span> ' + this.escapeHtml(card.name) + '</span>' +
       '</div>' +
       '<div class="bill-meta-line" style="display:block;margin-bottom:6px;">INT ' + (card.ratePct != null ? card.ratePct : 5) + '% &middot; DUE DAY ' + (card.dueDay || 15) + ' &middot; DEBT ' + this.fmtRsd(debt) + '</div>';
     if (!plans.length) html += '<div class="empty-state" style="padding:14px;"><div class="empty-state-text">No purchases yet. Click + NEW to add a transaction.</div></div>';
@@ -85,7 +85,7 @@ Object.assign(window.BlackBook, {
 
 planBlockHtml(inst) {
     const card = this.instCard(inst) || {};
-    const color = card.color || this.billColor(inst);
+    const color = this.cardColor(card);
     const closed = this.instIsClosed(inst);
     const paidEntries = this.instPaidEntries(inst);
     const paidCount = closed ? inst.months : paidEntries.length;
