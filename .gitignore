@@ -2,6 +2,8 @@
 profiles/
 data.json
 data.json.bak
+Black Book.xlsx
+import/
 
 # Dependencies
 node_modules/
