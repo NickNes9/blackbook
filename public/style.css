@@ -1509,12 +1509,15 @@ select:disabled {
   flex: 0 0 auto;
   align-self: stretch;
   aspect-ratio: 1;
-  padding: 0 4px;
+  padding: 0;
   justify-content: center;
 }
-.account-chip.ov-chip .chip-name {
-  letter-spacing: 4px;
-  font-size: 31px;
+.account-chip.ov-chip .ov-triangle {
+  width: 0;
+  height: 0;
+  border-left: 11px solid transparent;
+  border-right: 11px solid transparent;
+  border-top: 16px solid currentColor;
 }
 
 /* Account manager square at the end of the row */
@@ -1582,12 +1585,12 @@ select:disabled {
 .ap-actions { display: flex; gap: 4px; align-items: center; margin-left: auto; justify-content: flex-end; }
 .ap-btn { background: none; border: none; cursor: pointer; color: var(--text-muted); font-size: 14px; padding: 2px 4px; line-height: 1; }
 .ap-btn:hover { color: var(--text); }
-.ap-btn .ap-eye { width: 16px; height: 16px; display: block; color: var(--text-muted); }
-.ap-btn.ap-hidden .ap-eye { color: #3f3f3f; }
+.ap-btn .ap-eye { width: 16px; height: 16px; display: block; }
 .ap-row.ap-dim .ap-name, .ap-row.ap-dim .ap-desc, .ap-row.ap-dim .ap-swatch { opacity: 0.4; }
 .ap-footer {
   display: flex;
   gap: 8px;
+  justify-content: flex-end;
   padding: 8px 6px 2px;
 }
 
