@@ -21,7 +21,9 @@ DATA_FILE = join(PROFILES_DIR, 'data.json');
 
 const DEFAULT_DATA = {
   accounts: [],
-  categories: [],
+  categories: [
+    { id: 'cat-invoice', name: 'Invoice', color: '#fa8c3c' }
+  ],
   transactions: [],
   bills: [],
   billPayments: [],
@@ -29,7 +31,7 @@ const DEFAULT_DATA = {
   budgets: [],
   installments: [],
   debts: [],
-  settings: { eurToRsdRate: 117.2, eurToRsdRateSource: 'manual', eurToRsdRateUpdated: null, defaultAccountId: null, defaultCategoryId: null }
+  settings: { eurToRsdRate: 117.2, eurToRsdRateSource: 'manual', eurToRsdRateUpdated: null, defaultAccountId: null, defaultCategoryId: null, dateSeparator: '/' }
 };
 
 app.use(express.json({ limit: '50mb' }));

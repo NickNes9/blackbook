@@ -31,9 +31,9 @@ Object.assign(window.BlackBook, {
     const offToday = this.vy() !== new Date().getFullYear();
     el.innerHTML = '<div class="month-picker">' +
       '<span class="mp-year"><button class="mp-year-btn" onclick="BlackBook.shiftYear(-1)">&#9664;</button><span class="mp-year-label">' + this.vy() + '</span><button class="mp-year-btn" onclick="BlackBook.shiftYear(1)">&#9654;</button></span>' +
+      '<button class="mp-today' + (offToday ? ' mp-today-active' : '') + '" onclick="BlackBook.gotoToday()">TODAY</button>' +
       '<span style="flex:1;"></span>' +
       '<button class="btn btn-primary" onclick="BlackBook.openNewBill()">+ NEW BILL</button>' +
-      '<button class="mp-today' + (offToday ? ' mp-today-active' : '') + '" onclick="BlackBook.gotoToday()">TODAY</button>' +
       '</div>' +
       this.billsSummaryHtml() +
       '<div class="list-sep"></div>' +
@@ -112,7 +112,8 @@ Object.assign(window.BlackBook, {
         '<span class="bill-actions-mini">' +
         '<button class="btn btn-sm ' + (bill.autopay ? 'btn-primary' : 'btn-muted') + '" onclick="BlackBook.toggleBillAutopay(\x27' + bill.id + '\x27)" title="Auto-mark upcoming months as paid">' + (bill.autopay ? 'AUTO' : 'MAN') + '</button>' +
         '<button class="btn btn-sm btn-secondary" onclick="BlackBook.openEditBill(\x27' + bill.id + '\x27)">EDIT</button>' +
-        '<button class="btn btn-sm btn-danger" onclick="BlackBook.deleteBill(\x27' + bill.id + '\x27)">DEL</button></span></div>';
+        '<button class="btn btn-sm btn-danger" onclick="BlackBook.deleteBill(\x27' + bill.id + '\x27)">DEL</button></span>' +
+        '</div>';
       for (let m = 0; m < 12; m++) {
         const mk = this.vy() + '-' + String(m + 1).padStart(2, '0');
         const paid = this.getBillPayment(bill.id, mk);
@@ -167,10 +168,15 @@ Object.assign(window.BlackBook, {
     const colorEl = document.getElementById('bill-color');
     colorEl.value = '#888888';
     colorEl.disabled = true;
-    const catSelect = document.getElementById('bill-category');
-    catSelect.innerHTML = this.sortedCategories().map(c => '<option value="' + c.id + '">' + this.escapeHtml(c.name) + '</option>').join('');
+    const catInput = document.getElementById('bill-category-input');
+    const catHidden = document.getElementById('bill-category');
+    if (catInput && catHidden) {
+      catHidden.value = '';
+      catInput.value = '';
+      this.initCategoryPicker('bill-category-input', 'bill-category', 'bill-category-dropdown');
+    }
     const billCat = this.data.categories.find(c => /^bill/i.test(String(c.name).trim()));
-    if (billCat) catSelect.value = billCat.id;
+    if (billCat) { catHidden.value = billCat.id; catInput.value = billCat.name.toUpperCase(); }
     const paySel = document.getElementById('bill-payfrom');
     paySel.innerHTML = this.accountSelectOptions(this.data.settings.defaultAccountId || '');
     document.getElementById('bill-modal-title').textContent = 'New Bill';
@@ -192,8 +198,13 @@ Object.assign(window.BlackBook, {
     const colorEl = document.getElementById('bill-color');
     colorEl.value = bill.color || this.billColor(bill);
     colorEl.disabled = !bill.color;
-    const catSelect = document.getElementById('bill-category');
-    catSelect.innerHTML = this.sortedCategories().map(c => '<option value="' + c.id + '"' + (c.id === bill.categoryId ? ' selected' : '') + '>' + this.escapeHtml(c.name) + '</option>').join('');
+    const catInput = document.getElementById('bill-category-input');
+    const catHidden = document.getElementById('bill-category');
+    if (catInput && catHidden) {
+      catHidden.value = bill.categoryId || '';
+      catInput.value = bill.categoryId ? this.data.categories.find(c => c.id === bill.categoryId)?.name?.toUpperCase() || '' : '';
+      this.initCategoryPicker('bill-category-input', 'bill-category', 'bill-category-dropdown');
+    }
     const paySel = document.getElementById('bill-payfrom');
     paySel.innerHTML = this.accountSelectOptions(bill.payAccountId || this.data.settings.defaultAccountId || '');
     document.getElementById('bill-modal-title').textContent = 'Edit Bill';

@@ -10,7 +10,7 @@ Object.assign(window.BlackBook, {
 
   openNewTransaction(targetId) {
     document.getElementById('tx-id').value = '';
-    document.getElementById('tx-date').value = this.fmtDateInput(this.today());
+    document.getElementById('tx-date').value = this.fmtDateInput(this.todayForViewedMonth());
     document.getElementById('tx-type').value = 'expense';
     document.getElementById('tx-amount').value = '';
     document.getElementById('tx-note').value = '';
@@ -34,7 +34,7 @@ Object.assign(window.BlackBook, {
     amountInput.oninput = () => { document.getElementById('tx-type').value = amountInput.value.trim().startsWith('+') ? 'income' : 'expense'; };
     this.openModal('transaction-modal');
     setTimeout(() => amountInput.focus(), 50);
-    this.initCategoryPicker();
+    this.initCategoryPicker('tx-category-input', 'tx-category', 'category-dropdown');
     this.bindQuickEntryExtras();
   },
 
@@ -115,6 +115,7 @@ Object.assign(window.BlackBook, {
   },
 
   openTransferModal() {
+    this._transferSourceIds = null;
     const vis = this.visibleAccounts();
     if (vis.length < 2) { alert('You need at least two accounts to transfer.'); return; }
     const opts = vis.map(a => '<option value="' + a.id + '">' + this.escapeHtml(a.name) + ' (' + (a.currency || 'RSD') + ')</option>').join('');
@@ -135,6 +136,7 @@ Object.assign(window.BlackBook, {
 
   openEditTransfer(txId) {
     const tx = this.data.transactions.find(t => t.id === txId);
+    this._transferSourceIds = null;
     if (!tx || tx.type !== 'transfer') return this.openEditTransaction(txId);
     const vis = this.visibleAccounts();
     const opts = vis.map(a => '<option value="' + a.id + '">' + this.escapeHtml(a.name) + ' (' + (a.currency || 'RSD') + ')</option>').join('');
@@ -280,6 +282,15 @@ Object.assign(window.BlackBook, {
       } else {
         const ok = await this.doTransfer(from, to, amountOut, noteExtra, date, amountIn);
         if (!ok) return;
+        if (this._transferSourceIds && this._transferSourceIds.length === 2) {
+          const src = this._transferSourceIds;
+          this._transferSourceIds = null;
+          this._mergeIds = null;
+          this._bulkSel = new Set();
+          this._bulkOnly = false;
+          this.data.transactions = this.data.transactions.filter(t => !src.includes(t.id));
+          await this.save();
+        }
       }
       this.closeModal('transfer-modal');
       this.syncViewToDate(date);
@@ -308,7 +319,7 @@ Object.assign(window.BlackBook, {
     if (catInput && catHidden) { catHidden.value = tx.categoryId; const cat = this.data.categories.find(c => c.id === tx.categoryId); catInput.value = cat ? cat.name.toUpperCase() : ''; }
     this.openModal('transaction-modal');
     setTimeout(() => document.getElementById('tx-amount').focus(), 50);
-    this.initCategoryPicker();
+    this.initCategoryPicker('tx-category-input', 'tx-category', 'category-dropdown');
     this.bindQuickEntryExtras();
     this.updateTxNativeRow();
     this.updateTxPreview();
@@ -467,10 +478,15 @@ Object.assign(window.BlackBook, {
     document.getElementById('merge-list').innerHTML = list;
     document.getElementById('merge-title').textContent = 'Merge Transactions \u00b7 ' + txs.length;
     this.renderMergeSummary();
+    if (txs.length === 2) {
+      document.getElementById('merge-summary').insertAdjacentHTML('beforeend', '<div style="color:var(--text-muted);margin-top:4px;">Tip: you can also convert these into a transfer between their accounts.</div>');
+    }
     if (!this._mergeOk) {
       document.getElementById('merge-summary').insertAdjacentHTML('beforeend', '<div style="color:var(--expense);margin-top:4px;">Cannot merge: transactions use different currencies or accounts/cards. Select a matching group.</div>');
     }
     this.openModal('merge-modal');
+    const trBtn = document.getElementById('merge-transfer-btn');
+    if (trBtn) trBtn.style.display = (txs.length === 2) ? '' : 'none';
   },
 
   selectMergeTarget(idx) {
@@ -514,6 +530,44 @@ Object.assign(window.BlackBook, {
     this.closeModal('merge-modal');
     this.bulkClear();
     alert('Merged ' + this._mergeIds.length + ' transactions into 1 (' + this.fmtAmount(sum, this._mergeCurrency) + ').');
+  },
+
+  mergeAsTransfer() {
+    if (!this._mergeIds || this._mergeIds.length !== 2) return;
+    const txs = this.data.transactions.filter(t => this._mergeIds.includes(t.id));
+    if (txs.length !== 2) return;
+    const accMap = Object.fromEntries((this.data.accounts || []).map(a => [a.id, a]));
+    const accs = txs.map(t => accMap[t.accountId]);
+    const exp = txs.find(t => (t.amount || 0) < 0);
+    const inc = txs.find(t => (t.amount || 0) > 0);
+    const reason = txs.some(t => t.cardId) ? 'one of the selected transactions is on a credit card.' :
+      (!accs[0] || !accs[1] || accs[0].id === accs[1].id) ? 'the two transactions must be on different accounts.' :
+      (!exp || !inc) ? 'one transaction must be an expense and one an income.' : null;
+    if (reason) { alert('Cannot convert to transfer: ' + reason); return; }
+    this._transferSourceIds = [exp.id, inc.id];
+    const fromAcc = accMap[exp.accountId];
+    const toAcc = accMap[inc.accountId];
+    const opts = this.data.accounts.filter(a => a.type !== 'credit' && a.type !== 'creditcard').map(a => '<option value="' + a.id + '">' + this.escapeHtml(a.name) + ' (' + (a.currency || 'RSD') + ')</option>').join('');
+    const fSel = document.getElementById('tr-from');
+    const tSel = document.getElementById('tr-to');
+    fSel.innerHTML = opts;
+    tSel.innerHTML = opts;
+    fSel.value = fromAcc.id;
+    tSel.value = toAcc.id;
+    const amtOut = document.getElementById('tr-amount');
+    const amtIn = document.getElementById('tr-amount-in');
+    amtOut.value = Math.abs(exp.amount);
+    amtOut.dispatchEvent(new Event('input'));
+    if ((inc.currency || 'RSD') === (toAcc.currency || 'RSD')) amtIn.value = Math.abs(inc.amount);
+    const tgt = txs[this._mergeSelected] || exp;
+    document.getElementById('tr-date').value = this.fmtDateInput(tgt.date);
+    document.getElementById('tr-note').value = txs.map(t => (t.note || '').trim()).filter(Boolean).join('; ');
+    this._transferNoteBase = this.transferNoteBase();
+    this.updateTransferNote();
+    this.updateTransferCurrencyLabels();
+    this.closeModal('merge-modal');
+    this.openModal('transfer-modal');
+    setTimeout(() => amtOut.focus(), 50);
   },
 
   bindModalSubmit() {
@@ -584,67 +638,5 @@ Object.assign(window.BlackBook, {
     });
   },
 
-  initCategoryPicker() {
-    if (this._catPickBound) return;
-    const input = document.getElementById('tx-category-input');
-    const hidden = document.getElementById('tx-category');
-    const dropdown = document.getElementById('category-dropdown');
-    if (!input || !dropdown) return;
-    this._catPickBound = true;
-
-    const sortedCats = () => this.data.categories.slice().sort((a, b) => a.name.localeCompare(b.name));
-    const closeDropdown = () => dropdown.classList.add('hidden');
-    const pick = (cat) => {
-      if (!cat) return;
-      input.value = cat.name.toUpperCase();
-      hidden.value = cat.id;
-      input.classList.remove('pick-empty');
-      closeDropdown();
-    };
-    const cycle = (dir) => {
-      const cats = sortedCats();
-      if (!cats.length) return;
-      const idx = cats.findIndex(c => c.id === hidden.value);
-      const next = idx < 0 ? (dir > 0 ? 0 : cats.length - 1) : (idx + dir + cats.length) % cats.length;
-      pick(cats[next]);
-    };
-
-    input.addEventListener('click', openDropdown);
-    input.addEventListener('focus', openDropdown);
-
-    function openDropdown() {
-      const cats = sortedCats();
-      dropdown.innerHTML = cats.length ? cats.map(c =>
-        '<div class="category-dropdown-item' + (c.id === hidden.value ? ' active' : '') + '" data-id="' + c.id + '"><span class="cat-dot" style="background:' + c.color + ';"></span>' + BlackBook.escapeHtml(c.name) + '</div>'
-      ).join('') : '<div class="category-dropdown-empty">No categories yet</div>';
-      const act = dropdown.querySelector('.category-dropdown-item.active');
-      if (act) act.scrollIntoView({ block: 'nearest' });
-      dropdown.classList.remove('hidden');
-    }
-
-    input.addEventListener('wheel', (e) => { e.preventDefault(); cycle(e.deltaY > 0 ? 1 : -1); }, { passive: false });
-    input.addEventListener('keydown', (e) => {
-      if (e.key === 'ArrowDown') { e.preventDefault(); cycle(1); }
-      else if (e.key === 'ArrowUp') { e.preventDefault(); cycle(-1); }
-      else if (e.key === 'Escape') {
-        if (!dropdown.classList.contains('hidden')) { e.preventDefault(); e.stopPropagation(); }
-        closeDropdown();
-      } else if (e.key === 'Enter' && !dropdown.classList.contains('hidden')) {
-        e.preventDefault(); closeDropdown();
-      }
-    });
-
-    dropdown.addEventListener('click', (e) => {
-      const item = e.target.closest('.category-dropdown-item');
-      if (!item || !item.dataset.id) return;
-      pick(this.data.categories.find(c => c.id === item.dataset.id));
-    });
-
-    document.addEventListener('pointerdown', (e) => {
-      if (dropdown.classList.contains('hidden')) return;
-      const root = document.getElementById('category-autocomplete');
-      if (!root || !root.contains(e.target)) closeDropdown();
-    });
-  },
 });
 })();

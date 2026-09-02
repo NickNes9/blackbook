@@ -1,16 +1,5 @@
 (function () {
 Object.assign(window.BlackBook, {
-  savingsChipsHtml() {
-    const goals = this.data.savingsGoals || [];
-    if (!goals.length) return '';
-    let html = '<div class="cat-filter">';
-    for (const g of goals) {
-      const color = g.color || this.billColor(g);
-      html += '<div class="cat-filter-chip" style="--cc:' + color + ';" onclick="BlackBook.toggleSavingsGoal(\x27' + g.id + '\x27)" title="' + this.escapeHtml(g.name) + ' \u00b7 click to show/hide entries">' + this.escapeHtml(g.name) + '</div>';
-    }
-    return html + '</div>';
-  },
-
   renderSavings() {
     const el = document.getElementById('page-savings');
     if (!el) return;
@@ -19,7 +8,6 @@ Object.assign(window.BlackBook, {
     el.innerHTML = this.yearPickerHtml() +
       this.savingsSummaryHtml() +
       '<div class="list-sep"></div>' +
-      this.savingsChipsHtml() +
       '<div class="page-scroll-wrap"><div class="cat-label" style="margin-bottom:8px;">GOALS</div>' +
       this.savingsGoalsHtml() + '</div>';
   },

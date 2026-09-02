@@ -16,6 +16,8 @@ window.BlackBook = {
   savingsChart: null,
   _cmdPaletteIndex: -1,
   _cmdPaletteItems: [],
+  _ovSortBy: 'date',
+  _ovSortDir: 'desc',
 
   async init() {
     try {
@@ -34,6 +36,10 @@ window.BlackBook = {
     if (!this.data.invoices) this.data.invoices = [];
     if (this.migrateCreditCards()) await this.save();
     if (this.migrateTransfers()) await this.save();
+    if (!(this.data.categories || []).some(c => c && c.name && String(c.name).toLowerCase() === 'invoice')) {
+      this.invoiceCategory();
+      await this.save();
+    }
     let signFixed = false;
     for (const t of (this.data.transactions || [])) {
       if (!t || typeof t.amount !== 'number') continue;
@@ -142,6 +148,7 @@ window.BlackBook = {
       }
     });
 
+    this.upgradeAllSelects(document);
     this.navigateTo('overview');
   },
 
@@ -261,6 +268,22 @@ window.BlackBook = {
     return 'hsl(' + Math.round(h) + ', ' + Math.round(s) + '%, ' + Math.round(l) + '%)';
   },
 
+  _catPalette: ['#3791f0', '#f0483e', '#2fa35c', '#f5a236', '#8f5bd9', '#d9407a', '#2bb8c8', '#b8c22c', '#e0642f', '#4f7ad1', '#c2a028', '#2f9e8f', '#a83e9e', '#cf7a24', '#3cc27a', '#d95b8c', '#6a7cf0', '#bf6b3f'],
+
+  nextCategoryColor() {
+    const used = new Set((this.data.categories || []).map(c => c.color).filter(Boolean));
+    for (const a of (this.data.accounts || [])) if (a.color) used.add(a.color);
+    for (const col of this._catPalette) if (!used.has(col)) return col;
+    const golden = 137.508;
+    let i = this._paletteCursor || 0;
+    for (let k = 0; k < 120; k++) {
+      i++;
+      const col = this.hslToHex('hsl(' + Math.round((i * golden) % 360) + ', 65%, 62%)');
+      if (!used.has(col)) { this._paletteCursor = i; return col; }
+    }
+    return this.hslToHex('hsl(' + Math.round(Math.random() * 360) + ', 65%, 62%)');
+  },
+
   hslToHex(hsl) {
     const m = hsl.match(/hsl\((\d+),\s*(\d+)%,\s*(\d+)%\)/);
     if (!m) return hsl;
@@ -378,6 +401,8 @@ window.BlackBook = {
       else if (page === 'debts') this.renderDebts();
       else if (page === 'invoices') this.renderInvoices();
       else if (page === 'settings') this.renderSettings();
+      const pageEl = document.getElementById('page-' + page);
+      if (pageEl) this.upgradeAllSelects(pageEl);
     } catch (err) {
       console.error('renderPage failed:', err);
       if (!this._renderErrShown) { this._renderErrShown = true; alert('Render error: ' + err.message); }
@@ -432,17 +457,29 @@ window.BlackBook = {
     return n.getFullYear() + '-' + String(n.getMonth() + 1).padStart(2, '0') + '-' + String(n.getDate()).padStart(2, '0');
   },
 
+  todayForViewedMonth() {
+    const n = new Date();
+    const day = String(n.getDate()).padStart(2, '0');
+    return this.vy() + '-' + String(this.vm() + 1).padStart(2, '0') + '-' + day;
+  },
+
+  getDateSeparator() {
+    return (this.data.settings && this.data.settings.dateSeparator) || '/';
+  },
+
   fmtDateInput(iso) {
     const p = String(iso || '').split('-');
     if (p.length !== 3 || p[0].length !== 4) return '';
-    return parseInt(p[2], 10) + '/' + parseInt(p[1], 10) + '/' + p[0];
+    const sep = this.getDateSeparator();
+    return parseInt(p[2], 10) + sep + parseInt(p[1], 10) + sep + p[0];
   },
 
   parseDateInput(str) {
     let s = String(str || '').trim().replace(/\s+/g, '');
     if (!s) return null;
-    const original = s;
-    s = s.replace(/[-/.]/g, '.').replace(/\.+/g, '.').replace(/^\.|\.$/g, '');
+    const sep = this.getDateSeparator();
+    const sepEscaped = sep.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    s = s.replace(new RegExp('[-/.' + sepEscaped + ']', 'g'), '.').replace(/\.+/g, '.').replace(/^\.|\.$/g, '');
     let d, m, y;
     if (/^\d{4}\.\d{1,2}\.\d{1,2}$/.test(s)) {
       const q = s.split('.'); y = parseInt(q[0], 10); m = parseInt(q[1], 10); d = parseInt(q[2], 10);
@@ -491,7 +528,7 @@ window.BlackBook = {
   },
 
   openModal(id) { document.getElementById(id).classList.remove('hidden'); },
-  closeModal(id) { document.getElementById(id).classList.add('hidden'); },
+  closeModal(id) { document.getElementById(id).classList.add('hidden'); if (id === 'transfer-modal') this._transferSourceIds = null; },
 
   confirmModal(opts) {
     return new Promise((resolve) => {
@@ -1049,6 +1086,96 @@ window.BlackBook = {
     return cat;
   },
 
+  invoiceCategory() {
+    let cat = this.data.categories.find(c => c.name.toLowerCase() === 'invoice');
+    if (!cat) {
+      cat = { id: 'cat-invoice', name: 'Invoice', color: '#fa8c3c' };
+      this.data.categories.push(cat);
+    }
+    return cat;
+  },
+
+  _invFileStore() {
+    if (this._invFileStorePromise) return this._invFileStorePromise;
+    this._invFileStorePromise = new Promise((resolve, reject) => {
+      const req = indexedDB.open('blackbook-invoice-files', 1);
+      req.onupgradeneeded = () => {
+        if (!req.result.objectStoreNames.contains('files')) req.result.createObjectStore('files');
+      };
+      req.onsuccess = () => resolve(req.result);
+      req.onerror = () => reject(req.error);
+    });
+    return this._invFileStorePromise;
+  },
+
+  async _invFilePut(id, blob) {
+    try {
+      const db = await this._invFileStore();
+      return new Promise((resolve, reject) => {
+        const tx = db.transaction('files', 'readwrite');
+        tx.objectStore('files').put(blob, 'inv:' + id);
+        tx.oncomplete = () => resolve(true);
+        tx.onerror = () => reject(tx.error);
+      });
+    } catch (e) { return false; }
+  },
+
+  async _invFileGet(id) {
+    try {
+      const db = await this._invFileStore();
+      return new Promise((resolve) => {
+        const tx = db.transaction('files', 'readonly');
+        const req = tx.objectStore('files').get('inv:' + id);
+        req.onsuccess = () => resolve(req.result || null);
+        req.onerror = () => resolve(null);
+      });
+    } catch (e) { return null; }
+  },
+
+  async _invFileDel(id) {
+    try {
+      const db = await this._invFileStore();
+      return new Promise((resolve) => {
+        const tx = db.transaction('files', 'readwrite');
+        tx.objectStore('files').delete('inv:' + id);
+        tx.oncomplete = () => resolve(true);
+        tx.onerror = () => resolve(false);
+      });
+    } catch (e) { return false; }
+  },
+
+  _fileToDataURL(file) {
+    return new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result);
+      reader.onerror = () => resolve(null);
+      reader.readAsDataURL(file);
+    });
+  },
+
+  _dataURLToBlob(dataUrl) {
+    try {
+      const m = String(dataUrl).match(/^data:([^;,]+)?(;base64)?,(.*)$/s);
+      if (!m) return null;
+      const mime = m[1] || 'application/octet-stream';
+      const bytes = m[2] ? atob(m[3]) : decodeURIComponent(m[3]);
+      const arr = new Uint8Array(bytes.length);
+      for (let i = 0; i < bytes.length; i++) arr[i] = bytes.charCodeAt(i);
+      return new Blob([arr], { type: mime });
+    } catch (e) { return null; }
+  },
+
+  async openInvoiceFile(id) {
+    const v = this.data.invoices.find(x => x.id === id);
+    if (!v) return;
+    let blob = await this._invFileGet(id);
+    if (!blob && v.fileData) blob = this._dataURLToBlob(v.fileData);
+    if (!blob) { alert('No file attached to this invoice.'); return; }
+    const url = URL.createObjectURL(blob);
+    window.open(url, '_blank');
+    setTimeout(() => URL.revokeObjectURL(url), 60000);
+  },
+
   isTransfer(tx) {
     if (!tx) return false;
     if (tx.type === 'transfer') return true;
@@ -1204,6 +1331,142 @@ window.BlackBook = {
     if (!dateStr) return;
     const { y, m } = this.ymOf(dateStr);
     if (!isNaN(y) && !isNaN(m)) { const v = this.vw(); v.y = y; v.m = m; }
+  },
+
+  initCategoryPicker(inputId, hiddenId, dropdownId) {
+    if (this._catPickBound && this._catPickBound.has(inputId)) return;
+    if (!this._catPickBound) this._catPickBound = new Set();
+    const input = document.getElementById(inputId);
+    const hidden = document.getElementById(hiddenId);
+    const dropdown = document.getElementById(dropdownId);
+    if (!input || !dropdown) return;
+    this._catPickBound.add(inputId);
+
+    const sortedCats = () => this.data.categories.slice().sort((a, b) => a.name.localeCompare(b.name));
+    const closeDropdown = () => dropdown.classList.add('hidden');
+    const pick = (cat) => {
+      if (!cat) return;
+      input.value = cat.name.toUpperCase();
+      hidden.value = cat.id;
+      input.classList.remove('pick-empty');
+      closeDropdown();
+    };
+    const cycle = (dir) => {
+      const cats = sortedCats();
+      if (!cats.length) return;
+      const idx = cats.findIndex(c => c.id === hidden.value);
+      const next = idx < 0 ? (dir > 0 ? 0 : cats.length - 1) : (idx + dir + cats.length) % cats.length;
+      pick(cats[next]);
+    };
+
+    const openDropdown = () => {
+      const cats = sortedCats();
+      dropdown.innerHTML = cats.length ? cats.map(c =>
+        '<div class="category-dropdown-item' + (c.id === hidden.value ? ' active' : '') + '" data-id="' + c.id + '"><span class="cat-dot" style="background:' + c.color + ';"></span>' + this.escapeHtml(c.name) + '</div>'
+      ).join('') : '<div class="category-dropdown-empty">No categories yet</div>';
+      const act = dropdown.querySelector('.category-dropdown-item.active');
+      if (act) act.scrollIntoView({ block: 'nearest' });
+      dropdown.classList.remove('hidden');
+    };
+
+    input.addEventListener('click', openDropdown);
+    input.addEventListener('focus', openDropdown);
+    input.addEventListener('wheel', (e) => { e.preventDefault(); cycle(e.deltaY > 0 ? 1 : -1); }, { passive: false });
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'ArrowDown') { e.preventDefault(); cycle(1); }
+      else if (e.key === 'ArrowUp') { e.preventDefault(); cycle(-1); }
+      else if (e.key === 'Escape') {
+        if (!dropdown.classList.contains('hidden')) { e.preventDefault(); e.stopPropagation(); }
+        closeDropdown();
+      } else if (e.key === 'Enter' && !dropdown.classList.contains('hidden')) {
+        e.preventDefault(); closeDropdown();
+      }
+    });
+
+    dropdown.addEventListener('click', (e) => {
+      const item = e.target.closest('.category-dropdown-item');
+      if (!item || !item.dataset.id) return;
+      pick(this.data.categories.find(c => c.id === item.dataset.id));
+    });
+
+    document.addEventListener('pointerdown', (e) => {
+      if (!dropdown.classList.contains('hidden') && !dropdown.contains(e.target) && e.target !== input) {
+        closeDropdown();
+      }
+    });
+  },
+
+  upgradeSelect(el) {
+    if (!el || el.tagName !== 'SELECT' || el.dataset.customSelect === '1') return;
+    const wrap = document.createElement('div');
+    wrap.className = 'category-autocomplete custom-select';
+    if (el.classList.contains('qe-currency')) wrap.classList.add('cs-flex-fixed');
+    const btn = document.createElement('div');
+    btn.className = 'input custom-select-btn';
+    btn.tabIndex = 0;
+    const list = document.createElement('div');
+    list.className = 'category-dropdown hidden';
+    el.dataset.customSelect = '1';
+    el.parentNode.replaceChild(wrap, el);
+    wrap.appendChild(el);
+    wrap.appendChild(btn);
+    wrap.appendChild(list);
+
+    const sync = () => {
+      const opt = el.selectedOptions && el.selectedOptions[0];
+      btn.textContent = (opt && opt.text) ? opt.text : '\u00a0';
+    };
+    const curIndex = () => Math.max(el.selectedIndex, 0);
+    const open = () => {
+      const opts = Array.from(el.options);
+      list.innerHTML = opts.length ? opts.map((o, i) =>
+        '<div class="category-dropdown-item' + (i === curIndex() ? ' active' : '') + '" data-i="' + i + '">' + this.escapeHtml(o.text) + '</div>'
+      ).join('') : '<div class="category-dropdown-empty">No options</div>';
+      const act = list.querySelector('.category-dropdown-item.active');
+      if (act) act.scrollIntoView({ block: 'nearest' });
+      list.classList.remove('hidden');
+    };
+    const close = () => list.classList.add('hidden');
+    const toggle = () => list.classList.contains('hidden') ? open() : close();
+    const pickIndex = (i) => {
+      if (!el.options.length) return;
+      el.selectedIndex = Math.min(Math.max(i, 0), el.options.length - 1);
+      el.dispatchEvent(new Event('change', { bubbles: true }));
+      sync();
+    };
+
+    btn.addEventListener('click', (e) => { e.stopPropagation(); toggle(); });
+    btn.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') { e.stopPropagation(); close(); }
+      else if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle(); }
+      else if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+        e.preventDefault();
+        if (list.classList.contains('hidden')) { open(); return; }
+        const step = e.key === 'ArrowDown' ? 1 : -1;
+        let i = curIndex() + step;
+        if (i < 0) i = el.options.length - 1;
+        if (i >= el.options.length) i = 0;
+        pickIndex(i);
+        open();
+      }
+    });
+    list.addEventListener('click', (e) => {
+      const item = e.target.closest('.category-dropdown-item');
+      if (!item || !item.dataset.i) return;
+      pickIndex(parseInt(item.dataset.i, 10));
+      close();
+    });
+    document.addEventListener('pointerdown', (e) => {
+      if (!list.classList.contains('hidden') && !wrap.contains(e.target)) close();
+    });
+    el.addEventListener('change', sync);
+    if (window.MutationObserver) new MutationObserver(() => sync()).observe(el, { childList: true, attributes: true, subtree: true });
+    sync();
+  },
+
+  upgradeAllSelects(root) {
+    const scope = root || document;
+    scope.querySelectorAll('select').forEach(s => this.upgradeSelect(s));
   },
 
   chartAccountsTx() {

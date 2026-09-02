@@ -100,7 +100,12 @@
         <div class="form-group"><label>Due Day (1-28)</label><input type="number" min="1" max="28" id="bill-dueDay" class="input" required></div>
         <div class="form-group"><label>Color</label><div style="display:flex;align-items:center;gap:10px;"><label style="font-size:13px;color:var(--text-dim);display:flex;align-items:center;gap:4px;"><input type="checkbox" id="bill-color-auto" checked onchange="BlackBook.billColorAutoChanged()"> AUTO</label><input type="color" id="bill-color" class="color-input" value="#888888" disabled></div></div>
         <div class="form-group"><label><input type="checkbox" id="bill-autopay" style="vertical-align:middle;"> AUTO-PAY</label></div>
-        <div class="form-group"><label>Category</label><select id="bill-category" class="input" required></select></div>
+        <div class="form-group"><label>Category</label>
+<div class="category-autocomplete" id="bill-category-autocomplete">
+  <input type="text" id="bill-category-input" class="input cat-pick-input" placeholder="CATEGORY..." autocomplete="off" readonly>
+  <input type="hidden" id="bill-category">
+  <div id="bill-category-dropdown" class="category-dropdown hidden"></div>
+</div></div>
         <div class="form-group"><label>Pay From</label><select id="bill-payfrom" class="input"></select></div>
         <div class="form-group"><label>Show in Graph</label><select id="bill-active" class="input"><option value="true">Yes</option><option value="false">No</option></select></div>
         <div class="form-actions">
@@ -192,6 +197,7 @@
         <button class="modal-close" onclick="BlackBook.closeModal('card-tx-modal')">&times;</button>
       </div>
       <form id="card-tx-form">
+        <input type="hidden" id="ctx-edit-id">
         <div class="form-group"><label>Credit Card</label><select id="ctx-card" class="input"></select></div>
         <div class="form-group"><label>Amount (RSD)</label><input type="text" inputmode="decimal" id="ctx-amount" class="input" required placeholder="e.g. 12000" autocomplete="off"></div>
         <div class="form-row-2col">
@@ -199,7 +205,12 @@
           <div class="form-group"><label>Installments</label><select id="ctx-months" class="input"><option value="1">1</option><option value="2">2</option><option value="3">3</option><option value="6">6</option><option value="12">12</option></select></div>
         </div>
         <div class="form-group"><label>Note</label><input type="text" id="ctx-note" class="input" placeholder="What did you buy?"></div>
-        <div class="form-group"><label>Category</label><select id="ctx-category" class="input"></select></div>
+        <div class="form-group"><label>Category</label>
+<div class="category-autocomplete" id="ctx-category-autocomplete">
+  <input type="text" id="ctx-category-input" class="input cat-pick-input" placeholder="CATEGORY..." autocomplete="off" readonly>
+  <input type="hidden" id="ctx-category">
+  <div id="ctx-category-dropdown" class="category-dropdown hidden"></div>
+</div></div>
         <div class="form-actions">
           <button type="button" class="btn btn-secondary" onclick="BlackBook.closeModal('card-tx-modal')">Cancel</button>
           <button type="submit" class="btn btn-primary">Purchase</button>
@@ -257,6 +268,12 @@
           <div class="form-group"><label>Date</label><input type="text" inputmode="numeric" id="debt-date" class="input" placeholder="DD/MM/YYYY" required autocomplete="off"></div>
           <div class="form-group"><label>Due Date</label><input type="text" inputmode="numeric" id="debt-due" class="input" placeholder="DD/MM/YYYY" autocomplete="off"></div>
         </div>
+        <div class="form-group"><label>Category</label>
+<div class="category-autocomplete" id="debt-category-autocomplete">
+  <input type="text" id="debt-category-input" class="input cat-pick-input" placeholder="CATEGORY..." autocomplete="off" readonly>
+  <input type="hidden" id="debt-category">
+  <div id="debt-category-dropdown" class="category-dropdown hidden"></div>
+</div></div>
         <div class="form-group"><label>Already Paid</label><input type="text" inputmode="decimal" id="debt-paid" class="input" placeholder="0" autocomplete="off"></div>
         <div class="form-group"><label>Note</label><input type="text" id="debt-note" class="input" placeholder="What was it for?"></div>
         <div class="form-actions">
@@ -307,6 +324,12 @@
           <div class="form-group"><label>Issue Date</label><input type="text" inputmode="numeric" id="invoice-date" class="input" placeholder="DD/MM/YYYY" required autocomplete="off"></div>
           <div class="form-group"><label>Due Date</label><input type="text" inputmode="numeric" id="invoice-due" class="input" placeholder="DD/MM/YYYY" autocomplete="off"></div>
         </div>
+        <div class="form-group"><label>Category</label>
+<div class="category-autocomplete" id="invoice-category-autocomplete">
+  <input type="text" id="invoice-category-input" class="input cat-pick-input" placeholder="CATEGORY..." autocomplete="off" readonly>
+  <input type="hidden" id="invoice-category">
+  <div id="invoice-category-dropdown" class="category-dropdown hidden"></div>
+</div></div>
         <div class="form-group"><label>Line Items</label>
           <div id="inv-lines"></div>
           <div style="display:flex;justify-content:space-between;align-items:center;margin-top:6px;">
@@ -315,6 +338,13 @@
           </div>
         </div>
         <div class="form-group"><label>Note</label><input type="text" id="invoice-note" class="input" placeholder="Optional note"></div>
+        <div class="form-group"><label>Invoice File</label>
+          <div style="display:flex;gap:6px;align-items:center;">
+            <button type="button" id="invoice-file-btn" class="btn btn-sm btn-secondary">+ ATTACH FILE</button>
+            <span id="invoice-file-name" style="flex:1;min-width:0;font-size:12px;color:var(--text-dim);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"></span>
+            <input type="file" id="invoice-file-input" style="display:none;">
+          </div>
+        </div>
         <div class="form-actions">
           <button type="button" class="btn btn-secondary" onclick="BlackBook.closeModal('invoice-modal')">Cancel</button>
           <button type="submit" class="btn btn-primary">Save</button>
@@ -387,6 +417,7 @@
       <div id="merge-summary" style="font-size:13px;color:var(--text-dim);margin:8px 0;"></div>
       <div class="form-actions">
         <button type="button" class="btn btn-secondary" onclick="BlackBook.closeModal('merge-modal'); BlackBook.bulkClear();">Cancel</button>
+        <button type="button" class="btn btn-paid" id="merge-transfer-btn" onclick="BlackBook.mergeAsTransfer()" style="display:none;" title="Turn the 2 selected transactions into a transfer between their accounts">AS TRANSFER</button>
         <button type="button" class="btn btn-primary" onclick="BlackBook.submitMerge()">Merge</button>
       </div>
     </div>
@@ -577,6 +608,7 @@
   </footer>
 
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <script src="/js/core.js"></script>
   <script src="/js/page-overview.js"></script>
   <script src="/js/page-transactions.js"></script>
