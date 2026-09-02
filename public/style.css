@@ -1437,9 +1437,14 @@ select:disabled {
 
 /* ===== ACCOUNT CHIPS ===== */
 .account-chips {
+  position: relative;
+  margin-bottom: 20px;
+}
+
+.account-chips-row {
   display: flex;
   gap: 0;
-  margin-bottom: 20px;
+  flex-wrap: wrap;
 }
 
 .account-chip {
@@ -1476,6 +1481,90 @@ select:disabled {
 
 .account-chip.selected .chip-name { color: var(--on-fill); }
 .account-chip.selected .chip-balance { color: rgba(0,0,0,0.6); }
+
+/* Compact tiles: single-line NAME — AMOUNT, used when >5 accounts split across rows */
+.account-chip.chip-compact {
+  flex-direction: row;
+  justify-content: center;
+  gap: 8px;
+  white-space: nowrap;
+  overflow: hidden;
+}
+.account-chip.chip-compact .chip-name {
+  letter-spacing: 2px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 55%;
+}
+.account-chip.chip-compact .chip-name::after { content: '\2014'; margin-left: 8px; color: inherit; opacity: 0.5; }
+.account-chip.chip-compact .chip-balance {
+  font-size:15px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  letter-spacing: 0.5px;
+}
+
+/* Permanent OVERVIEW tile */
+.account-chip.ov-chip { max-width: 150px; }
+
+/* Account manager square at the end of the row */
+.account-chip.account-mgr-square {
+  flex: 0 0 auto;
+  width: 44px;
+  max-height: 100%;
+  padding: 4px 0;
+  border-left: 1px solid var(--divider);
+}
+.account-chip.account-mgr-square .chip-name { letter-spacing: 0; font-size: 22px; line-height: 1; }
+
+/* Account manager popover */
+.accounts-panel {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 6px);
+  z-index: 60;
+  width: 340px;
+  max-height: 70vh;
+  overflow-y: auto;
+  background: var(--modal-bg);
+  border: 1px solid var(--divider);
+  box-shadow: var(--shadow-pop);
+  padding: 8px;
+}
+.accounts-panel.hidden { display: none; }
+.accounts-panel-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: var(--text-muted);
+  padding: 4px 6px 8px;
+}
+.ap-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--divider);
+}
+.ap-row:last-child { border-bottom: none; }
+.ap-swatch { width: 14px; height: 14px; border-radius: 3px; flex-shrink: 0; }
+.ap-name { font-weight: 600; font-size: 13px; color: var(--text); }
+.ap-desc { font-size: 11px; color: var(--text-muted); }
+.ap-name-wrap { flex: 1; overflow: hidden; }
+.ap-actions { display: flex; gap: 4px; align-items: center; }
+.ap-btn { background: none; border: none; cursor: pointer; color: var(--text-muted); font-size: 14px; padding: 2px 4px; line-height: 1; }
+.ap-btn:hover { color: var(--text); }
+.ap-btn.ap-hidden { color: var(--expense); }
+.ap-row.ap-dim .ap-name, .ap-row.ap-dim .ap-desc, .ap-row.ap-dim .ap-swatch { opacity: 0.4; }
+.ap-footer {
+  display: flex;
+  gap: 8px;
+  padding: 8px 6px 2px;
+}
 
 /* ===== FILTER BAR ===== */
 .filter-bar {
@@ -1853,6 +1942,24 @@ select:disabled {
   overflow: hidden;
   text-overflow: ellipsis;
 }
+
+.settings-row-name-wrap {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  line-height: 1.2;
+}
+.settings-row-name-wrap .settings-row-name { flex: none; }
+.settings-row-desc {
+  font-size:11px;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.settings-row:has(.settings-row-desc) { height: auto; min-height: 32px; padding: 4px 8px; }
 
 .settings-row-meta {
   font-size:11px;

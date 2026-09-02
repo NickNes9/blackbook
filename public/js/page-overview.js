@@ -12,7 +12,8 @@ Object.assign(window.BlackBook, {
         ? '<div class="list-sep"></div><div class="graph-show-row"><button class="btn btn-sm btn-secondary" onclick="BlackBook.toggleOverviewGraph()">SHOW GRAPH</button></div>'
         : '<div class="list-sep"></div><div class="overview-charts"><div class="chart-panel overview-line-panel"><div class="chart-head-row"><span class="chart-title-text">INCOME VS EXPENSES</span><button class="btn btn-sm btn-secondary" onclick="BlackBook.toggleOverviewGraph()" title="Hide graph (H)">HIDE</button></div><canvas id="overview-line-chart"></canvas></div></div>');
     this.bindBarTooltip(el);
-    setTimeout(() => { this.fitElems('.account-chip .chip-name'); this.fitElems('.account-chip .chip-balance'); }, 20);
+    this.bindAccountsPanelDismiss();
+    setTimeout(() => { if (this.visibleAccounts().length <= 5) { this.fitElems('.account-chip .chip-name'); this.fitElems('.account-chip .chip-balance'); } }, 20);
     if (!hideGraph) setTimeout(() => { this.renderOverviewLineChart(); }, 50);
   },
 
@@ -356,13 +357,110 @@ Object.assign(window.BlackBook, {
 
   accountCardsHtml() {
     const allSelected = !this.selectedAccount;
-    let html = '<div class="account-chips"><div class="account-chip' + (allSelected ? ' selected' : '') + '" onclick="BlackBook.selectAccount(null)"><span class="chip-name">OVERVIEW</span></div>';
-    for (const a of this.visibleAccounts()) {
+    const accts = this.visibleAccounts();
+    const split = accts.length > 5;
+    const chip = (a) => {
       const { amount: bal, currency } = this.accountBalanceNative(a.id);
       const sel = this.selectedAccount === a.id;
-      html += '<div class="account-chip' + (sel ? ' selected' : '') + '" onclick="BlackBook.selectAccount(\x27' + a.id + '\x27)"><span class="chip-name">' + this.escapeHtml(a.name) + '</span><span class="chip-balance ' + (bal < 0 ? 'amount-negative' : 'amount-positive') + '">' + this.fmtAmount(bal, currency) + '</span></div>';
+      const label = split ? (a.shortName || a.name || '?') : (a.name || a.shortName || '?');
+      const compact = split ? ' chip-compact' : '';
+      const full = a.name || label;
+      const titleAttr = (split && full && full !== label ? full : '') + (a.description ? ((split && full && full !== label ? ' \u2014 ' : '') + a.description) : '');
+      const amt = '<span class="chip-balance ' + (bal < 0 ? 'amount-negative' : 'amount-positive') + '">' + this.fmtAmount(bal, currency) + '</span>';
+      return '<div class="account-chip' + (sel ? ' selected' : '') + compact + '" onclick="BlackBook.selectAccount(\x27' + a.id + '\x27)' + (titleAttr ? '" title="' + this.escapeHtml(titleAttr) : '') + '"><span class="chip-name">' + this.escapeHtml(label) + '</span>' + amt + '</div>';
+    };
+    const overviewChip = '<div class="account-chip ov-chip' + (allSelected ? ' selected' : '') + (split ? ' chip-compact' : '') + '" onclick="BlackBook.selectAccount(null)"><span class="chip-name">OVERVIEW</span></div>';
+    const squareChip = '<div class="account-chip account-mgr-square" onclick="BlackBook.toggleAccountsPanel(event)" title="Manage accounts"><span class="chip-name">&vellip;</span></div>';
+
+    let html;
+    if (split) {
+      const rowGroups = [];
+      for (let i = 0; i < accts.length; i += 5) rowGroups.push(accts.slice(i, i + 5));
+      rowGroups[0].unshift(null); // placeholder for OVERVIEW at start of first row
+      rowGroups[rowGroups.length - 1].push('__SQUARE__');
+      html = rowGroups.map(r => '<div class="account-chips-row">' + r.map((x) => {
+        if (x === null) return overviewChip;
+        if (x === '__SQUARE__') return squareChip;
+        return chip(x);
+      }).join('') + '</div>').join('');
+    } else {
+      html = '<div class="account-chips-row">' + overviewChip + accts.map(chip).join('') + squareChip + '</div>';
     }
-    return html + '</div>';
+    return '<div class="account-chips">' + html + '</div>';
+  },
+
+  toggleAccountsPanel(ev) {
+    if (ev) { ev.stopPropagation(); }
+    this._accountsPanelOpen = !this._accountsPanelOpen;
+    this.syncAccountsPanel();
+  },
+
+  bindAccountsPanelDismiss() {
+    if (this._accountsPanelDismissBound) return;
+    this._accountsPanelDismissBound = true;
+    document.addEventListener('pointerdown', (e) => {
+      if (!this._accountsPanelOpen) return;
+      if (e.target.closest('.account-mgr-square')) return;
+      if (e.target.closest('.accounts-panel')) return;
+      this.closeAccountsPanel();
+    });
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && this._accountsPanelOpen) this.closeAccountsPanel();
+    });
+  },
+
+  syncAccountsPanel() {
+    const container = document.querySelector('.account-chips');
+    if (!container) return;
+    let panel = document.getElementById('accounts-panel');
+    if (this._accountsPanelOpen) {
+      if (!panel) {
+        panel = document.createElement('div');
+        panel.id = 'accounts-panel';
+        panel.className = 'accounts-panel';
+        container.appendChild(panel);
+      }
+      this.renderAccountsPanel(panel);
+    } else if (panel) {
+      panel.remove();
+      panel = null;
+    }
+  },
+
+  renderAccountsPanel(panel) {
+    const accts = this.data.accounts.filter(a => a.type !== 'credit' && a.type !== 'creditcard');
+    const rows = accts.map((a, i) => {
+      const dim = a.hidden ? ' ap-dim' : '';
+      const eye = a.hidden
+        ? '<button class="ap-btn ap-hidden" title="Show account" onclick="BlackBook.setAccountHidden(\x27' + a.id + '\x27,false)">&#128065;</button>'
+        : '<button class="ap-btn" title="Hide account" onclick="BlackBook.setAccountHidden(\x27' + a.id + '\x27,true)">&#128065;</button>';
+      const up = i > 0 ? '<button class="ap-btn" title="Move up" onclick="BlackBook.moveAccount(\x27' + a.id + '\x27,-1)">&#9650;</button>' : '<span class="ap-btn" style="opacity:0.3">&#9650;</span>';
+      const down = i < accts.length - 1 ? '<button class="ap-btn" title="Move down" onclick="BlackBook.moveAccount(\x27' + a.id + '\x27,1)">&#9660;</button>' : '<span class="ap-btn" style="opacity:0.3">&#9660;</span>';
+      const desc = a.description ? '<div class="ap-desc">' + this.escapeHtml(a.description) + '</div>' : '';
+      return '<div class="ap-row' + dim + '"><span class="ap-swatch" style="background:' + (a.color || '#52525b') + '"></span>' +
+        '<div class="ap-name-wrap"><span class="ap-name">' + this.escapeHtml(a.name) + '</span>' + desc + '</div>' +
+        '<div class="ap-actions">' + up + down + eye + '</div></div>';
+    }).join('');
+    panel.innerHTML =
+      '<div class="accounts-panel-head"><span>Accounts</span><button class="ap-btn" onclick="BlackBook.closeAccountsPanel()" title="Close">&times;</button></div>' +
+      rows +
+      '<div class="ap-footer"><button class="btn btn-sm btn-primary" onclick="BlackBook.closeAccountsPanel();BlackBook.openNewAccount()">+ ADD</button>' +
+      '<button class="btn btn-sm btn-secondary" onclick="BlackBook.closeAccountsPanel();BlackBook.navigateTo(\x27settings\x27)">MANAGE IN SETTINGS</button></div>';
+  },
+
+  closeAccountsPanel() {
+    this._accountsPanelOpen = false;
+    this.syncAccountsPanel();
+  },
+
+  async setAccountHidden(id, hidden) {
+    const acc = this.data.accounts.find(a => a.id === id);
+    if (!acc) return;
+    acc.hidden = !!hidden;
+    if (this.selectedAccount === id) this.selectedAccount = null;
+    await this.save();
+    this.renderPage(this.currentPage);
+    this.syncAccountsPanel();
   },
 
   renderOverviewLineChart() {

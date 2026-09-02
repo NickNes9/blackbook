@@ -168,7 +168,8 @@
       </div>
       <form id="settings-account-form">
         <input type="hidden" id="settings-account-id">
-        <div class="form-group"><label>Name</label><input type="text" id="settings-account-name" class="input" required></div>
+        <div class="form-group"><label>Name</label><input type="text" id="settings-account-name" class="input" maxlength="12" required></div>
+        <div class="form-group"><label>Description</label><input type="text" id="settings-account-description" class="input" placeholder="Optional short description"></div>
         <div class="form-group"><label>Short Name</label><input type="text" id="settings-account-shortname" class="input" placeholder="e.g. DB" maxlength="3"></div>
         <div class="form-group"><label>Color</label><input type="color" id="settings-account-color" class="color-input" value="#f5a623"></div>
         <div class="form-group"><label>Currency</label><select id="settings-account-currency" class="input"><option value="RSD">RSD</option><option value="EUR">EUR</option><option value="USD">USD</option><option value="XAU">XAU (GOLD)</option></select></div>
