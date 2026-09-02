@@ -437,9 +437,9 @@ Object.assign(window.BlackBook, {
           }
           if (idVal) {
             const acc = this.data.accounts.find(a => a.id === idVal);
-            if (acc) Object.assign(acc, { name: name, shortName: shortName, color: color, currency: currency, type: type, foreignFee: extra.foreignFee });
+            if (acc) Object.assign(acc, { name: name, shortName: shortName, color: color, currency: currency, type: type, foreignFee: extra.foreignFee, description: document.getElementById('settings-account-description').value.trim() || undefined });
           } else {
-            this.data.accounts.push(Object.assign({ id: crypto.randomUUID(), name: name, shortName: shortName, color: color, currency: currency, type: type }, extra));
+            this.data.accounts.push(Object.assign({ id: crypto.randomUUID(), name: name, shortName: shortName, color: color, currency: currency, type: type, description: document.getElementById('settings-account-description').value.trim() || undefined }, extra));
           }
         }
         await this.save();
@@ -481,6 +481,7 @@ Object.assign(window.BlackBook, {
   openNewAccount() {
     document.getElementById('settings-account-id').value = '';
     document.getElementById('settings-account-name').value = '';
+    document.getElementById('settings-account-description').value = '';
     document.getElementById('settings-account-shortname').value = '';
     document.getElementById('settings-account-color').value = this.nextCategoryColor();
     document.getElementById('settings-account-currency').value = 'RSD';
@@ -499,6 +500,7 @@ Object.assign(window.BlackBook, {
     if (!acc) return;
     document.getElementById('settings-account-id').value = acc.id;
     document.getElementById('settings-account-name').value = acc.name;
+    document.getElementById('settings-account-description').value = acc.description || '';
     document.getElementById('settings-account-shortname').value = acc.shortName || '';
     document.getElementById('settings-account-color').value = acc.color;
     document.getElementById('settings-account-currency').value = acc.currency;
@@ -516,6 +518,7 @@ Object.assign(window.BlackBook, {
     if (!card) return;
     document.getElementById('settings-account-id').value = 'card:' + cardId;
     document.getElementById('settings-account-name').value = card.name;
+    document.getElementById('settings-account-description').value = '';
     document.getElementById('settings-account-shortname').value = card.shortName || '';
     document.getElementById('settings-account-color').value = card.color || '#71717a';
     document.getElementById('settings-account-currency').value = 'RSD';
@@ -534,7 +537,8 @@ Object.assign(window.BlackBook, {
     if (i < 0 || j < 0 || j >= arr.length) return;
     const tmp = arr[i]; arr[i] = arr[j]; arr[j] = tmp;
     await this.save();
-    this.renderSettings();
+    this.renderPage(this.currentPage);
+    if (this.syncAccountsPanel) this.syncAccountsPanel();
   },
 
   async deleteAccount(id) {
@@ -577,7 +581,7 @@ Object.assign(window.BlackBook, {
       const canDown = arrIdx < this.data.accounts.length - 1;
       accountsList += '<div class="settings-row">' +
         '<span class="row-swatch" style="background:' + a.color + ';"></span>' +
-        '<span class="settings-row-name">' + this.escapeHtml(a.name) + '</span>' +
+        '<div class="settings-row-name-wrap"><span class="settings-row-name">' + this.escapeHtml(a.name) + '</span>' + (a.description ? '<span class="settings-row-desc">' + this.escapeHtml(a.description) + '</span>' : '') + '</div>' +
         '<span class="settings-row-meta">' + a.currency + ' &middot; ' + typeLabel + '</span>' +
         '<span class="settings-row-order">' +
         '<button type="button" class="btn btn-sm btn-secondary" ' + (canUp ? 'onclick="BlackBook.moveAccount(\x27' + a.id + '\x27,-1)"' : 'disabled') + ' title="Move up">&uarr;</button>' +
