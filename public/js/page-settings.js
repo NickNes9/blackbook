@@ -584,8 +584,8 @@ Object.assign(window.BlackBook, {
         '<div class="settings-row-name-wrap"><span class="settings-row-name">' + this.escapeHtml(a.name) + '</span>' + (a.description ? '<span class="settings-row-desc">' + this.escapeHtml(a.description) + '</span>' : '') + '</div>' +
         '<span class="settings-row-meta">' + a.currency + ' &middot; ' + typeLabel + '</span>' +
         '<span class="settings-row-order">' +
-        '<button type="button" class="btn btn-sm btn-secondary" ' + (canUp ? 'onclick="BlackBook.moveAccount(\x27' + a.id + '\x27,-1)"' : 'disabled') + ' title="Move up">&uarr;</button>' +
-        '<button type="button" class="btn btn-sm btn-secondary" ' + (canDown ? 'onclick="BlackBook.moveAccount(\x27' + a.id + '\x27,1)"' : 'disabled') + ' title="Move down">&darr;</button>' +
+        '<button type="button" class="btn btn-sm btn-secondary" ' + (canUp ? 'onclick="BlackBook.moveAccount(\x27' + a.id + '\x27,-1)"' : 'disabled') + ' title="Move up">&#9650;</button>' +
+        '<button type="button" class="btn btn-sm btn-secondary" ' + (canDown ? 'onclick="BlackBook.moveAccount(\x27' + a.id + '\x27,1)"' : 'disabled') + ' title="Move down">&#9660;</button>' +
         '</span>' +
         '<button class="btn btn-sm btn-secondary" onclick="BlackBook.openEditAccount(\x27' + a.id + '\x27)">EDIT</button>' +
         '<button class="btn btn-sm btn-danger" onclick="BlackBook.deleteAccount(\x27' + a.id + '\x27)">DEL</button></div>';
