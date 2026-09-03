@@ -1742,27 +1742,16 @@ window.BlackBook = {
     if (this._chartResizeBound) return;
     this._chartResizeBound = true;
     const HIDE_PX = 40;
+    const DRAG_PX = 6;
     document.addEventListener('mousedown', (e) => {
       const canvas = e.target.closest('.chart-panel canvas, .chart-panel-full canvas');
       if (!canvas) return;
       const panel = canvas.closest('.chart-panel, .chart-panel-full');
       if (!panel) return;
-      e.preventDefault();
       const startY = e.clientY;
       const startH = panel.offsetHeight;
-      const startTop = panel.getBoundingClientRect().top;
-      panel.classList.add('chart-panel-resizing');
+      let dragged = false;
       let hidden = false;
-      let scroller = null;
-      let scrollerTop = 0;
-      let scrollerOverflow = '';
-      const sc = panel.closest('.page-scroll-wrap, .tx-list-wrap');
-      if (sc) {
-        scroller = sc;
-        scrollerTop = sc.scrollTop;
-        scrollerOverflow = sc.style.overflow;
-        sc.style.overflow = 'hidden';
-      }
       const doHide = () => {
         if (hidden) return;
         hidden = true;
@@ -1770,33 +1759,34 @@ window.BlackBook = {
         const fn = this._hideFnForPanel(panel);
         if (fn) this[fn]();
       };
-      const doRestore = () => {
-        if (scroller) {
-          scroller.style.overflow = scrollerOverflow;
-          scroller.scrollTop = scrollerTop;
-          scroller = null;
-        }
-      };
-      const onMove = (ev) => {
-        ev.preventDefault();
-        const delta = startY - ev.clientY;
-        let newH = startH + delta;
-        if (newH < HIDE_PX) { doHide(); return; }
-        const maxH = Math.max(HIDE_PX, window.innerHeight - startTop - 20);
-        if (newH > startH) newH = Math.min(newH, maxH);
-        if (newH < HIDE_PX) newH = HIDE_PX;
-        panel.style.height = newH + 'px';
-        if (scroller) scroller.scrollTop = scrollerTop;
-      };
-      const onUp = () => {
+      const cleanup = () => {
         document.removeEventListener('mousemove', onMove);
         document.removeEventListener('mouseup', onUp);
+        window.removeEventListener('blur', cleanup);
         panel.classList.remove('chart-panel-resizing');
-        doRestore();
-        if (!hidden && panel.offsetHeight <= 0) doHide();
+      };
+      const onMove = (ev) => {
+        const delta = startY - ev.clientY;
+        if (!dragged) {
+          if (Math.abs(delta) < DRAG_PX) return;
+          dragged = true;
+          ev.preventDefault();
+        }
+        let newH = startH + delta;
+        if (newH < HIDE_PX) { doHide(); cleanup(); return; }
+        const top = panel.getBoundingClientRect().top;
+        const maxH = Math.max(HIDE_PX, window.innerHeight - top - 20);
+        newH = Math.min(newH, maxH);
+        if (newH < HIDE_PX) newH = HIDE_PX;
+        panel.style.height = newH + 'px';
+      };
+      const onUp = () => {
+        cleanup();
+        if (!dragged && panel.offsetHeight <= 0) doHide();
       };
       document.addEventListener('mousemove', onMove);
       document.addEventListener('mouseup', onUp);
+      window.addEventListener('blur', cleanup);
     });
   },
 
