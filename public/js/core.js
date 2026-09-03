@@ -1774,11 +1774,13 @@ window.BlackBook = {
         }
         let newH = startH + delta;
         if (newH < HIDE_PX) { doHide(); cleanup(); return; }
-        const top = panel.getBoundingClientRect().top;
-        const maxH = Math.max(HIDE_PX, Math.min(window.innerHeight * 0.65, window.innerHeight - top - 20));
-        newH = Math.min(newH, maxH);
+        const pctMax = Math.max(HIDE_PX, window.innerHeight * 0.65);
+        newH = Math.min(newH, pctMax);
         if (newH < HIDE_PX) newH = HIDE_PX;
         panel.style.height = newH + 'px';
+        const br = panel.getBoundingClientRect();
+        const over = br.bottom - (window.innerHeight - 4);
+        if (over > 0) panel.style.height = Math.max(HIDE_PX, br.height - over) + 'px';
       };
       const onUp = () => {
         cleanup();
