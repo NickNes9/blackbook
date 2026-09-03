@@ -1296,12 +1296,20 @@ select:disabled {
   max-height: min(600px, calc(100vh - 180px));
   display: flex;
   flex-direction: column;
+  overflow: hidden;
 }
 .chart-panel-resizing { user-select: none; }
 
 .chart-panel canvas {
   width: 100% !important;
   height: 100% !important;
+}
+
+.overview-line-panel canvas {
+  flex: 1 1 auto;
+  min-height: 0;
+  height: auto !important;
+  width: 100% !important;
 }
 
 /* ===== PAGE TOOLBAR ===== */
@@ -2362,6 +2370,7 @@ h1, h2, h3 {
   min-height: 0;
   max-height: min(600px, calc(100vh - 180px));
   margin-bottom: 20px;
+  overflow: hidden;
 }
 
 /* ===== BILLS GRID ===== */
