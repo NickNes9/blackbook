@@ -1294,7 +1294,7 @@ select:disabled {
   position: relative;
   height: 180px;
   min-height: 0;
-  max-height: min(600px, calc(100vh - 180px));
+  max-height: calc(100vh * 0.75);
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -2369,7 +2369,7 @@ h1, h2, h3 {
   width: 100%;
   height: 180px;
   min-height: 0;
-  max-height: min(600px, calc(100vh - 180px));
+  max-height: calc(100vh * 0.75);
   margin-bottom: 20px;
   overflow: hidden;
 }
