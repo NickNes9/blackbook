@@ -550,12 +550,12 @@ Object.assign(window.BlackBook, {
         },
         scales: {
           x: {
-            ticks: { color: '#888888', maxRotation: 0, autoSkip: false },
+            ticks: { color: '#888888', maxRotation: 0, autoSkip: false, font: { size: 11 } },
             grid: { color: '#2a2a2a', drawBorder: false },
             border: { display: false }
           },
           y: {
-            ticks: { color: '#888888', callback: (v) => v >= 1000 ? (v/1000).toFixed(0)+'k' : v },
+            ticks: { color: '#888888', font: { size: 11 }, callback: (v) => v >= 1000 ? (v/1000).toFixed(0)+'k' : v },
             grid: { color: '#2a2a2a', drawBorder: false },
             border: { display: false }
           }
