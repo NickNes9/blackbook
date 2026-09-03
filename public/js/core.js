@@ -1763,7 +1763,7 @@ window.BlackBook = {
         const delta = startY - ev.clientY;
         let newH = startH + delta;
         if (newH < HIDE_PX) { doHide(); return; }
-        const maxH = Math.min(window.innerHeight - 150, 600);
+        const maxH = Math.min(window.innerHeight - 180, 600);
         newH = Math.min(newH, maxH);
         if (newH < HIDE_PX) newH = HIDE_PX;
         panel.style.height = newH + 'px';
