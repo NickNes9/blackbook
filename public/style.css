@@ -1955,8 +1955,11 @@ select:disabled {
 }
 
 .budget-bar-fill {
-  position: relative;
-  height: 100%;
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 1;
   transition: width 0.3s ease;
   overflow: hidden;
 }
@@ -1971,6 +1974,7 @@ select:disabled {
   left: 0;
   right: 0;
   bottom: 0;
+  z-index: 3;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1988,6 +1992,7 @@ select:disabled {
   left: 0;
   right: 0;
   bottom: 0;
+  z-index: 2;
   display: flex;
   align-items: center;
   justify-content: center;
