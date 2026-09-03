@@ -718,7 +718,7 @@ Object.assign(window.BlackBook, {
       '<input type="file" id="settings-import-csv-file" accept=".csv,.txt,.xlsx,.xls,text/csv,text/plain,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel" style="display:none;">' +
       '</div></div>' +
 
-      '<div class="settings-footer">BLACK BOOK v0.7.0 &middot; Created by Nikola Ne&scaron;i&#263;</div>';
+      '<div class="settings-footer">BLACK BOOK v0.7.3 &middot; Created by Nikola Ne&scaron;i&#263;</div>';
   },
 
   async refreshRate(code) {
