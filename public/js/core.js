@@ -1750,6 +1750,8 @@ window.BlackBook = {
       if (!panel) return;
       const startY = e.clientY;
       const startH = panel.offsetHeight;
+      const startBottom = panel.getBoundingClientRect().bottom;
+      const pinBottom = Math.min(startBottom, window.innerHeight - 4);
       let dragged = false;
       let hidden = false;
       const doHide = () => {
@@ -1779,8 +1781,8 @@ window.BlackBook = {
         if (newH < HIDE_PX) newH = HIDE_PX;
         panel.style.height = newH + 'px';
         const br = panel.getBoundingClientRect();
-        const over = br.bottom - (window.innerHeight - 4);
-        if (over > 0) panel.style.height = Math.max(HIDE_PX, br.height - over) + 'px';
+        const drift = br.bottom - pinBottom;
+        if (Math.abs(drift) > 1) panel.style.height = Math.max(HIDE_PX, br.height - drift) + 'px';
       };
       const onUp = () => {
         cleanup();
