@@ -45,6 +45,7 @@ Object.assign(window.BlackBook, {
           '<div class="overview-charts"><div class="chart-panel chart-panel-full"><canvas id="bills-chart"></canvas></div></div>');
     if (!hideGraph) setTimeout(() => this.renderBillsChart(), 50);
     setTimeout(() => this.fitElems('.bill-cell'), 20);
+    this.finishFocus('bill');
   },
 
   async toggleBillsGraph() {
@@ -107,7 +108,7 @@ Object.assign(window.BlackBook, {
         }
         yearHasPaid = true;
       }
-      html += '<div class="bill-cell-label' + alt + (bill.active ? '' : ' inactive') + '">' +
+      html += '<div class="bill-cell-label' + alt + (bill.active ? '' : ' inactive') + this.focusRecordHtml('bill', bill.id) + '">' +
         '<span class="bill-name-line"><span class="cat-dot" style="background:' + color + ';"></span><span class="bill-name-text">' + this.escapeHtml(bill.name) + '</span><span class="bill-due-day">' + this.ordinalDay(bill.dueDay) + '</span></span>' +
         '<span class="bill-actions-mini">' +
         '<button class="btn btn-sm ' + (bill.autopay ? 'btn-primary' : 'btn-muted') + '" onclick="BlackBook.toggleBillAutopay(\x27' + bill.id + '\x27)" title="Auto-mark upcoming months as paid">' + (bill.autopay ? 'AUTO' : 'MAN') + '</button>' +
@@ -451,6 +452,7 @@ Object.assign(window.BlackBook, {
         }),
         borderColor: hc,
         backgroundColor: hc,
+        fill: false,
         tension: 0.3,
         borderWidth: 2.5,
         pointRadius: 2
@@ -484,6 +486,7 @@ Object.assign(window.BlackBook, {
         }),
         borderColor: this.billColor(bill),
         backgroundColor: this.billColor(bill),
+        fill: false,
         tension: 0.3,
         borderWidth: 2,
         pointRadius: 3

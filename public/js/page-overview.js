@@ -343,15 +343,34 @@ Object.assign(window.BlackBook, {
         const editFn = card ? 'openEditCardTx' : 'openEditTransaction';
         let billChip = '';
         let catLink = '';
-        if (tx.type === 'expense') {
-          const lBill = this.linkedBillForTx(tx);
-          if (lBill) {
-            billChip = '<span class="bill-link-chip is-linked" title="Linked to bill: ' + this.escapeHtml(lBill.name) + '">' + this.escapeHtml(lBill.name) + '</span>';
-            catLink = '<span class="tx-link-badge" title="Linked to bill: ' + this.escapeHtml(lBill.name) + '">B</span>';
-          } else {
-            const mBill = this.matchingUnpaidBill(tx);
-            if (mBill) billChip = '<button class="btn btn-sm bill-link-chip" title="Match unpaid bill: ' + this.escapeHtml(mBill.name) + '" onclick="event.stopPropagation();BlackBook.linkTxToBill(\x27' + tx.id + '\x27)">BILL: ' + this.escapeHtml(mBill.name) + '</button>';
+        const ltype = this.linkedRecordType(tx);
+        if (ltype) {
+          let label = '';
+          let full = '';
+          if (ltype === 'bill') {
+            const lBill = this.linkedBillForTx(tx);
+            if (lBill) { label = lBill.name; full = 'Linked to bill: ' + lBill.name; }
+          } else if (ltype === 'debt') {
+            const lDebt = this.debtForPaymentTx(tx.id);
+            if (lDebt) { label = (lDebt.type === 'in' ? '\u2192 ' : '\u2190 ') + (lDebt.person || ''); full = 'Linked to debt: ' + (lDebt.person || ''); }
+          } else if (ltype === 'invoice') {
+            const lInv = this.invoiceForPaymentTx(tx.id);
+            if (lInv) { label = (lInv.invoice.number || lInv.invoice.party || 'invoice'); full = 'Linked to invoice: ' + (lInv.invoice.number || lInv.invoice.party || ''); }
+          } else if (ltype === 'savings') {
+            const lSav = this.savingsForTx(tx.id);
+            if (lSav) { label = lSav.goal.name || 'savings'; full = 'Linked to savings: ' + (lSav.goal.name || ''); }
+          } else if (ltype === 'card') {
+            const lCard = this.cardById && this.cardById(tx.cardId);
+            label = (lCard ? lCard.name : 'card') + (tx.installId ? ' (plan)' : '');
+            full = 'Linked to credit card' + (tx.installId ? ' purchase plan' : '');
           }
+          if (label) {
+            billChip = '<button class="bill-link-chip is-linked" title="' + this.escapeHtml(full) + '" onclick="event.stopPropagation();BlackBook.navigateToRecord(\x27' + ltype + '\x27,\x27' + tx.id + '\x27)">' + this.escapeHtml(label) + '</button>';
+            catLink = '<span class="tx-link-badge" style="color:' + this.categoryColor(cat) + '" title="' + this.escapeHtml(full) + '"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8.2" r="3.4"/><circle cx="12" cy="15.8" r="3.4"/><path d="M12 11.6 v0.8"/></svg></span>';
+          }
+        } else if (tx.type === 'expense') {
+          const mBill = this.matchingUnpaidBill(tx);
+          if (mBill) billChip = '<button class="btn btn-sm bill-link-chip" title="Match unpaid bill: ' + this.escapeHtml(mBill.name) + '" onclick="event.stopPropagation();BlackBook.linkTxToBill(\x27' + tx.id + '\x27)">BILL: ' + this.escapeHtml(mBill.name) + '</button>';
         }
         rows += '<div class="tx-row' + (this._bulkSel && this._bulkSel.has(tx.id) ? ' bulk-selected' : '') + '" onclick="BlackBook.bulkToggle(\x27' + tx.id + '\x27, event.shiftKey)" onmouseenter="BlackBook.hoveredTxId=\x27' + tx.id + '\x27" onmouseleave="BlackBook.hoveredTxId=null"><span class="tx-num">' + rowNum + '</span><div class="tx-acct-stripe" style="background:' + this.accountColor(acc) + '"><span class="tx-acct-label">' + this.escapeHtml((acc.shortName || '?').toUpperCase()) + '</span></div><span class="tx-date">' + this.fmtDateInput(tx.date) + '</span><span class="tx-cat" style="color:' + this.categoryColor(cat) + '">' + this.escapeHtml(cat.name) + catLink + '</span><span class="tx-note">' + this.escapeHtml(tx.note || '') + '</span><span class="tx-actions" onclick="event.stopPropagation()">' + billChip + '<button class="btn btn-sm btn-secondary" onclick="BlackBook.' + editFn + '(\x27' + tx.id + '\x27)">EDIT</button><button class="btn btn-sm btn-danger" onclick="BlackBook.deleteTransaction(\x27' + tx.id + '\x27)">DEL</button></span><span class="tx-amt ' + amtClass + wtClass + '">' + txAmtDisplay + '</span></div>';
       }
@@ -517,7 +536,7 @@ Object.assign(window.BlackBook, {
       options: {
         responsive: true,
         maintainAspectRatio: false,
-        layout: { padding: { left: 8, right: 8, top: 8, bottom: 8 } },
+        layout: { padding: { left: 8, right: 8, top: 8, bottom: 0 } },
         plugins: {
           legend: { display: false },
           title: { display: false },

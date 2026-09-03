@@ -10,9 +10,18 @@ Object.assign(window.BlackBook, {
       '<div class="list-sep"></div>' +
       '<div class="page-scroll-wrap"><div class="cat-label" style="margin-bottom:8px;">GOALS</div>' +
       this.savingsGoalsHtml() + '</div>';
+    this.finishFocus('savings');
   },
 
   goalSaved(goal) { return (goal.entries || []).reduce((s, e) => s + e.amount, 0); },
+
+  async openSavingsEntries(goalId) {
+    const goal = this.data.savingsGoals.find(g => g.id === goalId);
+    if (!goal) return;
+    const first = (goal.entries || [].slice()).slice().sort((a, b) => b.date.localeCompare(a.date))[0];
+    if (first && first.date) this.syncViewToDate(first.date);
+    this.navigateTo('overview');
+  },
 
   savingsSummaryHtml() {
     let totalSaved = 0, totalTarget = 0;
@@ -46,10 +55,11 @@ Object.assign(window.BlackBook, {
     const pct = target > 0 ? Math.min(Math.round(saved / target * 100), 100) : 0;
     const barClass = pct < 80 ? 'under' : pct <= 100 ? 'warning' : 'over';
     const expanded = this._expandedGoals[goal.id];
-    let html = '<div class="savings-card">' +
+    let html = '<div class="savings-card' + this.focusRecordHtml('savings', goal.id) + '">' +
       '<div class="savings-header">' +
       '<span class="savings-name">' + this.escapeHtml(goal.name) + '</span>' +
       '<span class="savings-actions">' +
+      ((goal.entries && goal.entries.length) ? '<button class="btn btn-sm btn-secondary" onclick="BlackBook.openSavingsEntries(\x27' + goal.id + '\x27)" title="View entries in transactions">LINK</button>' : '') +
       '<button class="btn btn-sm btn-primary" onclick="BlackBook.openNewSavingsEntry(\x27' + goal.id + '\x27)">+ ADD</button>' +
       '<button class="btn btn-sm btn-secondary" onclick="BlackBook.openEditSavingsGoal(\x27' + goal.id + '\x27)">EDIT</button>' +
       '<button class="btn btn-sm btn-danger" onclick="BlackBook.deleteSavingsGoal(\x27' + goal.id + '\x27)">DEL</button></span></div>' +
@@ -133,17 +143,22 @@ Object.assign(window.BlackBook, {
     const entry = { id: crypto.randomUUID(), date: date, amount: amount, note: note || '' };
     goal.entries.push(entry);
     const tCat = this.transferCategory();
-    this.data.transactions.push({
+    const sourceAcc = this.data.settings.defaultAccountId || (this.visibleAccounts && this.visibleAccounts()[0] ? this.visibleAccounts()[0].id : null);
+    const tx = {
       id: crypto.randomUUID(),
       linkId: entry.id,
       date: date,
-      type: -amount >= 0 ? 'income' : 'expense',
-      amount: Math.round(-amount * 100) / 100,
+      type: 'transfer',
+      amount: Math.round(Math.abs(amount) * 100) / 100,
+      amountIn: Math.round(Math.abs(amount) * 100) / 100,
       currency: 'RSD',
-      accountId: '',
+      currencyIn: 'RSD',
+      fromAccountId: sourceAcc,
+      toAccountId: sourceAcc,
       categoryId: tCat.id,
       note: 'Savings: ' + goal.name + (note ? ' — ' + note : '')
-    });
+    };
+    this.data.transactions.push(tx);
     await this.save();
   },
 

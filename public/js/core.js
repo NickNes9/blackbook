@@ -149,6 +149,7 @@ window.BlackBook = {
     });
 
     this.upgradeAllSelects(document);
+    this.initChartResize();
     this.navigateTo('overview');
   },
 
@@ -432,12 +433,28 @@ window.BlackBook = {
   async save() {
     this._pendingSaves = (this._pendingSaves || 0) + 1;
     this.setSaveState('saving');
+    const payload = this.stripTransient(this.data);
     try {
-      await fetch('/api/save', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(this.profile ? { profile: this.profile, data: this.data } : this.data) });
+      await fetch('/api/save', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(this.profile ? { profile: this.profile, data: payload } : payload) });
     } finally {
       this._pendingSaves = (this._pendingSaves || 0) - 1;
       if (this._pendingSaves <= 0) { this._pendingSaves = 0; this.setSaveState('saved'); }
     }
+  },
+
+  stripTransient(obj) {
+    if (!obj || typeof obj !== 'object' || Array.isArray(obj)) return obj;
+    const out = {};
+    for (const k of Object.keys(obj)) {
+      if (k === '_debtReconciled') continue;
+      const v = obj[k];
+      if (v && typeof v === 'object') {
+        out[k] = this.stripTransient(v);
+      } else {
+        out[k] = v;
+      }
+    }
+    return out;
   },
 
   toRsd(amount, currency) {
@@ -1166,6 +1183,63 @@ window.BlackBook = {
     return bill || null;
   },
 
+  billPaymentForTx(txId) {
+    return (this.data.billPayments || []).find(p => p.txId === txId) || null;
+  },
+
+  debtForPaymentTx(txId) {
+    const d = (this.data.debts || []).find(x => x.id != null && (this.data.transactions || []).find(t => t.id === txId && t.debtId === x.id));
+    return d || null;
+  },
+
+  invoiceForPaymentTx(txId) {
+    for (const v of (this.data.invoices || [])) {
+      const p = (v.payments || []).find(pay => pay.txId === txId);
+      if (p) return { invoice: v, paymentIndex: (v.payments || []).indexOf(p) };
+      if (txId && String(txId).indexOf('tx-inv-' + v.id + '-p') === 0) {
+        const idx = (v.payments || []).findIndex(pay => pay && pay.txId === txId);
+        return { invoice: v, paymentIndex: idx >= 0 ? idx : -1 };
+      }
+    }
+    return null;
+  },
+
+  savingsForTx(txId) {
+    for (const g of (this.data.savingsGoals || [])) {
+      const idx = (g.entries || []).findIndex(e => e.id === txId || (this.data.transactions || []).find(t => t.id === txId && t.linkId === e.id));
+      if (idx >= 0) return { goal: g, entryIndex: idx };
+    }
+    return null;
+  },
+
+  linkedRecordType(tx) {
+    if (!tx) return null;
+    if (this.billPaymentForTx(tx.id)) return 'bill';
+    if (this.debtForPaymentTx(tx.id)) return 'debt';
+    if (this.invoiceForPaymentTx(tx.id)) return 'invoice';
+    if (this.savingsForTx(tx.id)) return 'savings';
+    if (tx.cardId || tx.installId) return 'card';
+    if (this.installmentForTx(tx.id)) return 'card';
+    return null;
+  },
+
+  installmentForTx(txId) {
+    const tx = (this.data.transactions || []).find(t => t.id === txId);
+    if (!tx) return null;
+    if (tx.pairId && String(tx.pairId).indexOf('inst-') === 0) {
+      const m = String(tx.pairId).match(/^inst-(.+)-s(\d+)$/);
+      if (m) {
+        const inst = (this.data.installments || []).find(i => String(i.id) === m[1]);
+        if (inst) return { inst, seq: parseInt(m[2], 10) };
+      }
+    }
+    if (tx.installId) {
+      const inst = (this.data.installments || []).find(i => String(i.id) === String(tx.installId));
+      if (inst) return { inst, seq: null };
+    }
+    return null;
+  },
+
   linkTxToBill(txId) {
     const tx = this.data.transactions.find(t => t.id === txId);
     const bill = this.matchingUnpaidBill(tx);
@@ -1197,6 +1271,15 @@ window.BlackBook = {
     let cat = this.data.categories.find(c => c.name.toLowerCase() === 'invoice');
     if (!cat) {
       cat = { id: 'cat-invoice', name: 'Invoice', color: '#fa8c3c' };
+      this.data.categories.push(cat);
+    }
+    return cat;
+  },
+
+  debtCategory() {
+    let cat = this.data.categories.find(c => c.name.toLowerCase() === 'debt');
+    if (!cat) {
+      cat = { id: 'cat-debt', name: 'Debt', color: '#facc15' };
       this.data.categories.push(cat);
     }
     return cat;
@@ -1451,6 +1534,56 @@ window.BlackBook = {
     this.renderPage(this.currentPage);
   },
 
+  navigateToRecord(type, id) {
+    const tx = this.data.transactions.find(t => t.id === id);
+    let page = null;
+    let month = null;
+    if (type === 'bill') {
+      const bp = this.billPaymentForTx(id);
+      page = 'bills';
+      if (bp && bp.month) { const parts = bp.month.split('-'); month = { y: parseInt(parts[0], 10), m: parseInt(parts[1], 10) - 1 }; }
+    } else if (type === 'debt') {
+      page = 'debts';
+    } else if (type === 'invoice') {
+      page = 'invoices';
+    } else if (type === 'savings') {
+      page = 'savings';
+    } else if (type === 'card') {
+      page = 'cards';
+    }
+    if (!page) return;
+    if (tx && !month) {
+      const t = this.data.transactions.find(x => x.id === id);
+      if (t && t.date) { const { y, m } = this.ymOf(t.date); if (!isNaN(y) && !isNaN(m)) month = { y, m }; }
+    }
+    if (month) {
+      if (!this._pageView) this._pageView = {};
+      if (!this._pageView[page]) { const n = new Date(); this._pageView[page] = { m: n.getMonth(), y: n.getFullYear() }; }
+      this._pageView[page].y = month.y;
+      this._pageView[page].m = month.m;
+    }
+    this._focusRecord = { type, id };
+    this.navigateTo(page);
+  },
+
+  focusRecordHtml(type, id) {
+    if (!this._focusRecord || this._focusRecord.type !== type || this._focusRecord.id !== id) return '';
+    return ' record-focused';
+  },
+
+  clearFocusRecord() { this._focusRecord = null; },
+
+  finishFocus(type) {
+    const fr = this._focusRecord;
+    if (!fr || fr.type !== type) return;
+    const el = document.querySelector('.record-focused');
+    if (el) {
+      setTimeout(() => { try { el.scrollIntoView({ behavior: 'smooth', block: 'center' }); } catch (e) {} }, 60);
+    }
+    const id = fr.id;
+    setTimeout(() => { if (this._focusRecord && this._focusRecord.id === id) this._focusRecord = null; }, 2000);
+  },
+
   syncViewToDate(dateStr) {
     if (!dateStr) return;
     const { y, m } = this.ymOf(dateStr);
@@ -1603,5 +1736,67 @@ window.BlackBook = {
     }
     if (this._bulkSel && this._bulkSel.size && this._bulkOnly) txs = txs.filter(t => this._bulkSel.has(t.id));
     return txs;
+  },
+
+  initChartResize() {
+    if (this._chartResizeBound) return;
+    this._chartResizeBound = true;
+    const HIDE_PX = 40;
+    document.addEventListener('mousedown', (e) => {
+      const canvas = e.target.closest('.chart-panel canvas, .chart-panel-full canvas');
+      if (!canvas) return;
+      const panel = canvas.closest('.chart-panel, .chart-panel-full');
+      if (!panel) return;
+      e.preventDefault();
+      const startY = e.clientY;
+      const startH = panel.offsetHeight;
+      panel.classList.add('chart-panel-resizing');
+      let hidden = false;
+      const doHide = () => {
+        if (hidden) return;
+        hidden = true;
+        panel.style.height = '';
+        const fn = this._hideFnForPanel(panel);
+        if (fn) this[fn]();
+      };
+      const onMove = (ev) => {
+        const delta = startY - ev.clientY;
+        let newH = startH + delta;
+        if (newH < HIDE_PX) { doHide(); return; }
+        const maxH = Math.min(window.innerHeight - 150, 600);
+        newH = Math.min(newH, maxH);
+        if (newH < HIDE_PX) newH = HIDE_PX;
+        panel.style.height = newH + 'px';
+      };
+      const onUp = () => {
+        document.removeEventListener('mousemove', onMove);
+        document.removeEventListener('mouseup', onUp);
+        panel.classList.remove('chart-panel-resizing');
+        if (!hidden && panel.offsetHeight <= 0) doHide();
+      };
+      document.addEventListener('mousemove', onMove);
+      document.addEventListener('mouseup', onUp);
+    });
+  },
+
+  _hideFnForPanel(panel) {
+    if (!panel) return null;
+    const pageId = panel.closest('.page');
+    const pid = pageId ? pageId.id : '';
+    if (pid === 'page-overview') return 'toggleOverviewGraph';
+    if (pid === 'page-bills') return 'toggleBillsGraph';
+    if (pid === 'page-budget') return 'toggleBudgetGraph';
+    const canvas = panel.querySelector('canvas');
+    const id = canvas ? canvas.id : '';
+    if (id === 'overview-chart' || id === 'overview-line-chart' || id === 'pie') return 'toggleOverviewGraph';
+    if (id === 'bills-chart') return 'toggleBillsGraph';
+    if (id === 'budget-chart') return 'toggleBudgetGraph';
+    return null;
+  },
+
+  resetChartHeights() {
+    document.querySelectorAll('.chart-panel, .chart-panel-full').forEach(p => {
+      p.style.height = '';
+    });
   },
 };

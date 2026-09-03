@@ -37,8 +37,7 @@ Object.assign(window.BlackBook, {
 
   // ===== CREDIT CARDS PAGE =====
 
-  renderCards() {
-    const el = document.getElementById('page-cards');
+  renderCards() {    const el = document.getElementById('page-cards');
     if (!el) return;
     if (!this.data.creditCards) this.data.creditCards = [];
     let html = '<div class="month-picker" style="justify-content:flex-end;">' +
@@ -47,6 +46,14 @@ Object.assign(window.BlackBook, {
     html += '<div class="list-sep"></div>';
     html += '<div class="page-scroll-wrap">' + this.cardsListHtml() + '</div>';
     el.innerHTML = html;
+    this.finishFocus('card');
+  },
+
+  async openCardPlanTxs(instId) {
+    const inst = this.data.installments.find(i => i.id === instId);
+    const tx = inst ? this.instPurchaseTx(inst) : null;
+    if (tx && tx.date) this.syncViewToDate(tx.date);
+    this.navigateTo('overview');
   },
 
   cardsSummaryHtml() {
@@ -94,10 +101,11 @@ planBlockHtml(inst) {
     const pct = grandTotal > 0 ? Math.min(Math.round((grandTotal - outstanding) / grandTotal * 100), 100) : 0;
     const advance = inst.advance || 0;
     const tx = this.instPurchaseTx(inst);
-    let html = '<div class="plan-card"' + (closed ? ' style="opacity:0.55;"' : '') + '>';
+    let html = '<div class="plan-card' + this.focusRecordHtml('card', inst.id) + '"' + (closed ? ' style="opacity:0.55;"' : '') + '>';
     html += '<div class="savings-header">' +
       '<span class="savings-name">' + this.escapeHtml(inst.name) + '</span>' +
       '<span class="savings-actions">' +
+      (tx ? '<button class="btn btn-sm btn-secondary" onclick="BlackBook.openCardPlanTxs(\x27' + inst.id + '\x27)" title="View this plan\u2019s transactions">LINK</button>' : '') +
       '<span class="inst-count-badge"' + (closed ? ' style="border-color:' + color + ';color:var(--on-fill);background:' + color + ';"' : '') + '>' + paidCount + '/' + inst.months + ' PAID</span>' +
       (closed ? '' : '<button class="btn btn-sm btn-primary" onclick="BlackBook.openPayInstallment(\x27' + inst.id + '\x27)" title="Pay toward this plan">PAY</button>') +
       (tx ? '<button class="btn btn-sm btn-secondary" onclick="BlackBook.openEditCardTx(\x27' + tx.id + '\x27)" title="Edit this purchase">EDIT</button>' : '') +
