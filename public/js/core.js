@@ -1750,6 +1750,7 @@ window.BlackBook = {
       e.preventDefault();
       const startY = e.clientY;
       const startH = panel.offsetHeight;
+      const startTop = panel.getBoundingClientRect().top;
       panel.classList.add('chart-panel-resizing');
       let hidden = false;
       let scroller = null;
@@ -1781,8 +1782,8 @@ window.BlackBook = {
         const delta = startY - ev.clientY;
         let newH = startH + delta;
         if (newH < HIDE_PX) { doHide(); return; }
-        const maxH = Math.min(window.innerHeight - 180, 600);
-        newH = Math.min(newH, maxH);
+        const maxH = Math.max(HIDE_PX, window.innerHeight - startTop - 20);
+        if (newH > startH) newH = Math.min(newH, maxH);
         if (newH < HIDE_PX) newH = HIDE_PX;
         panel.style.height = newH + 'px';
         if (scroller) scroller.scrollTop = scrollerTop;
