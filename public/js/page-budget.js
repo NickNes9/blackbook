@@ -127,8 +127,8 @@ Object.assign(window.BlackBook, {
           }
         },
         scales: {
-          x: { ticks: { color: '#555555' }, grid: { color: '#141414' } },
-          y: { ticks: { color: '#555555' }, grid: { color: '#141414' } }
+          x: { ticks: { color: '#555555', autoSkip: false, maxRotation: 0, font: { size: 11 } }, grid: { color: '#141414' } },
+          y: { ticks: { color: '#555555', font: { size: 11 } }, grid: { color: '#141414' } }
         }
       }
     });
