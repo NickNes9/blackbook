@@ -248,6 +248,7 @@ input[type="checkbox"]:checked {
 }
 
 .overview-charts .chart-panel { flex: 1; height: 180px; min-width: 0; }
+.overview-charts .chart-panel.chart-panel-resizing { flex: 0 0 auto; }
 
 /* !important: #page-overview's ID-specificity display:flex would otherwise beat this rule
    and keep the homepage permanently visible underneath every other page */
