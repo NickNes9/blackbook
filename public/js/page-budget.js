@@ -88,6 +88,7 @@ Object.assign(window.BlackBook, {
         data: spend.months.map(mk => this.round2(spend.total[mk] || 0)),
         borderColor: hc,
         backgroundColor: hc,
+        fill: false,
         tension: 0.3,
         borderWidth: 2.5,
         pointRadius: 2
@@ -102,6 +103,7 @@ Object.assign(window.BlackBook, {
         data: spend.months.map(mk => this.round2(per[mk] || 0)),
         borderColor: this.categoryColor(cat),
         backgroundColor: this.categoryColor(cat),
+        fill: false,
         tension: 0.3,
         borderWidth: 2,
         pointRadius: 3
@@ -179,8 +181,8 @@ Object.assign(window.BlackBook, {
       const catColor = this.categoryColor(cat);
       const budgetName = budget && budget.name ? budget.name : cat.name;
       const barValues = budget
-        ? '<span class="budget-bar-values' + (over ? ' amount-negative' : '') + '">' + this.fmtRsd(spentAbs) + '<span class="budget-bar-slash">/ ' + this.fmtRsd(amount) + '</span></span>'
-        : '<span class="budget-bar-values">' + this.fmtRsd(spentAbs) + '</span>';
+        ? this.fmtRsd(spentAbs) + '<span class="budget-bar-slash">/ ' + this.fmtRsd(amount) + '</span>'
+        : this.fmtRsd(spentAbs);
       const barBg = over ? 'rgba(248,113,113,0.15)' : 'var(--surface-raised)';
       html += '<div class="budget-card">' +
         '<div class="budget-headrow">' +
@@ -188,7 +190,7 @@ Object.assign(window.BlackBook, {
         '<span class="cat-dot" style="background:' + catColor + ';"></span>' +
         '<span class="budget-name-text">' + this.escapeHtml(budgetName) + '</span>' +
         '</span>' +
-        '<span class="bar-values-wrap"><div class="budget-bar' + (budget ? '' : ' budget-bar-none') + '" style="background:' + barBg + ';"><div class="budget-bar-fill' + (budget ? '' : ' budget-bar-fill-full') + ' ' + (over ? 'over' : '') + '" style="width:' + fillPct + '%;background:' + catColor + (over ? ';opacity:0.9' : '') + ';"></div><span class="budget-bar-values' + (over ? ' amount-negative' : '') + '">' + barValues + '</span></div></span>' +
+        '<span class="bar-values-wrap"><div class="budget-bar' + (budget ? '' : ' budget-bar-none') + '" style="background:' + barBg + ';"><div class="budget-bar-fill' + (budget ? '' : ' budget-bar-fill-full') + ' ' + (over ? 'over' : '') + '" style="width:' + fillPct + '%;background:' + catColor + (over ? ';opacity:0.9' : '') + ';"><span class="budget-bar-values-filled' + (over ? ' amount-negative' : '') + '">' + barValues + '</span></div><span class="budget-bar-values-unfilled' + (over ? ' amount-negative' : '') + '">' + barValues + '</span></div></span>' +
         '<span class="budget-pct' + (over ? ' over' : '') + '">' + (budget ? pct + '%' : '') + '</span>' +
         '<button class="btn btn-sm ' + (budget ? 'btn-secondary' : 'btn-primary') + '" style="min-width:56px;flex-shrink:0;margin-left:auto;" onclick="BlackBook.openBudgetModal(\x27' + cat.id + '\x27)">' + (budget ? 'EDIT' : 'SET') + '</button>' +
         '</div></div>';

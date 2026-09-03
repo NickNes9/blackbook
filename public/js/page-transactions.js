@@ -330,18 +330,121 @@ Object.assign(window.BlackBook, {
   async deleteTransaction(txId) {
     const wrap = document.querySelector('.tx-list-wrap');
     const scrollTop = wrap ? wrap.scrollTop : 0;
-    const removed = this.data.transactions.find(t => t.id === txId);
-    this.data.transactions = this.data.transactions.filter(t => t.id !== txId);
-    const bp = (this.data.billPayments || []).find(p => p.txId === txId);
-    if (bp) {
-      this.data.billPayments = this.data.billPayments.filter(p => p !== bp);
-      const bill = (this.data.bills || []).find(b => b.id === bp.billId);
-      if (bill) bill.active = false;
+    const tx = this.data.transactions.find(t => t.id === txId);
+    if (!tx) return;
+
+    const context = this.describeTransactionLinked(tx);
+    const linked = context.detail && context.detail !== 'plain' && context.detail !== 'transfer';
+    if (linked) {
+      const ok = await this.confirmModal({
+        title: context.title,
+        message: context.message,
+        confirmText: 'Delete',
+        danger: true
+      });
+      if (!ok) return;
     }
+
+    this.applyTransactionLinkRemove(tx);
+    const removed = tx;
+    this.data.transactions = this.data.transactions.filter(t => t.id !== txId);
     try { await this.save(); } catch (e) { if (removed) this.data.transactions.push(removed); }
     this.renderPage(this.currentPage);
     const nw = document.querySelector('.tx-list-wrap');
     if (nw) nw.scrollTop = scrollTop;
+  },
+
+  describeTransactionLinked(tx) {
+    const amtP = tx.nativeAmount != null ? this.fmtAmount(Math.abs(tx.nativeAmount), tx.nativeCurrency || tx.currency) : this.fmtAmount(Math.abs(tx.amount), tx.currency);
+    const due = 'Delete this linked transaction?';
+
+    const bp = this.billPaymentForTx(tx.id);
+    if (bp) {
+      const bill = (this.data.bills || []).find(b => b.id === bp.billId);
+      const label = bill ? bill.name : 'this bill';
+      return {
+        title: 'Delete Bill Payment',
+        message: 'Linked to "' + label + '". Deleting will mark that month UNPAID.',
+        detail: 'bill'
+      };
+    }
+
+    const debt = this.debtForPaymentTx(tx.id);
+    if (debt) {
+      const isIn = (debt.type === 'in');
+      return {
+        title: 'Delete Debt Payment',
+        message: 'This ' + amtP + ' payment is linked to the debt "' + (debt.person || '') + '". Deleting it reverses only this payment and increases the remaining balance.',
+        detail: 'debt'
+      };
+    }
+
+    const inv = this.invoiceForPaymentTx(tx.id);
+    if (inv && inv.paymentIndex >= 0) {
+      const v = inv.invoice;
+      return {
+        title: 'Delete Invoice Payment',
+        message: 'This ' + amtP + ' payment is linked to invoice "' + (v.number || v.party || '') + '". Deleting it reverses only this payment and increases the outstanding balance.',
+        detail: 'invoice'
+      };
+    }
+
+    const sav = this.savingsForTx(tx.id);
+    if (sav) {
+      return {
+        title: 'Delete Savings Contribution',
+        message: 'This contribution is linked to the savings goal "' + (sav.goal.name || '') + '". Deleting it will reduce that goal\u2019s saved amount.',
+        detail: 'savings'
+      };
+    }
+
+    const inst = this.installmentForTx(tx.id);
+    if (inst && inst.seq != null) {
+      return {
+        title: 'Delete Installment Payment',
+        message: 'This installment payment is linked to the purchase plan "' + ((inst.inst && inst.inst.name) || '') + '" (period ' + inst.seq + '). Deleting it will mark that period UNPAID on the plan.',
+        detail: 'card'
+      };
+    }
+
+    if (tx && tx.type === 'transfer') {
+      return {
+        title: 'Delete Transfer',
+        message: due + ' The money will be returned to its source account.',
+        detail: 'transfer'
+      };
+    }
+
+    return {
+      title: 'Delete Transaction',
+      message: (tx.note || '') ? 'Delete this transaction: "' + tx.note + '" (' + amtP + ')?' : ('Delete this ' + amtP + ' transaction?'),
+      detail: 'plain'
+    };
+  },
+
+  applyTransactionLinkRemove(tx) {
+    const bp = this.billPaymentForTx(tx.id);
+    if (bp) {
+      this.data.billPayments = this.data.billPayments.filter(p => p !== bp);
+    }
+    const debt = this.debtForPaymentTx(tx.id);
+    if (debt) {
+      this.removeDebtPayment(tx.id);
+    }
+    const inv = this.invoiceForPaymentTx(tx.id);
+    if (inv) {
+      this.removeInvoicePaymentByTx(tx.id);
+    }
+    const sav = this.savingsForTx(tx.id);
+    if (sav) {
+      sav.goal.entries.splice(sav.entryIndex, 1);
+    }
+    const inst = this.installmentForTx(tx.id);
+    if (inst && inst.inst && inst.seq != null) {
+      if (Array.isArray(inst.inst.paid)) {
+        inst.inst.paid = inst.inst.paid.filter(e => !(e && (e.seq === inst.seq && e.via === 'tx')));
+      }
+    }
   },
 
   bulkToggle(id, shiftKey) {

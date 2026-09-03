@@ -40,6 +40,7 @@ Object.assign(window.BlackBook, {
     html += '<div class="list-sep"></div>';
     html += '<div class="page-scroll-wrap">' + this.invoicesListHtml() + '</div>';
     el.innerHTML = html;
+    this.finishFocus('invoice');
   },
 
   setInvoiceFilter(f) { this._invFilter = f; this.renderPage('invoices'); },
@@ -113,11 +114,12 @@ Object.assign(window.BlackBook, {
     const cur = v.currency || 'RSD';
     const dirColor = v.dir === 'out' ? 'var(--income)' : 'var(--expense)';
     const expanded = this._expandedInvoices[v.id];
-    let html = '<div class="savings-card invoice-card"' + (isPaid ? ' style="opacity:0.55;"' : '') + '>';
+    let html = '<div class="savings-card invoice-card' + this.focusRecordHtml('invoice', v.id) + '"' + (isPaid ? ' style="opacity:0.55;"' : '') + '>';
     html += '<div class="savings-header">' +
       '<span class="savings-name"><span class="cat-dot" style="background:' + dirColor + ';"></span> ' + this.escapeHtml(v.party || '?') +
       ' <span class="inv-number">#' + this.escapeHtml(v.number || '-') + '</span></span>' +
       '<span class="savings-actions">' +
+      ((v.payments && v.payments.length) ? '<button class="btn btn-sm btn-secondary" onclick="BlackBook.openInvoicePayments(\x27' + v.id + '\x27)" title="View payments in transactions">LINK</button>' : '') +
       '<button class="btn btn-sm ' + (isPaid ? 'btn-secondary' : 'btn-primary') + ' invoice-paid-btn" onclick="BlackBook.toggleInvoicePaid(\x27' + v.id + '\x27)" title="' + (isPaid ? 'Mark as unpaid' : 'Mark as paid') + '">' + (isPaid ? 'UNPAID' : 'PAID') + '</button>' +
       (v.fileName ? '<button class="btn btn-sm btn-secondary" onclick="BlackBook.openInvoiceFile(\x27' + v.id + '\x27)" title="Open attached file: ' + this.escapeHtml(v.fileName) + '">INVOICE</button>' : '') +
       '<button class="btn btn-sm btn-secondary" onclick="BlackBook.openEditInvoice(\x27' + v.id + '\x27)">EDIT</button>' +
@@ -162,7 +164,7 @@ Object.assign(window.BlackBook, {
   _invLineRow(desc, qty, price) {
     return '<div class="inv-line">' +
       '<input type="text" class="input inv-line-desc" placeholder="Description" value="' + this.escapeHtml(desc || '') + '">' +
-      '<input type="text" inputmode="decimal" class="input inv-line-qty" placeholder="Qty" value="' + (qty != null && qty !== '' ? qty : '') + '" autocomplete="off">' +
+      '<input type="text" inputmode="decimal" class="input inv-line-qty" placeholder="Qty" value="' + (qty != null && qty !== '' ? qty : '1') + '" autocomplete="off">' +
       '<input type="text" inputmode="decimal" class="input inv-line-price" placeholder="Unit price" value="' + (price != null && price !== '' ? price : '') + '" autocomplete="off">' +
       '<span class="inv-line-total">0</span>' +
       '<button type="button" class="btn btn-sm btn-danger inv-line-del">&times;</button></div>';
@@ -209,7 +211,16 @@ Object.assign(window.BlackBook, {
     document.getElementById('invoice-id').value = '';
     this._setInvDir('out');
     document.getElementById('invoice-party').value = '';
-    document.getElementById('invoice-number').value = '';
+    const year = new Date().getFullYear();
+    const prefix = year + '-';
+    let maxSeq = 0;
+    for (const v of (this.data.invoices || [])) {
+      if (v.number && v.number.startsWith(prefix)) {
+        const seq = parseInt(v.number.substring(prefix.length), 10);
+        if (!isNaN(seq) && seq > maxSeq) maxSeq = seq;
+      }
+    }
+    document.getElementById('invoice-number').value = prefix + String(maxSeq + 1).padStart(3, '0');
     document.getElementById('invoice-date').value = this.fmtDateInput(this.today());
     const in14 = new Date(Date.now() + 14 * 86400000);
     document.getElementById('invoice-due').value = this.fmtDateInput(in14.toISOString().slice(0, 10));
@@ -300,7 +311,20 @@ Object.assign(window.BlackBook, {
       if (!this.data.invoices) this.data.invoices = [];
       if (id) {
         const v = this.data.invoices.find(x => x.id === id);
-        if (v) Object.assign(v, data);
+        if (v) {
+          const hasPays = (v.payments && v.payments.length) > 0;
+          if (hasPays) {
+            const newTotal = lines.reduce((s, l) => s + (parseFloat(l.qty) || 0) * (parseFloat(l.price) || 0), 0);
+            const oldTotal = this.invTotal(v);
+            const curChanged = v.currency !== data.currency;
+            const dirChanged = v.dir !== data.dir;
+            if (Math.abs(newTotal - oldTotal) > 0.009 || curChanged || dirChanged) {
+              const ok = await this.confirmModal({ title: 'Edit Linked Invoice', message: 'This invoice has linked payment transaction(s). Changing its total, currency, or direction can change the outstanding balance.\n\nContinue?', confirmText: 'Continue' });
+              if (!ok) return;
+            }
+          }
+          Object.assign(v, data);
+        }
       } else {
         data.amountPaid = 0;
         data.payments = [];
@@ -352,6 +376,14 @@ Object.assign(window.BlackBook, {
     this.renderPage(this.currentPage === 'invoices' ? 'invoices' : this.currentPage);
   },
 
+  async openInvoicePayments(id) {
+    const v = this.data.invoices.find(x => x.id === id);
+    if (!v) return;
+    const first = (v.payments || [])[0];
+    if (first && first.date) this.syncViewToDate(first.date);
+    this.navigateTo('overview');
+  },
+
   openInvPayModal(id) {
     const v = this.data.invoices.find(x => x.id === id);
     if (!v || this.invIsPaid(v)) return;
@@ -385,21 +417,40 @@ Object.assign(window.BlackBook, {
     });
   },
 
+  invNextSeq(v) {
+    const used = new Set((v.payments || []).map(p => p && p.seq));
+    let seq = 1;
+    while (used.has(seq)) seq++;
+    return seq;
+  },
+
   async applyInvoicePayment(v, amt, accountId, categoryId, date) {
     if (!(amt > 0)) return;
     const remaining = this.invRemaining(v);
     if (remaining <= 0.009) return;
     if (amt > remaining) amt = remaining;
     if (!v.payments) v.payments = [];
-    const seqN = v.payments.length + 1;
+    const seqN = this.invNextSeq(v);
     const pairId = 'inv-' + v.id + '-p' + seqN;
     const txId = 'tx-' + pairId;
     const cur = v.currency || 'RSD';
     const type = v.dir === 'out' ? 'income' : 'expense';
     this.data.transactions.unshift({ id: txId, type: type, amount: type === 'income' ? amt : -amt, currency: cur, accountId: accountId || null, categoryId: categoryId || null, date: date, note: 'Invoice ' + (v.number ? '#' + v.number + ' ' : '') + (v.party || ''), pairId: pairId });
-    v.payments.push({ date: date, amount: amt, accountId: accountId || null, categoryId: categoryId || null, txId: txId });
+    v.payments.push({ date: date, amount: amt, accountId: accountId || null, categoryId: categoryId || null, txId: txId, seq: seqN });
     v.amountPaid = Math.round(((v.amountPaid || 0) + amt) * 100) / 100;
     await this.save();
+  },
+
+  removeInvoicePaymentByTx(txId) {
+    const found = this.invoiceForPaymentTx(txId);
+    if (!found) return;
+    const v = found.invoice;
+    const idx = found.paymentIndex;
+    if (idx < 0 || idx >= (v.payments || []).length) return;
+    const pay = v.payments[idx];
+    if (v.payments) v.payments.splice(idx, 1);
+    const amt = pay ? (pay.amount || 0) : 0;
+    v.amountPaid = Math.max(0, Math.round(((v.amountPaid || 0) - amt) * 100) / 100);
   },
 
 });

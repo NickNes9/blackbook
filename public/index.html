@@ -259,7 +259,7 @@
         <input type="hidden" id="debt-id">
         <div class="form-row-2col">
           <div class="form-group"><label>Person</label><input type="text" id="debt-person" class="input" required placeholder="Name"></div>
-          <div class="form-group"><label>Direction</label><select id="debt-type" class="input"><option value="in">They owe me</option><option value="out">I owe them</option></select></div>
+          <div class="form-group"><label>Direction</label><button type="button" id="debt-dir-toggle" class="debt-dir-toggle" data-dir="in" onclick="BlackBook.toggleDebtDir()">THEY OWE ME</button><input type="hidden" id="debt-type" value="in"></div>
         </div>
         <div class="form-row-2col">
           <div class="form-group"><label>Amount</label><input type="text" inputmode="decimal" id="debt-amount" class="input" required placeholder="25000" autocomplete="off"></div>
