@@ -555,7 +555,7 @@ Object.assign(window.BlackBook, {
             border: { display: false }
           },
           y: {
-            ticks: { color: '#888888', font: { size: 11 }, callback: (v) => v >= 1000 ? (v/1000).toFixed(0)+'k' : v },
+            ticks: { color: '#888888', font: { size: 11 }, maxTicksLimit: 5, callback: (v) => v >= 1000 ? (v/1000).toFixed(0)+'k' : v },
             grid: { color: '#2a2a2a', drawBorder: false },
             border: { display: false }
           }
