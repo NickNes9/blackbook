@@ -1955,6 +1955,7 @@ select:disabled {
 }
 
 .budget-bar-fill {
+  position: relative;
   height: 100%;
   transition: width 0.3s ease;
   overflow: hidden;
@@ -1996,7 +1997,28 @@ select:disabled {
   white-space: nowrap;
   pointer-events: none;
   font-family: 'Hack', 'Courier New', monospace;
-}values-unfilled {\r\n  position: absolute;\r\n  top: 0;\r\n  left: 0;\r\n  right: 0;\r\n  bottom: 0;\r\n  display: flex;\r\n  align-items: center;\r\n  justify-content: center;\r\n  font-size: 16px;\r\n  font-weight: 700;\r\n  color: var(--text-dim);\r\n  white-space: nowrap;\r\n  pointer-events: none;\r\n}\r\n\r\n.budget-bar-values-filled .budget-bar-slash,\r\n.budget-bar-values-unfilled .budget-bar-slash {\r\n  font-weight: 600;\r\n  opacity: 0.8;\r\n  margin-left: 3px;\r\n}\r\n\r\n.budget-bar-none .budget-bar-fill {\r\n  background: var(--surface-raised);\r\n}\r\n\r\n.budget-bar-none .budget-bar-values-filled {\r\n  color: var(--text-dim);\r\n}\r\n\r\n.budget-bar-none .budget-bar-values-unfilled {\r\n  color: var(--text-dim);\r\n}/* ===== SETTINGS ===== */
+}
+
+.budget-bar-values-filled .budget-bar-slash,
+.budget-bar-values-unfilled .budget-bar-slash {
+  font-weight: 600;
+  opacity: 0.8;
+  margin-left: 3px;
+}
+
+.budget-bar-none .budget-bar-fill {
+  background: var(--surface-raised);
+}
+
+.budget-bar-none .budget-bar-values-filled {
+  color: var(--text-dim);
+}
+
+.budget-bar-none .budget-bar-values-unfilled {
+  color: var(--text-dim);
+}
+
+/* ===== SETTINGS ===== */
 .settings-section {
   background: var(--bg);
   padding: 12px;

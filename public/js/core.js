@@ -1755,7 +1755,7 @@ window.BlackBook = {
       const doHide = () => {
         if (hidden) return;
         hidden = true;
-        panel.style.height = '';
+        panel.style.display = 'none';
         const fn = this._hideFnForPanel(panel);
         if (fn) this[fn]();
       };
