@@ -1752,6 +1752,16 @@ window.BlackBook = {
       const startH = panel.offsetHeight;
       panel.classList.add('chart-panel-resizing');
       let hidden = false;
+      let scroller = null;
+      let scrollerTop = 0;
+      let scrollerOverflow = '';
+      const sc = panel.closest('.page-scroll-wrap, .tx-list-wrap');
+      if (sc) {
+        scroller = sc;
+        scrollerTop = sc.scrollTop;
+        scrollerOverflow = sc.style.overflow;
+        sc.style.overflow = 'hidden';
+      }
       const doHide = () => {
         if (hidden) return;
         hidden = true;
@@ -1759,7 +1769,15 @@ window.BlackBook = {
         const fn = this._hideFnForPanel(panel);
         if (fn) this[fn]();
       };
+      const doRestore = () => {
+        if (scroller) {
+          scroller.style.overflow = scrollerOverflow;
+          scroller.scrollTop = scrollerTop;
+          scroller = null;
+        }
+      };
       const onMove = (ev) => {
+        ev.preventDefault();
         const delta = startY - ev.clientY;
         let newH = startH + delta;
         if (newH < HIDE_PX) { doHide(); return; }
@@ -1767,11 +1785,13 @@ window.BlackBook = {
         newH = Math.min(newH, maxH);
         if (newH < HIDE_PX) newH = HIDE_PX;
         panel.style.height = newH + 'px';
+        if (scroller) scroller.scrollTop = scrollerTop;
       };
       const onUp = () => {
         document.removeEventListener('mousemove', onMove);
         document.removeEventListener('mouseup', onUp);
         panel.classList.remove('chart-panel-resizing');
+        doRestore();
         if (!hidden && panel.offsetHeight <= 0) doHide();
       };
       document.addEventListener('mousemove', onMove);
