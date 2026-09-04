@@ -63,7 +63,7 @@ Object.assign(window.BlackBook, {
   invRemaining(inv) { return Math.round((this.invTotal(inv) - this.invPaid(inv)) * 100) / 100; },
   invIsPaid(inv) { return this.invTotal(inv) > 0 && this.invRemaining(inv) <= 0.009; },
   invOverdue(inv) { return !this.invIsPaid(inv) && !!inv.dueDate && inv.dueDate < this.today(); },
-  invRsd(inv) { return Math.abs(this.toRsd(this.invTotal(inv), inv.currency || 'RSD')); },
+  invBase(inv) { return Math.abs(this.toBase(this.invTotal(inv), inv.currency || this.baseCurrency() || 'RSD')); },
   parseInvNumber(inv) {
     const num = (inv && inv.number || '').trim();
     const slash = num.match(/^\s*(\d{1,4})\s*\/\s*(\d{4})\s*$/);
@@ -88,16 +88,16 @@ Object.assign(window.BlackBook, {
     for (const v of this.data.invoices) {
       const rem = this.invRemaining(v);
       if (rem <= 0.009) continue;
-      const remRsd = Math.abs(this.toRsd(rem, v.currency || 'RSD'));
-      if (v.dir === 'out') owedMe += remRsd; else iOwe += remRsd;
-      if (this.invOverdue(v)) { overdueCnt++; overdueAmt += remRsd; }
+      const remBase = Math.abs(this.toBase(rem, v.currency || this.baseCurrency() || 'RSD'));
+      if (v.dir === 'out') owedMe += remBase; else iOwe += remBase;
+      if (this.invOverdue(v)) { overdueCnt++; overdueAmt += remBase; }
     }
     const f = this._invFilter || 'all';
     const filterLabel = f === 'out' ? 'INCOMES' : f === 'in' ? 'EXPENSES' : 'ALL';
     return '<div class="month-summary">' +
-      '<div class="month-summary-item"><span class="month-summary-label">INCOME</span><span class="month-summary-value amount-positive">' + this.fmtRsd(owedMe) + '</span></div>' +
-      '<div class="month-summary-item"><span class="month-summary-label">EXPENSE</span><span class="month-summary-value amount-negative">' + this.fmtRsd(iOwe) + '</span></div>' +
-      '<div class="month-summary-item"><span class="month-summary-label">OVERDUE</span><span class="month-summary-value ' + (overdueCnt ? 'amount-negative' : '') + '">' + (overdueCnt ? overdueCnt + ' &middot; ' + this.fmtRsd(overdueAmt) : this.fmtRsd(0)) + '</span></div>' +
+      '<div class="month-summary-item"><span class="month-summary-label">INCOME</span><span class="month-summary-value amount-positive">' + this.fmtBase(owedMe) + '</span></div>' +
+      '<div class="month-summary-item"><span class="month-summary-label">EXPENSE</span><span class="month-summary-value amount-negative">' + this.fmtBase(iOwe) + '</span></div>' +
+      '<div class="month-summary-item"><span class="month-summary-label">OVERDUE</span><span class="month-summary-value ' + (overdueCnt ? 'amount-negative' : '') + '">' + (overdueCnt ? overdueCnt + ' &middot; ' + this.fmtBase(overdueAmt) : this.fmtBase(0)) + '</span></div>' +
       '<span style="flex:1;"></span>' +
       '<span style="display:flex;gap:4px;align-items:center;">' +
       '<button class="btn btn-sm btn-secondary inv-filter-cycle" onclick="BlackBook.cycleInvoiceFilter()" title="Cycle filter: Incomes → Expenses → All" style="min-width:100px;text-align:center;">' + filterLabel + '</button>' +
@@ -134,7 +134,7 @@ Object.assign(window.BlackBook, {
   invoiceCardHtml(v) {
     const total = this.invTotal(v), paid = this.invPaid(v);
     const isPaid = this.invIsPaid(v), overdue = this.invOverdue(v);
-    const cur = v.currency || 'RSD';
+    const cur = v.currency || this.baseCurrency() || 'RSD';
     const dirColor = v.dir === 'out' ? 'var(--income)' : 'var(--expense)';
     const expanded = this._expandedInvoices[v.id];
     let html = '<div class="savings-card invoice-card' + this.focusRecordHtml('invoice', v.id) + '"' + (isPaid ? ' style="opacity:0.55;"' : '') + '>';
@@ -277,7 +277,7 @@ Object.assign(window.BlackBook, {
     document.getElementById('invoice-number').value = v.number || '';
     document.getElementById('invoice-date').value = this.fmtDateInput(v.date || '');
     document.getElementById('invoice-due').value = this.fmtDateInput(v.dueDate || '');
-    document.getElementById('invoice-currency').value = v.currency || 'RSD';
+    document.getElementById('invoice-currency').value = v.currency || this.baseCurrency() || 'RSD';
     document.getElementById('invoice-note').value = v.note || '';
     const catInput = document.getElementById('invoice-category-input');
     const catHidden = document.getElementById('invoice-category');
@@ -388,7 +388,7 @@ Object.assign(window.BlackBook, {
       const type = v.dir === 'out' ? 'income' : 'expense';
       const pairId = 'inv-' + v.id + '-p1';
       const txId = 'tx-' + pairId;
-      const cur = v.currency || 'RSD';
+      const cur = v.currency || this.baseCurrency() || 'RSD';
       this.data.transactions.unshift({ id: txId, type: type, amount: type === 'income' ? remaining : -remaining, currency: cur, accountId: accountId || null, categoryId: categoryId, date: date, note: 'Invoice ' + (v.number ? '#' + v.number + ' ' : '') + (v.party || ''), pairId: pairId });
       v.payments = [{ date: date, amount: remaining, accountId: accountId || null, categoryId: categoryId, txId: txId }];
       v.amountPaid = remaining;
@@ -410,7 +410,7 @@ Object.assign(window.BlackBook, {
     if (!v || this.invIsPaid(v)) return;
     document.getElementById('ipay-id').value = id;
     document.getElementById('ipay-amount').value = this.invRemaining(v).toFixed(2);
-    document.getElementById('ipay-account').innerHTML = this.visibleAccounts().map(a => '<option value="' + a.id + '"' + (a.currency === (v.currency || 'RSD') ? ' selected' : '') + '>' + this.escapeHtml(a.name) + ' (' + a.currency + ')</option>').join('');
+    document.getElementById('ipay-account').innerHTML = this.visibleAccounts().map(a => '<option value="' + a.id + '"' + (a.currency === (v.currency || this.baseCurrency() || 'RSD') ? ' selected' : '') + '>' + this.escapeHtml(a.name) + ' (' + a.currency + ')</option>').join('');
     document.getElementById('ipay-category').innerHTML = this.sortedCategories().map(c => '<option value="' + c.id + '">' + this.escapeHtml(c.name) + '</option>').join('');
     document.getElementById('ipay-date').value = this.fmtDateInput(this.today());
     document.getElementById('invoice-pay-title').textContent = 'Payment \u2014 ' + (v.party || 'invoice') + ' #' + (v.number || '-');
@@ -454,7 +454,7 @@ Object.assign(window.BlackBook, {
     const seqN = this.invNextSeq(v);
     const pairId = 'inv-' + v.id + '-p' + seqN;
     const txId = 'tx-' + pairId;
-    const cur = v.currency || 'RSD';
+    const cur = v.currency || this.baseCurrency() || 'RSD';
     const type = v.dir === 'out' ? 'income' : 'expense';
     this.data.transactions.unshift({ id: txId, type: type, amount: type === 'income' ? amt : -amt, currency: cur, accountId: accountId || null, categoryId: categoryId || null, date: date, note: 'Invoice ' + (v.number ? '#' + v.number + ' ' : '') + (v.party || ''), pairId: pairId });
     v.payments.push({ date: date, amount: amt, accountId: accountId || null, categoryId: categoryId || null, txId: txId, seq: seqN });
