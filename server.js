@@ -31,7 +31,7 @@ const DEFAULT_DATA = {
   budgets: [],
   installments: [],
   debts: [],
-  settings: { eurToRsdRate: 117.2, eurToRsdRateSource: 'manual', eurToRsdRateUpdated: null, defaultAccountId: null, defaultCategoryId: null, dateSeparator: '/' }
+  settings: { baseCurrency: 'RSD', enabledCurrencies: ['RSD', 'EUR', 'USD', 'GBP', 'CHF', 'JPY', 'CNY', 'AUD', 'CAD', 'SEK', 'NOK', 'PLN', 'CZK', 'TRY', 'INR'], eurToRsdRate: 117.2, eurToRsdRateSource: 'manual', eurToRsdRateUpdated: null, defaultAccountId: null, defaultCategoryId: null, dateSeparator: '/' }
 };
 
 app.use(express.json({ limit: '50mb' }));
@@ -135,7 +135,7 @@ app.post('/api/profiles', async (req, res) => {
 });
 
 const OZ_TO_GRAM = 31.1034768;
-const RATE_CODES = ['EUR', 'USD', 'XAU'];
+
 
 function loadDB() {
   const db = existsSync(DATA_FILE)
@@ -147,14 +147,6 @@ function loadDB() {
 
 function ensureRates(db) {
   if (!db.settings.rates) db.settings.rates = {};
-  const legacyEur = db.settings.eurToRsdRate ?? null;
-  for (const code of RATE_CODES) {
-    if (!db.settings.rates[code]) {
-      db.settings.rates[code] = code === 'EUR'
-        ? { rate: legacyEur, source: legacyEur ? (db.settings.eurToRsdRateSource || 'manual') : null, updated: db.settings.eurToRsdRateUpdated || null }
-        : { rate: null, source: null, updated: null };
-    }
-  }
   return db.settings.rates;
 }
 
@@ -164,15 +156,15 @@ async function fetchFiatRates() {
   try {
     const resp = await fetch('https://open.er-api.com/v6/latest/EUR');
     const data = await resp.json();
-    if (data?.rates?.RSD) {
-      return { rsdPerEur: data.rates.RSD, usdPerEur: data.rates.USD || null, source: 'open.er-api.com' };
+    if (data?.rates) {
+      return { rates: data.rates, source: 'open.er-api.com' };
     }
   } catch (e) {}
   try {
     const resp = await fetch('https://cdn.jsdelivr.net/npm/@fawazahmed0/currency-api@latest/v1/currencies/eur.json');
     const data = await resp.json();
-    if (data?.eur?.rsd) {
-      return { rsdPerEur: data.eur.rsd, usdPerEur: data.eur.usd || null, source: 'jsdelivr currency-api' };
+    if (data?.eur) {
+      return { rates: data.eur, source: 'jsdelivr currency-api' };
     }
   } catch (e) {}
   return null;
@@ -191,25 +183,25 @@ async function fetchRates(cur, db, force) {
   const out = {};
   const rates = ensureRates(db);
   const updated = new Date().toISOString();
-  // shouldUpdate(code): explicit request always wins; bulk refresh skips manual overrides
   const shouldUpdate = (code) => {
     if (cur && cur !== code) return false;
-    return force || cur === code || rates[code].source !== 'manual';
+    return force || cur === code || !rates[code] || rates[code].source !== 'manual';
   };
-  const wantFiat = !cur || ['EUR', 'USD'].includes(cur);
-  if (wantFiat && ['EUR', 'USD'].some(shouldUpdate)) {
-    const fiat = await fetchFiatRates();
-    if (fiat) {
-      if (shouldUpdate('EUR')) out.EUR = { rate: rnd4(fiat.rsdPerEur), source: fiat.source, updated };
-      if (fiat.usdPerEur && shouldUpdate('USD')) out.USD = { rate: rnd4(fiat.rsdPerEur / fiat.usdPerEur), source: fiat.source, updated };
+  const fiat = await fetchFiatRates();
+  if (fiat) {
+    for (const [code, rate] of Object.entries(fiat.rates)) {
+      if (code === 'EUR') continue;
+      if (shouldUpdate(code)) {
+        out[code] = { rate: rnd4(rate), source: fiat.source, updated };
+      }
     }
   }
-  if (shouldUpdate('XAU')) {
-    const usdPerOz = await fetchGoldUsdPerOz();
-    if (usdPerOz) {
-      const usdRate = out.USD?.rate || rates.USD?.rate;
-      if (usdRate) {
-        out.XAU = { rate: rnd4((usdPerOz / OZ_TO_GRAM) * usdRate), source: 'gold-api.com', updated };
+  if (!cur || cur === 'XAU') {
+    if (shouldUpdate('XAU')) {
+      const usdPerOz = await fetchGoldUsdPerOz();
+      if (usdPerOz && fiat?.rates?.USD) {
+        const eurPerGram = usdPerOz / fiat.rates.USD / OZ_TO_GRAM;
+        out.XAU = { rate: rnd4(eurPerGram), source: 'gold-api.com', updated };
       }
     }
   }
