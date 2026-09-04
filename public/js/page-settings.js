@@ -215,7 +215,8 @@ Object.assign(window.BlackBook, {
       }
       if (!type) type = signMode === 'pos' ? (amt > 0 ? 'expense' : 'income') : (amt < 0 ? 'expense' : 'income');
       const currencyRaw = g(r, curCol).toUpperCase();
-      const currency = ['RSD', 'EUR', 'USD', 'XAU'].includes(currencyRaw) ? currencyRaw : 'RSD';
+      const enabled = this.data.settings.enabledCurrencies || ['RSD', 'EUR', 'USD'];
+      const currency = enabled.includes(currencyRaw) ? currencyRaw : this.baseCurrency();
       this.data.transactions.push({
         id: crypto.randomUUID(), date: date, type: type,
         amount: Math.round((type === 'income' ? Math.abs(amt) : -Math.abs(amt)) * 100) / 100,
@@ -249,19 +250,25 @@ Object.assign(window.BlackBook, {
 
   ratesTableHtml() {
     const rates = this.getRates();
-    let rows = '<div class="rate-grid-row rate-grid-head"><span>CUR</span><span>RATE</span><span>SOURCE</span><span>UPDATED</span><span>MANUAL OVERRIDE</span><span></span><span></span></div>';
-    for (const code of ['EUR', 'USD', 'XAU']) {
+    const enabled = this.data.settings.enabledCurrencies || ['RSD', 'EUR', 'USD'];
+    let rows = '<div class="rate-grid-row rate-grid-head"><span>CUR</span><span>RATE (in EUR)</span><span>SOURCE</span><span>UPDATED</span><span>MANUAL OVERRIDE</span><span></span><span></span><span></span></div>';
+    for (const code of enabled) {
       const r = rates[code] || { rate: null, source: null, updated: null };
-      const rateVal = r.rate != null ? r.rate.toLocaleString('en-US', { maximumFractionDigits: 4 }) + ' <span class="rate-unit">RSD</span>' : '--';
+      const rateVal = code === 'EUR' ? '1.0000 <span class="rate-unit">EUR</span>'
+        : (r.rate != null ? r.rate.toLocaleString('en-US', { maximumFractionDigits: 4 }) + ' <span class="rate-unit">EUR</span>' : '--');
       const updated = r.updated ? new Date(r.updated).toLocaleString() : '--';
+      const removable = code !== (this.data.settings.baseCurrency || 'RSD');
       rows += '<div class="rate-grid-row">' +
         '<span class="rate-code">' + code + '</span>' +
         '<span class="rate-val">' + rateVal + '</span>' +
         '<span class="rate-src">' + this.escapeHtml(r.source || '--') + '</span>' +
         '<span class="rate-upd">' + updated + '</span>' +
-        '<input type="number" step="0.0001" class="input rate-manual-input" id="rate-manual-' + code + '" placeholder="set manually" value="' + (r.rate != null ? r.rate : '') + '">' +
-        '<button class="btn btn-sm btn-secondary" onclick="BlackBook.saveManualRate(\x27' + code + '\x27)">SET</button>' +
-        '<button class="btn btn-sm btn-secondary" onclick="BlackBook.refreshRate(\x27' + code + '\x27)">REFRESH</button>' +
+        (code !== 'EUR'
+          ? '<input type="number" step="0.0001" class="input rate-manual-input" id="rate-manual-' + code + '" placeholder="set manually" value="' + (r.rate != null ? r.rate : '') + '">' +
+            '<button class="btn btn-sm btn-secondary" onclick="BlackBook.saveManualRate(\x27' + code + '\x27)">SET</button>' +
+            '<button class="btn btn-sm btn-secondary" onclick="BlackBook.refreshRate(\x27' + code + '\x27)">REFRESH</button>'
+          : '<span></span><span></span><span></span>') +
+        (removable ? '<button class="btn btn-sm btn-danger" onclick="BlackBook.removeCurrency(\x27' + code + '\x27)">RM</button>' : '') +
         '</div>';
     }
     return rows;
@@ -397,6 +404,16 @@ Object.assign(window.BlackBook, {
       defaultCat.addEventListener('change', async () => {
         this.data.settings.defaultCategoryId = defaultCat.value || null;
         await this.save();
+      });
+    }
+    const baseCurSelect = el.querySelector('#settings-base-currency');
+    if (baseCurSelect) {
+      baseCurSelect.addEventListener('change', async () => {
+        this.data.settings.baseCurrency = baseCurSelect.value || 'RSD';
+        this.populateCurrencyDropdowns();
+        this.updateBaseCurrencyLabels();
+        await this.save();
+        this.renderSettings();
       });
     }
   },
@@ -680,7 +697,11 @@ Object.assign(window.BlackBook, {
       '<div class="settings-section-header"><span class="settings-section-title">DEFAULTS</span></div>' +
       '<div style="display:flex;gap:12px;flex-wrap:wrap;">' +
       '<div class="form-group"><label>Default Account</label><select id="settings-default-account" class="input">' + defaultAccountOpts + '</select></div>' +
-      '<div class="form-group"><label>Default Category</label><select id="settings-default-category" class="input">' + defaultCategoryOpts + '</select></div></div></div>' +
+      '<div class="form-group"><label>Default Category</label><select id="settings-default-category" class="input">' + defaultCategoryOpts + '</select></div>' +
+      '<div class="form-group"><label>Base Currency</label><select id="settings-base-currency" class="input">' +
+      (this.data.settings.enabledCurrencies || ['RSD', 'EUR', 'USD']).map(c =>
+        '<option value="' + c + '"' + (c === (this.data.settings.baseCurrency || 'RSD') ? ' selected' : '') + '>' + c + '</option>'
+      ).join('') + '</select></div></div></div>' +
 
       '<div class="settings-section">' +
       '<div class="settings-section-header"><span class="settings-section-title">PAGES &middot; PROFILE ' + this.escapeHtml((this.profile || 'default').toUpperCase()) + '</span></div>' +
@@ -689,7 +710,9 @@ Object.assign(window.BlackBook, {
 
       '<div>' +
       '<div class="settings-section">' +
-      '<div class="settings-section-header"><span class="settings-section-title">EXCHANGE RATES &middot; 1 UNIT IN RSD</span><button class="btn btn-sm btn-secondary" id="settings-refresh-all-rates">REFRESH ALL</button></div>' +
+      '<div class="settings-section-header"><span class="settings-section-title">EXCHANGE RATES &middot; 1 UNIT IN EUR</span>' +
+      '<button class="btn btn-sm btn-secondary" id="settings-refresh-all-rates">REFRESH ALL</button>' +
+      '<button class="btn btn-sm btn-primary" onclick="BlackBook.openAddCurrencyModal()">+ ADD CURRENCY</button></div>' +
       '<div class="settings-rate-card">' + this.ratesTableHtml() + '</div></div>' +
 
       '<div class="settings-section">' +
@@ -753,6 +776,57 @@ Object.assign(window.BlackBook, {
     const val = parseFloat(input.value);
     if (isNaN(val) || val <= 0) { alert('Invalid rate value.'); return; }
     this.getRates()[code] = { rate: val, source: 'manual', updated: new Date().toISOString() };
+    await this.save();
+    this.renderSettings();
+  },
+
+  openAddCurrencyModal() {
+    const enabled = new Set(this.data.settings.enabledCurrencies || []);
+    const allCodes = ['AED','AUD','BGN','BRL','CAD','CHF','CNY','CZK','DKK','EUR','GBP','HKD','HRK','HUF','IDR','ILS','INR','ISK','JPY','KRW','MXN','MYR','NOK','NZD','PHP','PLN','RON','RSD','SEK','SGD','THB','TRY','TWD','USD','ZAR'];
+    const available = allCodes.filter(c => !enabled.has(c));
+    if (!available.length) { alert('All common currencies are already enabled.'); return; }
+    const list = available.map(c => '<button class="btn btn-sm btn-secondary" style="margin:2px;cursor:pointer;" onclick="BlackBook.addCurrency(\x27' + c + '\x27)">' + c + '</button>').join(' ');
+    const overlay = document.createElement('div');
+    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:9999;display:flex;align-items:center;justify-content:center;';
+    overlay.id = 'add-currency-overlay';
+    overlay.innerHTML = '<div style="background:var(--bg,#111);border:1px solid var(--border,#333);border-radius:8px;padding:20px;max-width:520px;max-height:80vh;overflow-y:auto;">' +
+      '<div style="margin-bottom:12px;font-weight:bold;">SELECT CURRENCY TO ADD</div>' +
+      '<div>' + list + '</div>' +
+      '<div style="margin-top:12px;"><button class="btn btn-sm btn-secondary" onclick="BlackBook.closeAddCurrencyModal()">CLOSE</button></div></div>';
+    document.body.appendChild(overlay);
+  },
+
+  closeAddCurrencyModal() {
+    const el = document.getElementById('add-currency-overlay');
+    if (el) el.remove();
+  },
+
+  async addCurrency(code) {
+    if (!code) return;
+    const enabled = this.data.settings.enabledCurrencies || [];
+    if (!enabled.includes(code)) {
+      enabled.push(code);
+      this.data.settings.enabledCurrencies = enabled;
+    }
+    this.populateCurrencyDropdowns();
+    await this.save();
+    try {
+      const resp = await fetch('/api/exchange-rate?cur=' + code);
+      const result = await resp.json();
+      if (result.rates && result.rates[code]) {
+        this.getRates()[code] = result.rates[code];
+        await this.save();
+      }
+    } catch (e) {}
+    this.closeAddCurrencyModal();
+    this.renderSettings();
+  },
+
+  async removeCurrency(code) {
+    if (!code || code === (this.data.settings.baseCurrency || 'RSD')) return;
+    if (!(await this.confirmModal({ title: 'Remove Currency', message: 'Remove ' + code + ' from enabled currencies?\n\nHistorical data is preserved.', confirmText: 'Remove' }))) return;
+    this.data.settings.enabledCurrencies = (this.data.settings.enabledCurrencies || []).filter(c => c !== code);
+    this.populateCurrencyDropdowns();
     await this.save();
     this.renderSettings();
   },
