@@ -10,7 +10,7 @@ Object.assign(window.BlackBook, {
     for (const b of bills) {
       const color = this.billColor(b);
       const on = b.active !== false;
-      const amt = b.amount != null ? ' \u00b7 ' + this.fmtAmount(Math.abs(b.amount), b.currency || 'RSD') : '';
+      const amt = b.amount != null ? ' \u00b7 ' + this.fmtAmount(Math.abs(b.amount), b.currency || this.baseCurrency() || 'RSD') : '';
       html += '<div class="cat-filter-chip' + (on ? ' selected' : '') + '" style="--cc:' + color + ';' + (on ? 'background:' + color + ';color:var(--on-fill);' : '') + (on ? '' : 'opacity:0.55;') + '" onclick="BlackBook.toggleBillActive(\x27' + b.id + '\x27)" title="' + this.escapeHtml(b.name) + amt + ' \u00b7 click to show/hide in graph">' + this.escapeHtml(b.name) + '</div>';
     }
     html += '<span style="flex:1;"></span>';
@@ -57,18 +57,18 @@ Object.assign(window.BlackBook, {
   billsSummaryHtml() {
     let total = 0;
     for (const b of this.data.bills) { if (b.amount != null) {
-      const cur = b.currency || 'RSD';
-      if (cur === 'RSD') { total += Math.abs(b.amount); }
+      const cur = b.currency || this.baseCurrency() || 'RSD';
+      if (cur === this.baseCurrency()) { total += Math.abs(b.amount); }
       else {
         const from = this.billPayFrom(b);
         const acc = from && !from.startsWith('card:') ? this.data.accounts.find(a => a.id === from) : null;
         const fee = (acc && acc.foreignFee) || 0;
         const feeRes = this.calcForeignFee(b.amount, fee, cur);
-        total += Math.abs(this.toRsd(b.amount, cur)) + feeRes.feeRsd;
+        total += Math.abs(this.toBase(b.amount, cur)) + feeRes.feeRsd;
       }
     } }
     return '<div class="month-summary">' +
-      '<div class="month-summary-item"><span class="month-summary-label">MONTHLY TOTAL</span><span class="month-summary-value">' + this.fmtRsd(total) + '</span></div>' +
+      '<div class="month-summary-item"><span class="month-summary-label">MONTHLY TOTAL</span><span class="month-summary-value">' + this.fmtBase(total) + '</span></div>' +
       '<div class="month-summary-item"><span class="month-summary-label">BILLS</span><span class="month-summary-value">' + this.data.bills.length + '</span></div>' +
       '</div>';
   },
@@ -97,14 +97,14 @@ Object.assign(window.BlackBook, {
         if (!p) continue;
         const tx = p.txId ? this.data.transactions.find(t => t.id === p.txId) : null;
         if (tx) {
-          const txCur = tx.currency || bill.currency || 'RSD';
-          if (txCur === 'RSD') { yearTotal += Math.abs(tx.amount); }
-          else { yearTotal += Math.abs(this.toRsd(tx.amount, txCur)); }
+          const txCur = tx.currency || bill.currency || this.baseCurrency() || 'RSD';
+          if (txCur === this.baseCurrency()) { yearTotal += Math.abs(tx.amount); }
+          else { yearTotal += Math.abs(this.toBase(tx.amount, txCur)); }
         } else if (p.nativeAmount != null) {
           yearTotal += Math.abs(p.amount);
         } else {
           const native = p.amount != null ? p.amount : bill.amount;
-          if (native != null) yearTotal += Math.abs(this.toRsd(native, bill.currency || 'RSD'));
+          if (native != null) yearTotal += Math.abs(this.toBase(native, bill.currency || this.baseCurrency() || 'RSD'));
         }
         yearHasPaid = true;
       }
@@ -123,20 +123,20 @@ Object.assign(window.BlackBook, {
           const tx = paid.txId ? this.data.transactions.find(t => t.id === paid.txId) : null;
           let rsdAmount, nativeAbs;
           if (tx) {
-            const txCur = tx.currency || bill.currency || 'RSD';
-            if (txCur === 'RSD') {
+            const txCur = tx.currency || bill.currency || this.baseCurrency() || 'RSD';
+            if (txCur === this.baseCurrency()) {
               rsdAmount = Math.abs(tx.amount);
             } else {
-              rsdAmount = Math.abs(this.toRsd(tx.amount, txCur));
+              rsdAmount = Math.abs(this.toBase(tx.amount, txCur));
             }
-            nativeAbs = tx.nativeAmount != null ? Math.abs(tx.nativeAmount) : (txCur !== 'RSD' ? Math.abs(tx.amount) : null);
+            nativeAbs = tx.nativeAmount != null ? Math.abs(tx.nativeAmount) : (txCur !== this.baseCurrency() ? Math.abs(tx.amount) : null);
           } else {
             rsdAmount = Math.abs(paid.amount);
             nativeAbs = paid.nativeAmount != null ? Math.abs(paid.nativeAmount) : null;
           }
-          const natCur = (tx && tx.nativeCurrency) || paid.nativeCurrency || bill.currency || 'RSD';
+          const natCur = (tx && tx.nativeCurrency) || paid.nativeCurrency || bill.currency || this.baseCurrency() || 'RSD';
           const rsd = rsdAmount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-          amtLabel = nativeAbs != null && natCur !== 'RSD'
+          amtLabel = nativeAbs != null && natCur !== this.baseCurrency()
             ? rsd + '<br>(' + nativeAbs.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' ' + natCur + ')'
             : rsd;
         } else {
@@ -160,7 +160,7 @@ Object.assign(window.BlackBook, {
     document.getElementById('bill-id').value = '';
     document.getElementById('bill-name').value = '';
     document.getElementById('bill-amount').value = '';
-    document.getElementById('bill-currency').value = 'RSD';
+    document.getElementById('bill-currency').value = this.baseCurrency();
     this.updateBillAmountLabel();
     document.getElementById('bill-dueDay').value = '';
     document.getElementById('bill-active').value = 'true';
@@ -221,9 +221,9 @@ Object.assign(window.BlackBook, {
   },
 
   updateBillAmountLabel() {
-    const cur = document.getElementById('bill-currency').value || 'RSD';
+    const cur = document.getElementById('bill-currency').value || this.baseCurrency() || 'RSD';
     const lbl = document.getElementById('bill-amount-label');
-    if (lbl) lbl.textContent = cur === 'RSD' ? 'Amount (empty if unknown)' : 'Amount in ' + cur + ' (empty if unknown)';
+    if (lbl) lbl.textContent = cur === this.baseCurrency() ? 'Amount (empty if unknown)' : 'Amount in ' + cur + ' (empty if unknown)';
   },
 
   async deleteBill(billId) {
@@ -327,7 +327,7 @@ Object.assign(window.BlackBook, {
         if (!tn || (tn !== bn && !tn.includes(bn) && !bn.includes(tn))) return false;
       }
       if (amt != null) {
-        const tAmt = this.toRsd(Math.abs(t.amount), t.currency || 'RSD');
+        const tAmt = this.toBase(Math.abs(t.amount), t.currency || this.baseCurrency() || 'RSD');
         const tolerance = Math.max(amt * 0.05, 1);
         if (Math.abs(tAmt - amt) > tolerance) return false;
       }
@@ -343,9 +343,9 @@ Object.assign(window.BlackBook, {
     const existing = this.billMatchTx(bill, pay.month);
     if (existing) {
       pay.txId = existing.id;
-      const rsd = this.toRsd(Math.abs(existing.amount), existing.currency || 'RSD');
+      const rsd = this.toBase(Math.abs(existing.amount), existing.currency || this.baseCurrency() || 'RSD');
       const actual = amt;
-      if (Math.abs(rsd - Math.abs(actual)) > 0.005 && existing.currency === 'RSD') {
+      if (Math.abs(rsd - Math.abs(actual)) > 0.005 && existing.currency === this.baseCurrency()) {
         existing.amount = -Math.round(Math.abs(actual) * 100) / 100;
       }
       pay.amount = Math.abs(existing.amount);
@@ -357,7 +357,7 @@ Object.assign(window.BlackBook, {
     const y = parseInt(mp[0]), m = parseInt(mp[1]);
     const day = Math.min(Math.max(parseInt(bill.dueDay) || 1, 1), new Date(y, m, 0).getDate());
     const txId = 'bil-' + crypto.randomUUID();
-    const billCur = bill.currency || 'RSD';
+    const billCur = bill.currency || this.baseCurrency() || 'RSD';
     const tx = { id: txId, date: y + '-' + String(m).padStart(2, '0') + '-' + String(day).padStart(2, '0'), type: 'expense', categoryId: bill.categoryId || null, note: bill.name };
     if (from.startsWith('card:')) {
       tx.cardId = from.slice(5);
@@ -365,12 +365,12 @@ Object.assign(window.BlackBook, {
       tx.currency = billCur;
     } else {
       const acc = this.data.accounts.find(a => a.id === from);
-      const accCur = (acc && acc.currency) || 'RSD';
-      if (billCur !== accCur && billCur !== 'RSD' && accCur === 'RSD') {
+      const accCur = (acc && acc.currency) || this.baseCurrency() || 'RSD';
+      if (billCur !== accCur && billCur !== this.baseCurrency() && accCur === this.baseCurrency()) {
         const fee = (acc && acc.foreignFee) || 0;
         const amtCur = pay.amountCurrency || billCur;
-        const nativeAbs = pay.nativeAmount != null ? Math.abs(pay.nativeAmount) : (amtCur !== 'RSD' ? Math.abs(amt) : Math.abs(bill.amount || 0));
-        const rsdBase = amtCur === 'RSD' ? Math.abs(amt) : Math.abs(this.toRsd(amt, amtCur));
+        const nativeAbs = pay.nativeAmount != null ? Math.abs(pay.nativeAmount) : (amtCur !== this.baseCurrency() ? Math.abs(amt) : Math.abs(bill.amount || 0));
+        const rsdBase = amtCur === this.baseCurrency() ? Math.abs(amt) : Math.abs(this.toBase(amt, amtCur));
         let feeRsd;
         if (pay.feeAmountOverride != null) {
           feeRsd = this.round2(Math.abs(pay.feeAmountOverride));
@@ -427,23 +427,23 @@ Object.assign(window.BlackBook, {
             if (p) {
               const tx = p.txId ? this.data.transactions.find(t => t.id === p.txId) : null;
               if (tx) {
-                const txCur = tx.currency || b.currency || 'RSD';
-                if (txCur === 'RSD') { s += Math.abs(tx.amount); }
-                else { s += Math.abs(this.toRsd(tx.amount, txCur)); }
+                const txCur = tx.currency || b.currency || this.baseCurrency() || 'RSD';
+                if (txCur === this.baseCurrency()) { s += Math.abs(tx.amount); }
+                else { s += Math.abs(this.toBase(tx.amount, txCur)); }
               }
               else if (p.nativeAmount != null) { s += Math.abs(p.amount); }
-              else { const native = p.amount != null ? p.amount : b.amount; if (native != null) s += Math.abs(this.toRsd(native, b.currency || 'RSD')); }
+              else { const native = p.amount != null ? p.amount : b.amount; if (native != null) s += Math.abs(this.toBase(native, b.currency || this.baseCurrency() || 'RSD')); }
             } else {
               const native = b.amount;
               if (native != null) {
-                const cur = b.currency || 'RSD';
-                if (cur === 'RSD') { s += Math.abs(native); }
+                const cur = b.currency || this.baseCurrency() || 'RSD';
+                if (cur === this.baseCurrency()) { s += Math.abs(native); }
                 else {
                   const from = this.billPayFrom(b);
                   const acc = from && !from.startsWith('card:') ? this.data.accounts.find(a => a.id === from) : null;
                   const fee = (acc && acc.foreignFee) || 0;
                   const feeRes = this.calcForeignFee(native, fee, cur);
-                  s += Math.abs(this.toRsd(native, cur)) + feeRes.feeRsd;
+                  s += Math.abs(this.toBase(native, cur)) + feeRes.feeRsd;
                 }
               }
             }
@@ -467,22 +467,22 @@ Object.assign(window.BlackBook, {
           if (p) {
             const tx = p.txId ? this.data.transactions.find(t => t.id === p.txId) : null;
             if (tx) {
-              const txCur = tx.currency || bill.currency || 'RSD';
-              return this.round2(txCur === 'RSD' ? Math.abs(tx.amount) : Math.abs(this.toRsd(tx.amount, txCur)));
+              const txCur = tx.currency || bill.currency || this.baseCurrency() || 'RSD';
+              return this.round2(txCur === this.baseCurrency() ? Math.abs(tx.amount) : Math.abs(this.toBase(tx.amount, txCur)));
             }
             if (p.nativeAmount != null) return this.round2(Math.abs(p.amount));
             const native = p.amount != null ? p.amount : bill.amount;
-            return native != null ? this.round2(this.toRsd(native, bill.currency)) : 0;
+            return native != null ? this.round2(this.toBase(native, bill.currency)) : 0;
           }
           const native = bill.amount;
           if (native == null) return 0;
-          const cur = bill.currency || 'RSD';
-          if (cur === 'RSD') return Math.abs(native);
+          const cur = bill.currency || this.baseCurrency() || 'RSD';
+          if (cur === this.baseCurrency()) return Math.abs(native);
           const from = this.billPayFrom(bill);
           const acc = from && !from.startsWith('card:') ? this.data.accounts.find(a => a.id === from) : null;
           const fee = (acc && acc.foreignFee) || 0;
           const feeRes = this.calcForeignFee(native, fee, cur);
-          return this.round2(Math.abs(this.toRsd(native, cur)) + feeRes.feeRsd);
+          return this.round2(Math.abs(this.toBase(native, cur)) + feeRes.feeRsd);
         }),
         borderColor: this.billColor(bill),
         backgroundColor: this.billColor(bill),
@@ -521,14 +521,14 @@ Object.assign(window.BlackBook, {
     const bill = this.data.bills.find(b => b.id === billId);
     if (!bill) return;
     const existing = this.getBillPayment(billId, mk);
-    const cur = bill.currency || 'RSD';
+    const cur = bill.currency || this.baseCurrency() || 'RSD';
     const from = this.billPayFrom(bill);
     const acc = from && !from.startsWith('card:') ? this.data.accounts.find(a => a.id === from) : null;
-    const accCur = (acc && acc.currency) || 'RSD';
-    const isForeign = cur !== accCur && cur !== 'RSD' && accCur === 'RSD';
+    const accCur = (acc && acc.currency) || this.baseCurrency() || 'RSD';
+    const isForeign = cur !== accCur && cur !== this.baseCurrency() && accCur === this.baseCurrency();
     document.getElementById('bpay-bill').value = billId;
     document.getElementById('bpay-month').value = mk;
-    document.getElementById('bpay-amount-label').textContent = isForeign ? 'Amount (RSD)' : 'Amount (' + cur + ')';
+    document.getElementById('bpay-amount-label').textContent = isForeign ? 'Amount (' + this.baseCurrency() + ')' : 'Amount (' + cur + ')';
     const nativeRow = document.getElementById('bpay-native-row');
     const nativeLabel = document.getElementById('bpay-native-label');
     const nativeInput = document.getElementById('bpay-native-amount');
@@ -542,7 +542,7 @@ Object.assign(window.BlackBook, {
       nativeInput.value = existing && existing.nativeAmount != null ? Math.abs(existing.nativeAmount) : (bill.amount != null ? Math.abs(bill.amount) : '');
       document.getElementById('bpay-amount').value = existing ? (existing.baseAmount != null ? Math.abs(existing.baseAmount) : (existing.amount != null ? Math.abs(existing.amount) : '')) : '';
       feeRow.style.display = '';
-      feeLabel.textContent = 'Fee (RSD)' + (feePctModal > 0 ? ' \u00b7 ' + feePctModal + '% of native' : '');
+      feeLabel.textContent = 'Fee (' + this.baseCurrency() + ')' + (feePctModal > 0 ? ' \u00b7 ' + feePctModal + '% of native' : '');
       feeInput.value = existing && existing.feeAmount != null ? Math.abs(existing.feeAmount) : '';
     } else {
       nativeRow.style.display = 'none';
@@ -561,10 +561,10 @@ Object.assign(window.BlackBook, {
         const autoRes = nativeVal > 0 ? this.calcForeignFee(nativeVal, feePctModal, cur) : { feeNative: null, feeRsd: 0 };
         const feeRsd = manualFee > 0 ? manualFee : autoRes.feeRsd;
         const total = this.round2(val + feeRsd);
-        let feeTxt = 'FEE ' + feeRsd.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' RSD';
+        let feeTxt = 'FEE ' + feeRsd.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' ' + this.baseCurrency();
         if (manualFee > 0) feeTxt += ' (manual)';
         else if (autoRes.feeNative != null) feeTxt += ' (' + autoRes.feeNative.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' ' + cur + ')';
-        parts.push(feeTxt + ' \u2192 ' + total.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' RSD');
+        parts.push(feeTxt + ' \u2192 ' + total.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' ' + this.baseCurrency());
       } else if (nativeVal > 0) {
         parts.push('\u2248 ' + nativeVal.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' ' + cur);
       }
@@ -608,12 +608,12 @@ Object.assign(window.BlackBook, {
         if (manualFee >= 0) pay.feeAmountOverride = manualFee;
       }
       if (bill) {
-        const billCur = bill.currency || 'RSD';
+        const billCur = bill.currency || this.baseCurrency() || 'RSD';
         const from = this.billPayFrom(bill);
         const acc = from && !from.startsWith('card:') ? this.data.accounts.find(a => a.id === from) : null;
-        const accCur = (acc && acc.currency) || 'RSD';
-        const isForeign = billCur !== accCur && billCur !== 'RSD' && accCur === 'RSD';
-        if (isForeign) pay.amountCurrency = 'RSD';
+        const accCur = (acc && acc.currency) || this.baseCurrency() || 'RSD';
+        const isForeign = billCur !== accCur && billCur !== this.baseCurrency() && accCur === this.baseCurrency();
+        if (isForeign) pay.amountCurrency = this.baseCurrency();
         this.attachBillTransaction(bill, pay);
       }
       this.data.billPayments.push(pay);
@@ -633,18 +633,18 @@ Object.assign(window.BlackBook, {
       const tx = this.data.transactions.find(t => t.id === p.txId);
       if (!tx) continue;
       const bill = this.data.bills.find(b => b.id === p.billId);
-      const billCur = (bill && bill.currency) || 'RSD';
+      const billCur = (bill && bill.currency) || this.baseCurrency() || 'RSD';
       const from = bill ? this.billPayFrom(bill) : null;
       const acc = from && !from.startsWith('card:') ? this.data.accounts.find(a => a.id === from) : null;
-      const accCur = (acc && acc.currency) || 'RSD';
-      if ((tx.currency || 'RSD') === 'RSD' && tx.nativeAmount != null && billCur !== 'RSD' && accCur === 'RSD') {
+      const accCur = (acc && acc.currency) || this.baseCurrency() || 'RSD';
+      if ((tx.currency || this.baseCurrency() || 'RSD') === this.baseCurrency() && tx.nativeAmount != null && billCur !== this.baseCurrency() && accCur === this.baseCurrency()) {
         const fee = (acc && acc.foreignFee) || 0;
         const nativeAbs = Math.abs(tx.nativeAmount);
         const buggy = this.round2(nativeAbs * (1 + fee / 100));
         if (Math.abs(tx.amount) === buggy) {
           const curR = tx.nativeCurrency || billCur;
           const feeRes = this.calcForeignFee(nativeAbs, fee, curR);
-          const fixed = -this.round2(Math.abs(this.toRsd(nativeAbs, curR)) + feeRes.feeRsd);
+          const fixed = -this.round2(Math.abs(this.toBase(nativeAbs, curR)) + feeRes.feeRsd);
           if (fixed !== tx.amount) { tx.amount = fixed; changed = true; }
         }
       }
@@ -656,7 +656,7 @@ Object.assign(window.BlackBook, {
     }
     if (changed) this.save();
   },
-  fmtBillAmount(bill) { const rsd = this.toRsd(bill.amount, bill.currency); return rsd.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' RSD' + (bill.currency && bill.currency !== 'RSD' ? ' (' + bill.amount + ' ' + bill.currency + ')' : ''); },
+  fmtBillAmount(bill) { const rsd = this.toBase(bill.amount, bill.currency); return rsd.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' ' + this.baseCurrency() + (bill.currency && bill.currency !== this.baseCurrency() ? ' (' + bill.amount + ' ' + bill.currency + ')' : ''); },
 
   // ==================== SAVINGS ====================
 });
