@@ -224,7 +224,7 @@ Object.assign(window.BlackBook, {
     document.getElementById('invoice-date').value = this.fmtDateInput(this.today());
     const in14 = new Date(Date.now() + 14 * 86400000);
     document.getElementById('invoice-due').value = this.fmtDateInput(in14.toISOString().slice(0, 10));
-    document.getElementById('invoice-currency').value = 'RSD';
+    document.getElementById('invoice-currency').value = this.baseCurrency();
     document.getElementById('invoice-note').value = '';
     const catInput = document.getElementById('invoice-category-input');
     const catHidden = document.getElementById('invoice-category');

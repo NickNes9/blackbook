@@ -77,7 +77,7 @@ Object.assign(window.BlackBook, {
       return;
     }
     const acc = this.data.accounts.find(a => a.id === accountVal);
-    const accCur = (acc && acc.currency) || this.baseCurrency() || 'RSD';
+    const accCur = (acc && acc.currency) || this.baseCurrency();
     if (accCur !== this.baseCurrency()) { row.style.display = 'none'; if (feeRow) feeRow.style.display = 'none'; return; }
     row.style.display = '';
     if (feeRow) feeRow.style.display = '';

@@ -498,7 +498,7 @@ Object.assign(window.BlackBook, {
     const resetBtn = document.getElementById('settings-account-color-reset');
     if (resetBtn) { resetBtn.dataset.name = ''; resetBtn.dataset.kind = 'account'; }
     this.bindColorPicker('settings-account-color', 'settings-account-color-hex', 'settings-account-color-reset');
-    document.getElementById('settings-account-currency').value = 'RSD';
+    document.getElementById('settings-account-currency').value = this.baseCurrency();
     document.getElementById('settings-account-fee').value = '0';
     document.getElementById('settings-account-type').value = 'cash';
     document.getElementById('settings-account-rate').value = '5';
@@ -549,7 +549,7 @@ Object.assign(window.BlackBook, {
     const resetBtn = document.getElementById('settings-account-color-reset');
     if (resetBtn) { resetBtn.dataset.name = (card.name || card.id || ''); resetBtn.dataset.kind = 'card'; }
     this.bindColorPicker('settings-account-color', 'settings-account-color-hex', 'settings-account-color-reset');
-    document.getElementById('settings-account-currency').value = 'RSD';
+    document.getElementById('settings-account-currency').value = this.baseCurrency();
     document.getElementById('settings-account-type').value = 'creditcard';
     document.getElementById('settings-account-rate').value = card.ratePct != null ? card.ratePct : 5;
     document.getElementById('settings-account-due-day').value = card.dueDay || 15;

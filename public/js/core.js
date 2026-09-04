@@ -148,6 +148,8 @@ window.BlackBook = {
       }
     });
 
+    this.populateCurrencyDropdowns();
+    this.updateBaseCurrencyLabels();
     this.upgradeAllSelects(document);
     this.initChartResize();
     this.navigateTo('overview');
@@ -366,6 +368,8 @@ window.BlackBook = {
     document.querySelectorAll('.sidebar-nav-item').forEach(b => b.classList.toggle('active', b.dataset.page === page));
     window.scrollTo(0, 0);
     this.renderPage(page);
+    this.populateCurrencyDropdowns();
+    this.updateBaseCurrencyLabels();
   },
 
   bindSidebarToggle() {
@@ -461,6 +465,23 @@ window.BlackBook = {
 
   baseCurrency() {
     return this.data.settings.baseCurrency || 'RSD';
+  },
+
+  populateCurrencyDropdowns() {
+    const curs = this.data.settings.enabledCurrencies || ['RSD', 'EUR', 'USD'];
+    const selects = ['tx-currency-select', 'bill-currency', 'savings-goal-currency', 'settings-account-currency', 'debt-currency', 'invoice-currency'];
+    for (const id of selects) {
+      const sel = document.getElementById(id);
+      if (!sel) continue;
+      const prev = sel.value;
+      sel.innerHTML = curs.map(c => '<option value="' + c + '">' + c + '</option>').join('');
+      if (curs.includes(prev)) sel.value = prev;
+    }
+  },
+
+  updateBaseCurrencyLabels() {
+    const cur = this.baseCurrency();
+    document.querySelectorAll('.base-cur-label').forEach(el => el.textContent = cur);
   },
 
   toBase(amount, currency) {
