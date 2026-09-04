@@ -238,7 +238,7 @@ Object.assign(window.BlackBook, {
       const acc = this.data.accounts.find(a => a.id === t.accountId);
       const card = t.cardId ? this.cardById(t.cardId) : null;
       const cat = this.data.categories.find(c => c.id === t.categoryId);
-      rows.push([t.date, t.type, t.amount, t.currency || 'RSD', acc ? acc.name : '', card ? card.name : '', cat ? cat.name : '', t.note || '']);
+      rows.push([t.date, t.type, t.amount, t.currency || this.baseCurrency(), acc ? acc.name : '', card ? card.name : '', cat ? cat.name : '', t.note || '']);
     }
     const csv = rows.map(r => r.map(esc).join(',')).join('\r\n');
     const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8' });
