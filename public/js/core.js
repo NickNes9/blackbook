@@ -457,24 +457,34 @@ window.BlackBook = {
     return out;
   },
 
-  toRsd(amount, currency) {
-    if (!currency || currency === 'RSD') return amount;
-    const rates = this.data.settings.rates;
-    const r = rates && rates[currency];
-    if (r && r.rate) return amount * r.rate;
-    if (currency === 'EUR' && this.data.settings.eurToRsdRate) return amount * this.data.settings.eurToRsdRate;
-    return amount;
+  rnd4(v) { return Math.round(v * 10000) / 10000; },
+
+  baseCurrency() {
+    return this.data.settings.baseCurrency || 'RSD';
+  },
+
+  toBase(amount, currency) {
+    const base = this.baseCurrency();
+    if (!currency || currency === base) return amount;
+    const rates = this.getRates();
+    const rateFrom = (currency === 'EUR') ? 1 : (rates[currency] || {}).rate;
+    const rateTo = (base === 'EUR') ? 1 : (rates[base] || {}).rate;
+    if (!rateFrom || !rateTo) return amount;
+    return Math.round(amount * rateFrom / rateTo * 100) / 100;
   },
 
   getRates() {
     const s = this.data.settings;
     if (!s.rates) s.rates = {};
-    const legacyEur = s.eurToRsdRate || null;
-    for (const code of ['EUR', 'USD', 'XAU']) {
-      if (!s.rates[code]) {
-        s.rates[code] = code === 'EUR'
-          ? { rate: legacyEur, source: legacyEur ? (s.eurToRsdRateSource || 'auto') : null, updated: s.eurToRsdRateUpdated || null }
-          : { rate: null, source: null, updated: null };
+    if (!s.rates.EUR) s.rates.EUR = { rate: 1, source: null, updated: null };
+    // Legacy migration: if EUR rate > 10, rates are RSD-based — convert to EUR-based
+    if (s.rates.EUR.rate > 10) {
+      const eurRate = s.rates.EUR.rate;
+      for (const [code, r] of Object.entries(s.rates)) {
+        if (code === 'EUR') { s.rates[code] = { rate: 1, source: r.source, updated: r.updated }; continue; }
+        if (r && r.rate != null) {
+          s.rates[code] = { rate: this.rnd4(r.rate / eurRate), source: r.source, updated: r.updated };
+        }
       }
     }
     return s.rates;
@@ -582,8 +592,8 @@ window.BlackBook = {
     r(val);
   },
 
-  fmtRsd(amount) {
-    return amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' RSD';
+  fmtBase(amount) {
+    return amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' ' + this.baseCurrency();
   },
 
   round2(amount) {
@@ -592,7 +602,7 @@ window.BlackBook = {
 
   calcForeignFee(nativeAmt, pct, nativeCur) {
     const feeNative = this.round2(Math.abs(nativeAmt) * pct / 100);
-    return { feeNative: feeNative, feeRsd: this.round2(this.toRsd(feeNative, nativeCur || 'RSD')) };
+    return { feeNative: feeNative, feeBase: this.round2(this.toBase(feeNative, nativeCur || this.baseCurrency())) };
   },
 
   fmtAmount(amount, currency) {
@@ -600,30 +610,30 @@ window.BlackBook = {
   },
 
   fmtDualCurrency(amount, currency, accountCurrency, nativeAmount, nativeCurrency) {
-    const cur = currency || 'RSD';
-    const accCur = accountCurrency || 'RSD';
+    const cur = currency || this.baseCurrency();
+    const accCur = accountCurrency || this.baseCurrency();
     const sign = amount < 0 ? '-' : '';
     if (nativeCurrency && nativeCurrency !== accCur) {
       const natAbs = Math.abs(nativeAmount);
-      const rsdAbs = Math.abs(amount);
-      return sign + natAbs.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' ' + nativeCurrency + ' (' + rsdAbs.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' ' + accCur + ')';
+      const baseAbs = Math.abs(amount);
+      return sign + natAbs.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' ' + nativeCurrency + ' (' + baseAbs.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' ' + accCur + ')';
     }
     const abs = Math.abs(amount);
     if (cur === accCur) return sign + abs.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' ' + cur;
-    const rsd = Math.abs(this.toRsd(abs, cur));
-    return sign + rsd.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' ' + accCur + ' (' + abs.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' ' + cur + ')';
+    const base = Math.abs(this.toBase(abs, cur));
+    return sign + base.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' ' + accCur + ' (' + abs.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' ' + cur + ')';
   },
 
   accountBalance(accountId) {
     let total = 0;
     for (const tx of this.data.transactions) {
       if (tx.type === 'transfer') {
-        if (tx.fromAccountId === accountId) total -= this.toRsd(tx.amount, tx.currency);
-        if (tx.toAccountId === accountId) total += this.toRsd(tx.amountIn || tx.amount, tx.currencyIn || tx.currency);
+        if (tx.fromAccountId === accountId) total -= this.toBase(tx.amount, tx.currency);
+        if (tx.toAccountId === accountId) total += this.toBase(tx.amountIn || tx.amount, tx.currencyIn || tx.currency);
         continue;
       }
       if (tx.accountId !== accountId) continue;
-      total += this.toRsd(tx.amount, tx.currency);
+      total += this.toBase(tx.amount, tx.currency);
     }
     return total;
   },
@@ -631,7 +641,7 @@ window.BlackBook = {
   accountBalanceNative(accountId) {
     const acc = this.data.accounts.find(a => a.id === accountId);
     let total = 0;
-    let currency = (acc && acc.currency) || 'RSD';
+    let currency = (acc && acc.currency) || this.baseCurrency();
     for (const tx of this.data.transactions) {
       if (tx.type === 'transfer') {
         if (tx.fromAccountId === accountId) {
@@ -779,12 +789,12 @@ window.BlackBook = {
     try {
       const parsed = this.parseCommand(query);
       const typeLabel = parsed.type === 'expense' ? 'Expense' : 'Income';
-      const detail = typeLabel + ': ' + Math.abs(parsed.amount) + ' RSD' + (parsed.category ? ' / ' + parsed.category.name : '') + (parsed.date ? ' / ' + parsed.date : '') + (parsed.note ? ' / ' + parsed.note : '');
+      const detail = typeLabel + ': ' + Math.abs(parsed.amount) + ' ' + this.baseCurrency() + (parsed.category ? ' / ' + parsed.category.name : '') + (parsed.date ? ' / ' + parsed.date : '') + (parsed.note ? ' / ' + parsed.note : '');
       let cmdHtml = '<div class="command-section"><div style="padding:4px 12px;font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text-muted);">COMMAND</div>';
       cmdHtml += this._paletteItemHtml('Create: ' + detail, 'Enter');
       this._cmdPaletteItems.push({
         execute: async () => {
-          const tx = { id: crypto.randomUUID(), date: parsed.date, type: parsed.type, amount: Math.round((parsed.type === 'expense' ? -1 : 1) * Math.abs(parsed.amount) * 100) / 100, currency: parsed.account.currency || 'RSD', accountId: parsed.account.id, categoryId: parsed.category.id, note: parsed.note };
+          const tx = { id: crypto.randomUUID(), date: parsed.date, type: parsed.type, amount: Math.round((parsed.type === 'expense' ? -1 : 1) * Math.abs(parsed.amount) * 100) / 100, currency: parsed.account.currency || this.baseCurrency(), accountId: parsed.account.id, categoryId: parsed.category.id, note: parsed.note };
           this.data.transactions.unshift(tx);
           this.syncViewToDate(tx.date);
           await this.save();
@@ -805,7 +815,7 @@ window.BlackBook = {
       for (const tx of txResults) {
         const cat = this.data.categories.find(c => c.id === tx.categoryId);
         const sign = tx.type === 'income' ? '+' : '-';
-        const label = tx.date + '  ' + sign + this.toRsd(tx.amount, tx.currency).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + '  ' + (cat ? cat.name : '?') + (tx.note ? '  ' + tx.note : '');
+        const label = tx.date + '  ' + sign + this.toBase(tx.amount, tx.currency).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + '  ' + (cat ? cat.name : '?') + (tx.note ? '  ' + tx.note : '');
         searchHtml += this._paletteItemHtml(label, '');
         this._cmdPaletteItems.push({ execute: (_txId => () => { this.closeCommandPalette(); this.openEditTransaction(_txId); })(tx.id) });
       }
@@ -882,7 +892,7 @@ window.BlackBook = {
     let clear = false, amount = 0;
     if ((parts[2] || '').toLowerCase() === 'clear') { clear = true; }
     else { amount = this.evalAmount(parts[2]); if (isNaN(amount) || amount <= 0) throw new Error('budget amount invalid'); }
-    const label = (clear ? 'Clear budget: ' : 'Set budget: ') + cat.name + (clear ? '' : ' \u00b7 ' + Math.round(amount * 100) / 100 + ' RSD/mo');
+    const label = (clear ? 'Clear budget: ' : 'Set budget: ') + cat.name + (clear ? '' : ' \u00b7 ' + Math.round(amount * 100) / 100 + ' ' + this.baseCurrency() + '/mo');
     return {
       label: label,
       execute: async () => {
@@ -1150,7 +1160,7 @@ window.BlackBook = {
     const mk = y + '-' + String(m + 1).padStart(2, '0');
     const linkedTx = new Set((this.data.billPayments || []).map(p => p.txId).filter(Boolean));
     if (linkedTx.has(tx.id)) return null;
-    const txRsd = this.toRsd(Math.abs(tx.amount || 0), tx.currency || 'RSD');
+    const txRsd = this.toBase(Math.abs(tx.amount || 0), tx.currency || this.baseCurrency());
     for (const bill of (this.data.bills || [])) {
       if (bill.active === false) continue;
       if (this.getBillPayment(bill.id, mk)) continue;
@@ -1166,7 +1176,7 @@ window.BlackBook = {
         continue;
       }
       if (bill.amount != null && txRsd > 0) {
-        const bar = this.toRsd(Math.abs(bill.amount), bill.currency || 'RSD');
+        const bar = this.toBase(Math.abs(bill.amount), bill.currency || this.baseCurrency());
         const tolerance = Math.max(bar * 0.05, 1);
         if (Math.abs(txRsd - bar) > tolerance) continue;
       }
