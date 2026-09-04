@@ -2146,7 +2146,7 @@ select:disabled {
 
 .rate-grid-row {
   display: grid;
-  grid-template-columns: 48px 170px 110px 150px 1fr auto auto;
+  grid-template-columns: 48px 170px 110px 150px 1fr auto auto auto;
   gap: 8px;
   align-items: center;
   padding: 5px 0;
