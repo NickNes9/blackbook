@@ -189,12 +189,15 @@ async function fetchRates(cur, db, force) {
   };
   const fiat = await fetchFiatRates();
   if (fiat) {
+    // API returns units per EUR (e.g. USD=1.1619 means 1 EUR = 1.1619 USD).
+    // Store inverts so rate = EUR per 1 unit (1 USD = 0.86 EUR) — matches client pivot.
     for (const [code, rate] of Object.entries(fiat.rates)) {
       if (code === 'EUR') continue;
       if (shouldUpdate(code)) {
-        out[code] = { rate: rnd4(rate), source: fiat.source, updated };
+        out[code] = { rate: rnd4(1 / rate), source: fiat.source, updated };
       }
     }
+    if (shouldUpdate('EUR')) out.EUR = { rate: 1, source: fiat.source, updated };
   }
   if (!cur || cur === 'XAU') {
     if (shouldUpdate('XAU')) {
