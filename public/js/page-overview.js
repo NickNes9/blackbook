@@ -128,12 +128,12 @@ Object.assign(window.BlackBook, {
       if (this.isTransfer(tx)) continue;
       if (this._bulkSel && this._bulkSel.size && this._bulkOnly && !this._bulkSel.has(tx.id)) continue;
       if (y === year && m === month) {
-        const rsd = this.toRsd(tx.amount, tx.currency);
+        const rsd = this.toBase(tx.amount, tx.currency);
         if (tx.type === 'income') income += Math.abs(rsd); else expenses += Math.abs(rsd);
       }
     }
     const sortLabel = this._ovSortBy === 'date' ? 'DATE' : this._ovSortBy === 'value' ? 'VALUE' : 'DATE';
-    return '<div class="month-summary"><div class="month-summary-item"><span class="month-summary-label">INCOME</span><span class="month-summary-value amount-positive">' + this.fmtRsd(income) + '</span></div><div class="month-summary-item"><span class="month-summary-label">EXPENSES</span><span class="month-summary-value amount-negative">' + this.fmtRsd(expenses) + '</span></div><div class="month-summary-item"><span class="month-summary-label">NET</span><span class="month-summary-value ' + (income - expenses >= 0 ? 'amount-positive' : 'amount-negative') + '">' + this.fmtRsd(income - expenses) + '</span></div>' +
+    return '<div class="month-summary"><div class="month-summary-item"><span class="month-summary-label">INCOME</span><span class="month-summary-value amount-positive">' + this.fmtBase(income) + '</span></div><div class="month-summary-item"><span class="month-summary-label">EXPENSES</span><span class="month-summary-value amount-negative">' + this.fmtBase(expenses) + '</span></div><div class="month-summary-item"><span class="month-summary-label">NET</span><span class="month-summary-value ' + (income - expenses >= 0 ? 'amount-positive' : 'amount-negative') + '">' + this.fmtBase(income - expenses) + '</span></div>' +
       '<span style="flex:1;"></span>' +
       '<span style="display:flex;gap:6px;align-items:center;">' +
       (this._bulkSel && this._bulkSel.size ? '<div class="cat-filter-chip bulk-filter-chip' + (this._bulkOnly ? ' selected' : '') + '" onclick="BlackBook.toggleBulkOnly()">SELECTED (' + this._bulkSel.size + ')</div>' : '') +
@@ -162,7 +162,7 @@ Object.assign(window.BlackBook, {
       const { y, m } = this.ymOf(tx.date);
       if (this.isTransfer(tx)) continue;
       if (y === year && m === month && tx.type === 'expense') {
-        const rsd = Math.abs(this.toRsd(tx.amount, tx.currency));
+        const rsd = Math.abs(this.toBase(tx.amount, tx.currency));
         catTotals[tx.categoryId] = (catTotals[tx.categoryId] || 0) + rsd;
         catCounts[tx.categoryId] = (catCounts[tx.categoryId] || 0) + 1;
       }
@@ -186,7 +186,7 @@ Object.assign(window.BlackBook, {
         const w = widths[i];
         const pct = total > 0 ? amt / total * 100 : 0;
         const showText = w > 9;
-        segments += '<div class="cat-stacked-segment" style="left:' + offset.toFixed(3) + '%;width:' + Math.max(w - 0.15, 0.2).toFixed(3) + '%;background:' + this.categoryColor(cat) + ';" data-name="' + this.escapeHtml(cat.name) + '" data-amt="' + this.fmtRsd(amt) + '" data-pct="' + Math.round(pct * 10) / 10 + '" data-count="' + (catCounts[catId] || 0) + '"><span class="cat-seg-inner">' + (showText ? this.fmtRsd(amt) : '') + '</span></div>';
+        segments += '<div class="cat-stacked-segment" style="left:' + offset.toFixed(3) + '%;width:' + Math.max(w - 0.15, 0.2).toFixed(3) + '%;background:' + this.categoryColor(cat) + ';" data-name="' + this.escapeHtml(cat.name) + '" data-amt="' + this.fmtBase(amt) + '" data-pct="' + Math.round(pct * 10) / 10 + '" data-count="' + (catCounts[catId] || 0) + '"><span class="cat-seg-inner">' + (showText ? this.fmtBase(amt) : '') + '</span></div>';
         offset += w;
       });
     } else {
@@ -233,7 +233,7 @@ Object.assign(window.BlackBook, {
       if (this.isTransfer(tx)) continue;
       const d = new Date(tx.date);
       if (d.getFullYear() === year && d.getMonth() === month) {
-        const rsd = this.toRsd(tx.amount, tx.currency);
+        const rsd = this.toBase(tx.amount, tx.currency);
         if (tx.type === 'income') monthlyIncome += rsd; else monthlyExpenses += rsd;
       }
     }
@@ -243,15 +243,15 @@ Object.assign(window.BlackBook, {
     for (const bill of this.data.bills) {
       if (!bill.active) continue;
       if (bill.amount == null) continue;
-      if (bill.dueDay >= todayDate && bill.dueDay <= todayDate + 7) { upcomingBillCount++; upcomingBillTotal += this.toRsd(bill.amount, bill.currency); }
+      if (bill.dueDay >= todayDate && bill.dueDay <= todayDate + 7) { upcomingBillCount++; upcomingBillTotal += this.toBase(bill.amount, bill.currency); }
     }
     return '<div class="metrics-grid">' +
-      '<div class="metric-panel"><div class="metric-title">NET WORTH</div><div class="metric-value ' + (netWorth >= 0 ? 'metric-positive' : 'metric-negative') + '">' + this.fmtRsd(netWorth) + '</div></div>' +
-      '<div class="metric-panel"><div class="metric-title">CASH AVAILABLE</div><div class="metric-value ' + (cashAvailable >= 0 ? 'metric-positive' : 'metric-negative') + '">' + this.fmtRsd(cashAvailable) + '</div></div>' +
-      '<div class="metric-panel"><div class="metric-title">MONTHLY INCOME</div><div class="metric-value metric-positive">' + this.fmtRsd(monthlyIncome) + '</div><div class="metric-subtitle">' + now.toLocaleString('en', { month: 'long', year: 'numeric' }) + '</div></div>' +
-      '<div class="metric-panel"><div class="metric-title">MONTHLY EXPENSES</div><div class="metric-value metric-negative">' + this.fmtRsd(monthlyExpenses) + '</div><div class="metric-subtitle">' + now.toLocaleString('en', { month: 'long', year: 'numeric' }) + '</div></div>' +
+      '<div class="metric-panel"><div class="metric-title">NET WORTH</div><div class="metric-value ' + (netWorth >= 0 ? 'metric-positive' : 'metric-negative') + '">' + this.fmtBase(netWorth) + '</div></div>' +
+      '<div class="metric-panel"><div class="metric-title">CASH AVAILABLE</div><div class="metric-value ' + (cashAvailable >= 0 ? 'metric-positive' : 'metric-negative') + '">' + this.fmtBase(cashAvailable) + '</div></div>' +
+      '<div class="metric-panel"><div class="metric-title">MONTHLY INCOME</div><div class="metric-value metric-positive">' + this.fmtBase(monthlyIncome) + '</div><div class="metric-subtitle">' + now.toLocaleString('en', { month: 'long', year: 'numeric' }) + '</div></div>' +
+      '<div class="metric-panel"><div class="metric-title">MONTHLY EXPENSES</div><div class="metric-value metric-negative">' + this.fmtBase(monthlyExpenses) + '</div><div class="metric-subtitle">' + now.toLocaleString('en', { month: 'long', year: 'numeric' }) + '</div></div>' +
       '<div class="metric-panel"><div class="metric-title">SAVINGS RATE</div><div class="metric-value ' + (savingsRate >= 20 ? 'metric-positive' : savingsRate >= 0 ? '' : 'metric-negative') + '">' + savingsRate + '%</div><div class="metric-subtitle">of income saved</div></div>' +
-      '<div class="metric-panel"><div class="metric-title">UPCOMING BILLS</div><div class="metric-value">' + upcomingBillCount + '</div><div class="metric-subtitle">' + (upcomingBillTotal > 0 ? this.fmtRsd(upcomingBillTotal) + ' due soon' : 'No bills due') + '</div></div></div>';
+      '<div class="metric-panel"><div class="metric-title">UPCOMING BILLS</div><div class="metric-value">' + upcomingBillCount + '</div><div class="metric-subtitle">' + (upcomingBillTotal > 0 ? this.fmtBase(upcomingBillTotal) + ' due soon' : 'No bills due') + '</div></div></div>';
   },
 
   categoryFilterHtml() {
@@ -288,7 +288,7 @@ Object.assign(window.BlackBook, {
     if (sortBy === 'date') {
       txs.sort((a, b) => dirMult * a.date.localeCompare(b.date));
     } else if (sortBy === 'value') {
-      txs.sort((a, b) => dirMult * (Math.abs(this.toRsd(a.amount, a.currency)) - Math.abs(this.toRsd(b.amount, b.currency))));
+      txs.sort((a, b) => dirMult * (Math.abs(this.toBase(a.amount, a.currency)) - Math.abs(this.toBase(b.amount, b.currency))));
     }
     
     if (this.selectedAccount) {
@@ -333,12 +333,12 @@ Object.assign(window.BlackBook, {
           ? { shortName: card.shortName || '?', name: card.name }
           : (accounts[tx.accountId] || { shortName: 'TR', name: 'Transfer' });
         const cat = categories[tx.categoryId] || { name: '?' };
-        const rsd = this.toRsd(tx.amount, tx.currency);
+        const rsd = this.toBase(tx.amount, tx.currency);
         const amtClass = tx.type === 'income' ? 'amt-income' : 'amt-expense';
         let wtClass = '';
         if (Math.abs(rsd) > 10000) wtClass = ' amt-heavy'; else if (Math.abs(rsd) > 5000) wtClass = ' amt-medium';
-        const txCur = tx.currency || 'RSD';
-        const accCur = card ? 'RSD' : ((accounts[tx.accountId] || {}).currency || 'RSD');
+        const txCur = tx.currency || this.baseCurrency() || 'RSD';
+        const accCur = card ? this.baseCurrency() : ((accounts[tx.accountId] || {}).currency || this.baseCurrency() || 'RSD');
         const txAmtDisplay = this.fmtDualCurrency(tx.amount, txCur, accCur, tx.nativeAmount, tx.nativeCurrency);
         const editFn = card ? 'openEditCardTx' : 'openEditTransaction';
         let billChip = '';
@@ -520,7 +520,7 @@ Object.assign(window.BlackBook, {
       if (this.isTransfer(tx)) continue;
       const d = new Date(tx.date);
       if (d.getFullYear() !== year) continue;
-      const m = d.getMonth(), rsd = this.toRsd(tx.amount, tx.currency);
+      const m = d.getMonth(), rsd = this.toBase(tx.amount, tx.currency);
       if (tx.type === 'income') income[m] += rsd; else expenses[m] += rsd;
     }
     const incCol = this.data.settings.incomeColor || '#4ade80';
@@ -544,7 +544,7 @@ Object.assign(window.BlackBook, {
             usePointStyle: true,
             boxPadding: 3,
             callbacks: {
-              label: (c) => ' ' + c.dataset.label + ': ' + this.fmtRsd(c.parsed.y)
+              label: (c) => ' ' + c.dataset.label + ': ' + this.fmtBase(c.parsed.y)
             }
           }
         },

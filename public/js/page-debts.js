@@ -44,7 +44,7 @@ Object.assign(window.BlackBook, {
     return '<div class="cat-filter" style="margin-bottom:0;margin-right:10px;">' + chip('in', 'OWED') + chip('out', 'I OWE') + chip('all', 'ALL') + '</div>';
   },
 
-  debtRsd(d) { return Math.abs(this.toRsd(d.amount, d.currency || 'RSD')); },
+  debtRsd(d) { return Math.abs(this.toBase(d.amount, d.currency || this.baseCurrency() || 'RSD')); },
 
   debtPayments(d) {
     const out = [];
@@ -72,10 +72,10 @@ Object.assign(window.BlackBook, {
     const payments = this.debtPayments(d);
     let paid = 0;
     for (const p of payments) {
-      const cur = d.currency || 'RSD';
+      const cur = d.currency || this.baseCurrency() || 'RSD';
       const amt = p.txId ? (this.data.transactions.find(t => t.id === p.txId) || {}).amount : null;
       const value = (amt != null) ? Math.abs(amt) : p.amount;
-      paid += Math.abs(this.toRsd(value, cur));
+      paid += Math.abs(this.toBase(value, cur));
     }
     return Math.min(this.debtRsd(d), paid);
   },
@@ -83,7 +83,7 @@ Object.assign(window.BlackBook, {
   debtRemainingRsd(d) { return Math.max(0, this.debtRsd(d) - this.debtPaidRsd(d)); },
 
   debtPaidNative(d) {
-    const cur = d.currency || 'RSD';
+    const cur = d.currency || this.baseCurrency() || 'RSD';
     let paid = 0;
     for (const t of (this.data.transactions || [])) {
       if (!t || t.debtId !== d.id) continue;
@@ -120,9 +120,9 @@ Object.assign(window.BlackBook, {
     const f = this._debtFilter || 'all';
     const filterLabel = f === 'in' ? 'OWED' : f === 'out' ? 'I OWE' : 'ALL';
     return '<div class="month-summary">' +
-      '<div class="month-summary-item"><span class="month-summary-label">OWED TO ME</span><span class="month-summary-value amount-positive">' + this.fmtRsd(owedToMe) + '</span></div>' +
-      '<div class="month-summary-item"><span class="month-summary-label">I OWE</span><span class="month-summary-value amount-negative">' + this.fmtRsd(iOwe) + '</span></div>' +
-      '<div class="month-summary-item"><span class="month-summary-label">NET</span><span class="month-summary-value ' + (net >= 0 ? 'amount-positive' : 'amount-negative') + '">' + this.fmtRsd(net) + '</span></div>' +
+      '<div class="month-summary-item"><span class="month-summary-label">OWED TO ME</span><span class="month-summary-value amount-positive">' + this.fmtBase(owedToMe) + '</span></div>' +
+      '<div class="month-summary-item"><span class="month-summary-label">I OWE</span><span class="month-summary-value amount-negative">' + this.fmtBase(iOwe) + '</span></div>' +
+      '<div class="month-summary-item"><span class="month-summary-label">NET</span><span class="month-summary-value ' + (net >= 0 ? 'amount-positive' : 'amount-negative') + '">' + this.fmtBase(net) + '</span></div>' +
       '<span style="flex:1;"></span>' +
       '<span style="display:flex;gap:4px;align-items:center;">' +
       '<button class="btn btn-sm btn-secondary debt-filter-cycle" onclick="BlackBook.cycleDebtFilter()" title="Cycle filter: Owed → I Owe → All" style="min-width:100px;text-align:center;">' + filterLabel + '</button>' +
@@ -144,7 +144,7 @@ Object.assign(window.BlackBook, {
 
   debtCardHtml(d) {
     const settled = this.debtIsSettled(d);
-    const cur = d.currency || 'RSD';
+    const cur = d.currency || this.baseCurrency() || 'RSD';
     const total = Math.abs(d.amount || 0), paid = Math.min(total, this.debtPaidNative(d));
     const pct = total > 0 ? Math.min(Math.round(total > 0 ? (this.debtPaidRsd(d) / this.debtRsd(d)) * 100 : 0), 100) : 0;
     const overdue = !settled && d.dueDate && d.dueDate < this.today();
@@ -178,7 +178,7 @@ Object.assign(window.BlackBook, {
     document.getElementById('debt-person').value = '';
     this._setDebtDir('in');
     document.getElementById('debt-amount').value = '';
-    document.getElementById('debt-currency').value = 'RSD';
+    document.getElementById('debt-currency').value = this.baseCurrency();
     document.getElementById('debt-date').value = this.fmtDateInput(this.today());
     const in30 = new Date(Date.now() + 30 * 86400000);
     document.getElementById('debt-due').value = this.fmtDateInput(in30.toISOString().slice(0, 10));
@@ -206,7 +206,7 @@ Object.assign(window.BlackBook, {
     document.getElementById('debt-person').value = d.person;
     this._setDebtDir(d.type || 'in');
     document.getElementById('debt-amount').value = d.amount;
-    document.getElementById('debt-currency').value = d.currency || 'RSD';
+    document.getElementById('debt-currency').value = d.currency || this.baseCurrency() || 'RSD';
     document.getElementById('debt-date').value = this.fmtDateInput(d.date || '');
     document.getElementById('debt-due').value = this.fmtDateInput(d.dueDate || '');
     document.getElementById('debt-paid').value = d.amountPaid || '';
@@ -302,7 +302,7 @@ Object.assign(window.BlackBook, {
   async applyDebtPayment(d, amt, date) {
     if (!(amt > 0)) return;
     if (!this.data.transactions) this.data.transactions = [];
-    const cur = d.currency || 'RSD';
+    const cur = d.currency || this.baseCurrency() || 'RSD';
     const type = (d.type === 'in') ? 'income' : 'expense';
     const txId = 'tx-' + Date.now() + '-' + Math.floor(Math.random() * 10000);
     const tx = {
@@ -355,7 +355,7 @@ Object.assign(window.BlackBook, {
     const payments = this.debtPayments(d).slice();
     if (!payments.length) return;
     const last = payments[payments.length - 1];
-    const amtDisplay = this.fmtAmount(last.amount, d.currency || 'RSD');
+    const amtDisplay = this.fmtAmount(last.amount, d.currency || this.baseCurrency() || 'RSD');
     if (!(await this.confirmModal({ title: 'Unpay Debt', message: 'Remove the last payment of ' + amtDisplay + ' for "' + d.person + '"? The remaining debt will increase.', confirmText: 'Unpay' }))) return;
     if (last.txId) {
       this.removeDebtPayment(last.txId);

@@ -36,7 +36,7 @@ Object.assign(window.BlackBook, {
       const b = budgetMap[cat.id];
       const on = !(this._budgetCatOff && this._budgetCatOff[cat.id]);
       const name = b && b.name ? b.name : cat.name;
-      html += '<div class="cat-filter-chip' + (on ? ' selected' : '') + '" style="--cc:' + color + ';' + (on ? 'background:' + color + ';color:var(--on-fill);' : '') + (on ? '' : 'opacity:0.55;') + '" onclick="BlackBook.toggleBudgetCat(\x27' + cat.id + '\x27)" title="' + this.escapeHtml(name) + (b ? ' \u00b7 ' + this.fmtRsd(b.amount) : ' \u00b7 NO LIMIT') + ' \u00b7 click to show/hide in graph">' + this.escapeHtml(name) + '</div>';
+      html += '<div class="cat-filter-chip' + (on ? ' selected' : '') + '" style="--cc:' + color + ';' + (on ? 'background:' + color + ';color:var(--on-fill);' : '') + (on ? '' : 'opacity:0.55;') + '" onclick="BlackBook.toggleBudgetCat(\x27' + cat.id + '\x27)" title="' + this.escapeHtml(name) + (b ? ' \u00b7 ' + this.fmtBase(b.amount) : ' \u00b7 NO LIMIT') + ' \u00b7 click to show/hide in graph">' + this.escapeHtml(name) + '</div>';
     }
     html += '<span style="flex:1;"></span>';
     html += '<button class="btn btn-sm btn-secondary" style="margin-left:4px;" onclick="BlackBook.toggleBudgetGraph()" title="Hide budget graph">HIDE</button>';
@@ -66,7 +66,7 @@ Object.assign(window.BlackBook, {
       if (tx.type !== 'expense' || this.isTransfer(tx)) continue;
       const mk = String(tx.date || '').slice(0, 7);
       if (!totalSet.has(mk)) continue;
-      const rsd = Math.abs(this.toRsd(tx.amount, tx.currency));
+      const rsd = Math.abs(this.toBase(tx.amount, tx.currency));
       if (!byCat[tx.categoryId]) byCat[tx.categoryId] = {};
       byCat[tx.categoryId][mk] = (byCat[tx.categoryId][mk] || 0) + rsd;
       total[mk] += rsd;
@@ -144,13 +144,13 @@ Object.assign(window.BlackBook, {
       if (tx.type !== 'expense') continue;
       if (!budgetedIds.has(tx.categoryId) || this.isTransfer(tx)) continue;
       const { y, m } = this.ymOf(tx.date);
-      if (y === year && m === month) { used += Math.abs(this.toRsd(tx.amount, tx.currency)); }
+      if (y === year && m === month) { used += Math.abs(this.toBase(tx.amount, tx.currency)); }
     }
     const totalRemaining = totalBudgeted - used;
     return '<div class="month-summary">' +
-      '<div class="month-summary-item"><span class="month-summary-label">TOTAL BUDGET</span><span class="month-summary-value">' + this.fmtRsd(totalBudgeted) + '</span></div>' +
-      '<div class="month-summary-item"><span class="month-summary-label">USED</span><span class="month-summary-value">' + this.fmtRsd(used) + '</span></div>' +
-      '<div class="month-summary-item"><span class="month-summary-label">REMAINING</span><span class="month-summary-value ' + (totalRemaining >= 0 ? 'amount-positive' : 'amount-negative') + '">' + this.fmtRsd(totalRemaining) + '</span></div>' +
+      '<div class="month-summary-item"><span class="month-summary-label">TOTAL BUDGET</span><span class="month-summary-value">' + this.fmtBase(totalBudgeted) + '</span></div>' +
+      '<div class="month-summary-item"><span class="month-summary-label">USED</span><span class="month-summary-value">' + this.fmtBase(used) + '</span></div>' +
+      '<div class="month-summary-item"><span class="month-summary-label">REMAINING</span><span class="month-summary-value ' + (totalRemaining >= 0 ? 'amount-positive' : 'amount-negative') + '">' + this.fmtBase(totalRemaining) + '</span></div>' +
       '</div>';
   },
 
@@ -162,7 +162,7 @@ Object.assign(window.BlackBook, {
       if (tx.type !== 'expense') continue;
       if (this.isTransfer(tx)) continue;
       const { y, m } = this.ymOf(tx.date);
-      if (y === year && m === month) { catSpent[tx.categoryId] = (catSpent[tx.categoryId] || 0) + this.toRsd(tx.amount, tx.currency); }
+      if (y === year && m === month) { catSpent[tx.categoryId] = (catSpent[tx.categoryId] || 0) + this.toBase(tx.amount, tx.currency); }
     }
     let html = '';
     const sorted = this.sortedCategories();
@@ -181,8 +181,8 @@ Object.assign(window.BlackBook, {
       const catColor = this.categoryColor(cat);
       const budgetName = budget && budget.name ? budget.name : cat.name;
       const barValues = budget
-        ? this.fmtRsd(spentAbs) + '<span class="budget-bar-slash">/ ' + this.fmtRsd(amount) + '</span>'
-        : this.fmtRsd(spentAbs);
+        ? this.fmtBase(spentAbs) + '<span class="budget-bar-slash">/ ' + this.fmtBase(amount) + '</span>'
+        : this.fmtBase(spentAbs);
       const barBg = over ? 'rgba(248,113,113,0.15)' : 'var(--surface-raised)';
       html += '<div class="budget-card">' +
         '<div class="budget-headrow">' +

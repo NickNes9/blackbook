@@ -1,7 +1,7 @@
 (function () {
 Object.assign(window.BlackBook, {
   accountSelectOptions(selectedVal) {
-    const opts = this.visibleAccounts().map(a => '<option value="' + a.id + '"' + (a.id === selectedVal ? ' selected' : '') + '>' + this.escapeHtml(a.name) + (a.currency && a.currency !== 'RSD' ? ' (' + a.currency + ')' : '') + '</option>');
+    const opts = this.visibleAccounts().map(a => '<option value="' + a.id + '"' + (a.id === selectedVal ? ' selected' : '') + '>' + this.escapeHtml(a.name) + (a.currency && a.currency !== this.baseCurrency() ? ' (' + a.currency + ')' : '') + '</option>');
     for (const c of (this.data.creditCards || [])) {
       opts.push('<option value="card:' + c.id + '"' + ('card:' + c.id === selectedVal ? ' selected' : '') + '>' + this.escapeHtml(c.name) + '</option>');
     }
@@ -19,8 +19,8 @@ Object.assign(window.BlackBook, {
     const accSelect = document.getElementById('tx-account');
     accSelect.innerHTML = (defaultAccountId ? '' : '<option value="">-- SELECT ACCOUNT --</option>') + (this.accountSelectOptions(defaultAccountId) || '<option value="">no accounts</option>');
     const selAcc = cardPrefill ? null : this.data.accounts.find(a => a.id === defaultAccountId);
-    document.getElementById('tx-currency').value = selAcc ? (selAcc.currency || 'RSD') : 'RSD';
-    document.getElementById('tx-currency-select').value = selAcc ? (selAcc.currency || 'RSD') : 'RSD';
+    document.getElementById('tx-currency').value = selAcc ? (selAcc.currency || this.baseCurrency() || 'RSD') : this.baseCurrency();
+    document.getElementById('tx-currency-select').value = selAcc ? (selAcc.currency || this.baseCurrency() || 'RSD') : this.baseCurrency();
     document.getElementById('tx-native-amount').value = '';
     document.getElementById('tx-fee-amount').value = '';
     document.getElementById('tx-preview').textContent = '';
@@ -44,11 +44,11 @@ Object.assign(window.BlackBook, {
     document.getElementById('tx-account').addEventListener('change', (e) => {
       const v = String(e.target.value);
       if (v.startsWith('card:')) {
-        document.getElementById('tx-currency').value = 'RSD';
-        document.getElementById('tx-currency-select').value = 'RSD';
+        document.getElementById('tx-currency').value = this.baseCurrency();
+        document.getElementById('tx-currency-select').value = this.baseCurrency();
       } else {
         const acc = this.data.accounts.find(a => a.id === v);
-        const cur = acc ? (acc.currency || 'RSD') : 'RSD';
+        const cur = acc ? (acc.currency || this.baseCurrency() || 'RSD') : this.baseCurrency();
         document.getElementById('tx-currency').value = cur;
         document.getElementById('tx-currency-select').value = cur;
       }
@@ -71,14 +71,14 @@ Object.assign(window.BlackBook, {
     const row = document.getElementById('tx-native-row');
     const feeRow = document.getElementById('tx-fee-row');
     const label = row ? row.querySelector('label') : null;
-    if (!accountVal || accountVal.startsWith('card:') || cur === 'RSD') {
+    if (!accountVal || accountVal.startsWith('card:') || cur === this.baseCurrency()) {
       row.style.display = 'none';
       if (feeRow) feeRow.style.display = 'none';
       return;
     }
     const acc = this.data.accounts.find(a => a.id === accountVal);
-    const accCur = (acc && acc.currency) || 'RSD';
-    if (accCur !== 'RSD') { row.style.display = 'none'; if (feeRow) feeRow.style.display = 'none'; return; }
+    const accCur = (acc && acc.currency) || this.baseCurrency() || 'RSD';
+    if (accCur !== this.baseCurrency()) { row.style.display = 'none'; if (feeRow) feeRow.style.display = 'none'; return; }
     row.style.display = '';
     if (feeRow) feeRow.style.display = '';
     if (label) label.textContent = 'NATIVE AMOUNT (' + cur + ')';
@@ -89,10 +89,10 @@ Object.assign(window.BlackBook, {
     if (!previewEl) return;
     const accountVal = document.getElementById('tx-account').value;
     const cur = document.getElementById('tx-currency-select').value;
-    if (!accountVal || accountVal.startsWith('card:') || cur === 'RSD') { previewEl.textContent = ''; return; }
+    if (!accountVal || accountVal.startsWith('card:') || cur === this.baseCurrency()) { previewEl.textContent = ''; return; }
     const acc = this.data.accounts.find(a => a.id === accountVal);
-    const accCur = (acc && acc.currency) || 'RSD';
-    if (accCur !== 'RSD') { previewEl.textContent = ''; return; }
+    const accCur = (acc && acc.currency) || this.baseCurrency() || 'RSD';
+    if (accCur !== this.baseCurrency()) { previewEl.textContent = ''; return; }
     const nativeEl = document.getElementById('tx-native-amount');
     const nativeVal = nativeEl && nativeEl.value.trim() ? this.evalAmount(nativeEl.value) : null;
     const amtVal = this.evalAmount(document.getElementById('tx-amount').value);
@@ -104,10 +104,10 @@ Object.assign(window.BlackBook, {
       const autoRes = nativeVal > 0 ? this.calcForeignFee(nativeVal, fee, cur) : { feeNative: null, feeRsd: 0 };
       const feeRsd = manualFee > 0 ? manualFee : autoRes.feeRsd;
       const total = this.round2(amtVal + feeRsd);
-      let feeTxt = 'FEE ' + feeRsd.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' RSD';
+      let feeTxt = 'FEE ' + feeRsd.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' ' + this.baseCurrency();
       if (manualFee > 0) feeTxt += ' (manual)';
       else if (autoRes.feeNative != null) feeTxt += ' (' + autoRes.feeNative.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' ' + cur + ')';
-      parts.push(feeTxt + ' \u2192 ' + total.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' RSD');
+      parts.push(feeTxt + ' \u2192 ' + total.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' ' + this.baseCurrency());
     } else if (nativeVal > 0) {
       parts.push('\u2248 ' + nativeVal.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' ' + cur);
     }
@@ -118,7 +118,7 @@ Object.assign(window.BlackBook, {
     this._transferSourceIds = null;
     const vis = this.visibleAccounts();
     if (vis.length < 2) { alert('You need at least two accounts to transfer.'); return; }
-    const opts = vis.map(a => '<option value="' + a.id + '">' + this.escapeHtml(a.name) + ' (' + (a.currency || 'RSD') + ')</option>').join('');
+    const opts = vis.map(a => '<option value="' + a.id + '">' + this.escapeHtml(a.name) + ' (' + (a.currency || this.baseCurrency() || 'RSD') + ')</option>').join('');
     document.getElementById('tr-from').innerHTML = opts;
     document.getElementById('tr-to').innerHTML = opts;
     document.getElementById('tr-from').value = (this.selectedAccount && vis.some(a => a.id === this.selectedAccount) && this.selectedAccount !== vis[0].id) ? this.selectedAccount : vis[0].id;
@@ -139,7 +139,7 @@ Object.assign(window.BlackBook, {
     this._transferSourceIds = null;
     if (!tx || tx.type !== 'transfer') return this.openEditTransaction(txId);
     const vis = this.visibleAccounts();
-    const opts = vis.map(a => '<option value="' + a.id + '">' + this.escapeHtml(a.name) + ' (' + (a.currency || 'RSD') + ')</option>').join('');
+    const opts = vis.map(a => '<option value="' + a.id + '">' + this.escapeHtml(a.name) + ' (' + (a.currency || this.baseCurrency() || 'RSD') + ')</option>').join('');
     document.getElementById('tr-from').innerHTML = opts;
     document.getElementById('tr-to').innerHTML = opts;
     document.getElementById('tr-from').value = tx.fromAccountId;
@@ -182,8 +182,8 @@ Object.assign(window.BlackBook, {
   updateTransferCurrencyLabels() {
     const fromAcc = this.data.accounts.find(a => a.id === document.getElementById('tr-from').value);
     const toAcc = this.data.accounts.find(a => a.id === document.getElementById('tr-to').value);
-    const curF = fromAcc ? (fromAcc.currency || 'RSD') : 'RSD';
-    const curT = toAcc ? (toAcc.currency || 'RSD') : 'RSD';
+    const curF = fromAcc ? (fromAcc.currency || this.baseCurrency() || 'RSD') : this.baseCurrency();
+    const curT = toAcc ? (toAcc.currency || this.baseCurrency() || 'RSD') : this.baseCurrency();
     document.getElementById('tr-out-label').textContent = 'Amount out (' + curF + ')';
     document.getElementById('tr-in-label').textContent = 'Amount in (' + curT + ')';
   },
@@ -191,11 +191,12 @@ Object.assign(window.BlackBook, {
   convertBetweenCurrencies(amount, curFrom, curTo) {
     if (!amount || isNaN(amount)) return null;
     if (curFrom === curTo) return Math.round(amount * 100) / 100;
-    const rateFrom = curFrom === 'RSD' ? 1 : (this.getRates()[curFrom] || {}).rate;
-    const rateTo = curTo === 'RSD' ? 1 : (this.getRates()[curTo] || {}).rate;
+    const rates = this.getRates();
+    const rateFrom = (curFrom === 'EUR') ? 1 : (rates[curFrom] || {}).rate;
+    const rateTo = (curTo === 'EUR') ? 1 : (rates[curTo] || {}).rate;
     if (!rateFrom || !rateTo) return null;
-    const rsd = amount * rateFrom;
-    return Math.round(rsd / rateTo * 100) / 100;
+    const eur = amount * rateFrom;
+    return Math.round(eur / rateTo * 100) / 100;
   },
 
   async doTransfer(fromId, toId, amountOut, noteExtra, date, amountInOverride) {
@@ -203,8 +204,8 @@ Object.assign(window.BlackBook, {
     const fromAcc = this.data.accounts.find(a => a.id === fromId);
     const toAcc = this.data.accounts.find(a => a.id === toId);
     if (!fromAcc || !toAcc || fromId === toId || isNaN(amountOut) || amountOut <= 0) return false;
-    const curF = fromAcc.currency || 'RSD';
-    const curT = toAcc.currency || 'RSD';
+    const curF = fromAcc.currency || this.baseCurrency() || 'RSD';
+    const curT = toAcc.currency || this.baseCurrency() || 'RSD';
     let amountIn = amountInOverride;
     if (amountIn == null || isNaN(amountIn)) amountIn = this.convertBetweenCurrencies(amountOut, curF, curT);
     if (amountIn == null || isNaN(amountIn)) amountIn = amountOut;
@@ -237,8 +238,8 @@ Object.assign(window.BlackBook, {
     amtOut.addEventListener('input', () => {
       const f = document.getElementById('tr-from');
       const t = document.getElementById('tr-to');
-      const curF = (this.data.accounts.find(a => a.id === f.value) || {}).currency || 'RSD';
-      const curT = (this.data.accounts.find(a => a.id === t.value) || {}).currency || 'RSD';
+      const curF = (this.data.accounts.find(a => a.id === f.value) || {}).currency || this.baseCurrency() || 'RSD';
+      const curT = (this.data.accounts.find(a => a.id === t.value) || {}).currency || this.baseCurrency() || 'RSD';
       const converted = this.convertBetweenCurrencies(this.evalAmount(amtOut.value), curF, curT);
       if (converted != null) amtIn.value = converted;
     });
@@ -263,8 +264,8 @@ Object.assign(window.BlackBook, {
         if (tx) {
           const fromAcc = this.data.accounts.find(a => a.id === from);
           const toAcc = this.data.accounts.find(a => a.id === to);
-          const curF = fromAcc ? (fromAcc.currency || 'RSD') : 'RSD';
-          const curT = toAcc ? (toAcc.currency || 'RSD') : 'RSD';
+          const curF = fromAcc ? (fromAcc.currency || this.baseCurrency() || 'RSD') : this.baseCurrency();
+          const curT = toAcc ? (toAcc.currency || this.baseCurrency() || 'RSD') : this.baseCurrency();
           let finalAmountIn = amountIn;
           if (finalAmountIn == null || isNaN(finalAmountIn)) finalAmountIn = this.convertBetweenCurrencies(amountOut, curF, curT);
           if (finalAmountIn == null || isNaN(finalAmountIn)) finalAmountIn = amountOut;
@@ -559,10 +560,10 @@ Object.assign(window.BlackBook, {
     const txs = this.data.transactions.filter(t => ids.includes(t.id));
     const accMap = Object.fromEntries((this.data.accounts || []).map(a => [a.id, a]));
     const catMap = Object.fromEntries((this.data.categories || []).map(c => [c.id, c]));
-    const curs = new Set(txs.map(t => t.currency || 'RSD'));
+    const curs = new Set(txs.map(t => t.currency || this.baseCurrency() || 'RSD'));
     const accs = new Set(txs.map(t => t.cardId ? ('card:' + t.cardId) : (t.accountId || '')));
     this._mergeIds = txs.map(t => t.id);
-    this._mergeCurrency = txs[0].currency || 'RSD';
+    this._mergeCurrency = txs[0].currency || this.baseCurrency() || 'RSD';
     this._mergeOk = curs.size === 1 && accs.size === 1;
     this._mergeSelected = 0;
     let list = '<div style="max-height:280px;overflow:auto;">';
@@ -650,7 +651,7 @@ Object.assign(window.BlackBook, {
     this._transferSourceIds = [exp.id, inc.id];
     const fromAcc = accMap[exp.accountId];
     const toAcc = accMap[inc.accountId];
-    const opts = this.data.accounts.filter(a => a.type !== 'credit' && a.type !== 'creditcard').map(a => '<option value="' + a.id + '">' + this.escapeHtml(a.name) + ' (' + (a.currency || 'RSD') + ')</option>').join('');
+    const opts = this.data.accounts.filter(a => a.type !== 'credit' && a.type !== 'creditcard').map(a => '<option value="' + a.id + '">' + this.escapeHtml(a.name) + ' (' + (a.currency || this.baseCurrency() || 'RSD') + ')</option>').join('');
     const fSel = document.getElementById('tr-from');
     const tSel = document.getElementById('tr-to');
     fSel.innerHTML = opts;
@@ -661,7 +662,7 @@ Object.assign(window.BlackBook, {
     const amtIn = document.getElementById('tr-amount-in');
     amtOut.value = Math.abs(exp.amount);
     amtOut.dispatchEvent(new Event('input'));
-    if ((inc.currency || 'RSD') === (toAcc.currency || 'RSD')) amtIn.value = Math.abs(inc.amount);
+    if ((inc.currency || this.baseCurrency() || 'RSD') === (toAcc.currency || this.baseCurrency() || 'RSD')) amtIn.value = Math.abs(inc.amount);
     const tgt = txs[this._mergeSelected] || exp;
     document.getElementById('tr-date').value = this.fmtDateInput(tgt.date);
     document.getElementById('tr-note').value = txs.map(t => (t.note || '').trim()).filter(Boolean).join('; ');
@@ -690,10 +691,10 @@ Object.assign(window.BlackBook, {
       const accountVal = document.getElementById('tx-account').value;
       if (!accountVal) { alert('Select an account first.'); return; }
       const txData = { date: txDate, type: txType, amount: txType === 'income' ? rawAmt : -rawAmt, currency: document.getElementById('tx-currency-select').value, accountId: accountVal.startsWith('card:') ? null : accountVal, categoryId: document.getElementById('tx-category').value, note: document.getElementById('tx-note').value };
-      if (!accountVal.startsWith('card:') && txData.currency && txData.currency !== 'RSD') {
+      if (!accountVal.startsWith('card:') && txData.currency && txData.currency !== this.baseCurrency()) {
         const acc = this.data.accounts.find(a => a.id === accountVal);
-        const accCur = (acc && acc.currency) || 'RSD';
-        if (accCur === 'RSD') {
+        const accCur = (acc && acc.currency) || this.baseCurrency() || 'RSD';
+        if (accCur === this.baseCurrency()) {
           const nativeEl = document.getElementById('tx-native-amount');
           const nativeVal = nativeEl && nativeEl.value.trim() ? this.evalAmount(nativeEl.value) : null;
           const fee = (acc && acc.foreignFee) || 0;
@@ -708,7 +709,7 @@ Object.assign(window.BlackBook, {
             if (manualFee != null) {
               feeRsd = this.round2(manualFee);
             } else {
-              const nativeAbs = nativeVal > 0 ? nativeVal : (this.convertBetweenCurrencies(rawAmt, 'RSD', txData.currency) || 0);
+              const nativeAbs = nativeVal > 0 ? nativeVal : (this.convertBetweenCurrencies(rawAmt, this.baseCurrency(), txData.currency) || 0);
               feeRsd = this.calcForeignFee(nativeAbs, fee, txData.currency).feeRsd;
             }
             txData.amount = txType === 'income' ? this.round2(rawAmt + feeRsd) : -this.round2(rawAmt + feeRsd);

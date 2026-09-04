@@ -67,7 +67,7 @@ Object.assign(window.BlackBook, {
     }
     const pct = totalPlanned > 0 ? Math.min(Math.round((totalPlanned - totalOwed) / totalPlanned * 100), 100) : 0;
     return '<div class="month-summary">' +
-      '<div class="month-summary-item"><span class="month-summary-label">TOTAL DEBT</span><span class="month-summary-value amount-negative">' + this.fmtRsd(totalOwed) + '</span></div>' +
+      '<div class="month-summary-item"><span class="month-summary-label">TOTAL DEBT</span><span class="month-summary-value amount-negative">' + this.fmtBase(totalOwed) + '</span></div>' +
       '<div class="month-summary-item"><span class="month-summary-label">PAID OFF</span><span class="month-summary-value amount-positive">' + pct + '%</span></div></div>';
   },
 
@@ -84,7 +84,7 @@ Object.assign(window.BlackBook, {
       '<div class="savings-header">' +
       '<span class="savings-name"><span class="cat-dot" style="background:' + this.cardColor(card) + ';"></span> ' + this.escapeHtml(card.name) + '</span>' +
       '</div>' +
-      '<div class="bill-meta-line" style="display:block;margin-bottom:6px;">INT ' + (card.ratePct != null ? card.ratePct : 5) + '% &middot; DUE DAY ' + (card.dueDay || 15) + ' &middot; DEBT ' + this.fmtRsd(debt) + '</div>';
+      '<div class="bill-meta-line" style="display:block;margin-bottom:6px;">INT ' + (card.ratePct != null ? card.ratePct : 5) + '% &middot; DUE DAY ' + (card.dueDay || 15) + ' &middot; DEBT ' + this.fmtBase(debt) + '</div>';
     if (!plans.length) html += '<div class="empty-state" style="padding:14px;"><div class="empty-state-text">No purchases yet. Click + NEW to add a transaction.</div></div>';
     else html += plans.map(p => this.planBlockHtml(p)).join('');
     return html + '</div>';
@@ -111,13 +111,13 @@ planBlockHtml(inst) {
       (tx ? '<button class="btn btn-sm btn-secondary" onclick="BlackBook.openEditCardTx(\x27' + tx.id + '\x27)" title="Edit this purchase">EDIT</button>' : '') +
       '<button class="btn btn-sm btn-danger" onclick="BlackBook.deleteInstallment(\x27' + inst.id + '\x27)">DEL</button></span></div>';
     html += '<div class="savings-progress-text"><span>' + (closed ? '&#10003; FULLY PAID OFF' :
-      'LEFT ' + this.fmtRsd(this.instOutstanding(inst)) + ' of ' + this.fmtRsd(this.instGrandTotal(inst))) + '</span><span>' + pct + '%</span></div>' +
+      'LEFT ' + this.fmtBase(this.instOutstanding(inst)) + ' of ' + this.fmtBase(this.instGrandTotal(inst))) + '</span><span>' + pct + '%</span></div>' +
       '<div class="savings-progress-bar"><div class="savings-progress-fill" style="width:' + pct + '%;background:' + color + ';"></div></div>';
     html += '<div class="bill-meta-line" style="display:block;margin-top:6px;">' +
-      this.fmtRsd(this.instMonthlyAmount(inst)) + ' &times; ' + inst.months +
-      ' &middot; PRICE ' + this.fmtRsd(inst.total) + ' + INT ' + (inst.ratePct != null ? inst.ratePct : 5) + '% (' + this.fmtRsd(this.instInterest(inst)) + ') = TOTAL ' + this.fmtRsd(this.instGrandTotal(inst)) +
+      this.fmtBase(this.instMonthlyAmount(inst)) + ' &times; ' + inst.months +
+      ' &middot; PRICE ' + this.fmtBase(inst.total) + ' + INT ' + (inst.ratePct != null ? inst.ratePct : 5) + '% (' + this.fmtBase(this.instInterest(inst)) + ') = TOTAL ' + this.fmtBase(this.instGrandTotal(inst)) +
       ' &middot; DUE ' + (inst.dueDay || 15) + '/mo &middot; FROM ' + inst.startMonth +
-      (advance > 0 ? ' &middot; <span class="amount-positive">ADVANCE ' + this.fmtRsd(advance) + '</span>' : '') + '</div>';
+      (advance > 0 ? ' &middot; <span class="amount-positive">ADVANCE ' + this.fmtBase(advance) + '</span>' : '') + '</div>';
     html += '<div class="inst-rows">';
     for (let s = 1; s <= inst.months; s++) {
       const entry = paidEntries.find(e => e.seq === s);
@@ -126,7 +126,7 @@ planBlockHtml(inst) {
       html += '<div class="inst-row' + (entry ? ' inst-row-paid' : '') + '">' +
         '<span class="inst-seq">' + String(s).padStart(2, '0') + '</span>' +
         '<span class="inst-month">' + this.monthLabel(mk) + '</span>' +
-        '<span class="inst-amt">' + this.fmtRsd(due) + (s === 1 ? ' <span class="tip-dim">(incl INT)</span>' : '') + '</span>' +
+        '<span class="inst-amt">' + this.fmtBase(due) + (s === 1 ? ' <span class="tip-dim">(incl INT)</span>' : '') + '</span>' +
         '<span class="inst-status">' + (entry
           ? '<button class="btn btn-sm btn-toggle-paid" onclick="BlackBook.payInstallmentSlot(\x27' + inst.id + '\x27,' + s + ')" title="Click to undo this payment">PAID</button>'
           : '<button class="btn btn-sm btn-secondary" onclick="BlackBook.payInstallmentSlot(\x27' + inst.id + '\x27,' + s + ')">PAY</button>') + '</span>' +
@@ -192,7 +192,7 @@ planBlockHtml(inst) {
     const pairId = 'inst-' + inst.id + '-s' + seq;
     const date = this.mkOfSeq(inst, seq) + '-' + String(inst.dueDay || 15).padStart(2, '0');
     const note = 'Installment ' + inst.name + ' ' + seq + '/' + inst.months;
-    this.data.transactions.unshift({ id: 'tx-' + pairId, type: 'expense', amount: -amount, currency: acc.currency || 'RSD', accountId: fundingAccId, categoryId: catId, date: date, note: note, pairId: pairId });
+    this.data.transactions.unshift({ id: 'tx-' + pairId, type: 'expense', amount: -amount, currency: acc.currency || this.baseCurrency() || 'RSD', accountId: fundingAccId, categoryId: catId, date: date, note: note, pairId: pairId });
   },
 
   openPayInstallment(instId) {
@@ -203,7 +203,7 @@ planBlockHtml(inst) {
       '<div class="modal-content" style="max-width:360px;">' +
       '<div class="modal-header"><span class="modal-title">Pay ' + this.escapeHtml(inst.name) + '</span><button class="modal-close" onclick="BlackBook.closeModal(\'pay-installment-modal\')">&times;</button></div>' +
       '<div style="padding:14px;">' +
-      '<div style="font-size:13px;color:var(--text-muted);margin-bottom:10px;">Outstanding: ' + this.fmtRsd(outstanding) + '</div>' +
+      '<div style="font-size:13px;color:var(--text-muted);margin-bottom:10px;">Outstanding: ' + this.fmtBase(outstanding) + '</div>' +
       '<label style="font-size:12px;color:var(--text-muted);">AMOUNT</label>' +
       '<input type="text" inputmode="decimal" id="pay-inst-amount" class="input" style="width:100%;margin-top:4px;" placeholder="Enter amount" autofocus>' +
       '<div style="display:flex;gap:8px;margin-top:14px;justify-content:flex-end;">' +
@@ -254,7 +254,7 @@ planBlockHtml(inst) {
       if (fundingAccId) {
         const acc = this.data.accounts.find(a => a.id === fundingAccId);
         const pid = 'inst-' + inst.id + '-adv-' + Date.now();
-        this.data.transactions.unshift({ id: 'tx-' + pid, type: 'expense', amount: -rem, currency: acc.currency || 'RSD', accountId: fundingAccId, categoryId: this.instFeeCategory(), date: this.today(), note: 'Advance ' + inst.name, pairId: pid });
+        this.data.transactions.unshift({ id: 'tx-' + pid, type: 'expense', amount: -rem, currency: acc.currency || this.baseCurrency() || 'RSD', accountId: fundingAccId, categoryId: this.instFeeCategory(), date: this.today(), note: 'Advance ' + inst.name, pairId: pid });
       }
     }
     await this.save();
@@ -398,7 +398,7 @@ planBlockHtml(inst) {
           tx.installId = plan.id;
         }
       } else {
-        const newTx = { id: crypto.randomUUID(), date: date, type: 'expense', amount: -amt, currency: 'RSD', accountId: null, cardId: cardId, categoryId: categoryId, note: note };
+        const newTx = { id: crypto.randomUUID(), date: date, type: 'expense', amount: -amt, currency: this.baseCurrency(), accountId: null, cardId: cardId, categoryId: categoryId, note: note };
         if (months > 1) {
           if (!this.data.installments) this.data.installments = [];
           const { y, m } = this.ymOf(date);

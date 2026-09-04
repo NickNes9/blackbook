@@ -31,7 +31,7 @@ Object.assign(window.BlackBook, {
     }
     const pct = totalTarget > 0 ? Math.min(Math.round(totalSaved / totalTarget * 100), 100) : 0;
     return '<div class="savings-total-bar"><div class="savings-total-fill" style="width:' + pct + '%;"></div>' +
-      '<div class="savings-total-text"><span class="month-summary-label">SAVED&nbsp;</span><span class="month-summary-value">' + this.fmtRsd(totalSaved) + '</span><span class="month-summary-label">&nbsp;of&nbsp;</span><span class="month-summary-value">' + this.fmtRsd(totalTarget) + '</span><span class="month-summary-label">&nbsp;&middot;&nbsp;</span><span class="month-summary-value">' + pct + '%</span></div></div>';
+      '<div class="savings-total-text"><span class="month-summary-label">SAVED&nbsp;</span><span class="month-summary-value">' + this.fmtBase(totalSaved) + '</span><span class="month-summary-label">&nbsp;of&nbsp;</span><span class="month-summary-value">' + this.fmtBase(totalTarget) + '</span><span class="month-summary-label">&nbsp;&middot;&nbsp;</span><span class="month-summary-value">' + pct + '%</span></div></div>';
   },
 
   yearPickerHtml() {
@@ -63,7 +63,7 @@ Object.assign(window.BlackBook, {
       '<button class="btn btn-sm btn-primary" onclick="BlackBook.openNewSavingsEntry(\x27' + goal.id + '\x27)">+ ADD</button>' +
       '<button class="btn btn-sm btn-secondary" onclick="BlackBook.openEditSavingsGoal(\x27' + goal.id + '\x27)">EDIT</button>' +
       '<button class="btn btn-sm btn-danger" onclick="BlackBook.deleteSavingsGoal(\x27' + goal.id + '\x27)">DEL</button></span></div>' +
-      '<div class="savings-progress-text"><span>' + this.fmtRsd(saved) + ' of ' + this.fmtRsd(target) + '</span><span>' + pct + '%</span></div>' +
+      '<div class="savings-progress-text"><span>' + this.fmtBase(saved) + ' of ' + this.fmtBase(target) + '</span><span>' + pct + '%</span></div>' +
       '<div class="savings-progress-bar"><div class="savings-progress-fill ' + barClass + '" style="width:' + pct + '%;"></div></div>' +
       '<button class="btn btn-sm btn-secondary savings-expand-btn" onclick="BlackBook.toggleSavingsGoal(\x27' + goal.id + '\x27)">' + (expanded ? '&#9650; HIDE ENTRIES' : '&#9660; SHOW ENTRIES') + ' (' + (goal.entries || []).length + ')</button>';
     if (expanded) { html += this.savingsEntriesHtml(goal); }
@@ -81,7 +81,7 @@ Object.assign(window.BlackBook, {
     document.getElementById('savings-goal-id').value = '';
     document.getElementById('savings-goal-name').value = '';
     document.getElementById('savings-goal-target').value = '';
-    document.getElementById('savings-goal-currency').value = 'RSD';
+    document.getElementById('savings-goal-currency').value = this.baseCurrency();
     document.getElementById('savings-modal-title').textContent = 'New Savings Goal';
     this.openModal('savings-modal');
   },
@@ -92,7 +92,7 @@ Object.assign(window.BlackBook, {
     document.getElementById('savings-goal-id').value = goal.id;
     document.getElementById('savings-goal-name').value = goal.name;
     document.getElementById('savings-goal-target').value = goal.targetAmount;
-    document.getElementById('savings-goal-currency').value = goal.currency || 'RSD';
+    document.getElementById('savings-goal-currency').value = goal.currency || this.baseCurrency() || 'RSD';
     document.getElementById('savings-modal-title').textContent = 'Edit Savings Goal';
     this.openModal('savings-modal');
   },
@@ -151,8 +151,8 @@ Object.assign(window.BlackBook, {
       type: 'transfer',
       amount: Math.round(Math.abs(amount) * 100) / 100,
       amountIn: Math.round(Math.abs(amount) * 100) / 100,
-      currency: 'RSD',
-      currencyIn: 'RSD',
+      currency: this.baseCurrency(),
+      currencyIn: this.baseCurrency(),
       fromAccountId: sourceAcc,
       toAccountId: sourceAcc,
       categoryId: tCat.id,
@@ -173,7 +173,7 @@ Object.assign(window.BlackBook, {
       if (!goalId || isNaN(amount) || amount === 0) return;
       const goal = this.data.savingsGoals.find(g => g.id === goalId);
       if (!goal) return;
-      if (amount < 0 && this.goalSaved(goal) + amount < 0) { alert('Withdrawal exceeds saved balance (' + this.fmtRsd(this.goalSaved(goal)) + ').'); return; }
+      if (amount < 0 && this.goalSaved(goal) + amount < 0) { alert('Withdrawal exceeds saved balance (' + this.fmtBase(this.goalSaved(goal)) + ').'); return; }
       await this.addSavingsEntry(goalId, amount, date, note);
       this.closeModal('savings-entry-modal');
       this.renderSavings();
@@ -190,7 +190,7 @@ Object.assign(window.BlackBook, {
       rows += '<div class="savings-entry-item">' +
         '<span class="savings-entry-date">' + e.date + '</span>' +
         '<span class="savings-entry-note">' + this.escapeHtml(e.note || '') + '</span>' +
-        '<span class="savings-entry-amount ' + (neg ? 'savings-withdraw' : '') + '">' + (neg ? '' : '+') + this.fmtRsd(e.amount) + '</span>' +
+        '<span class="savings-entry-amount ' + (neg ? 'savings-withdraw' : '') + '">' + (neg ? '' : '+') + this.fmtBase(e.amount) + '</span>' +
         '<button class="savings-entry-delete" onclick="BlackBook.deleteSavingsEntry(\x27' + goal.id + '\x27, \x27' + e.id + '\x27)">&times;</button></div>';
     }
     return '<div class="savings-entries">' + rows + '</div>';
