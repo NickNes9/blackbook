@@ -216,7 +216,7 @@ Object.assign(window.BlackBook, {
       if (!type) type = signMode === 'pos' ? (amt > 0 ? 'expense' : 'income') : (amt < 0 ? 'expense' : 'income');
       const currencyRaw = g(r, curCol).toUpperCase();
       const enabled = this.data.settings.enabledCurrencies || ['RSD', 'EUR', 'USD'];
-      const currency = enabled.includes(currencyRaw) ? currencyRaw : this.baseCurrency();
+      const currency = (enabled.includes(currencyRaw) || currencyRaw === 'XAU') ? currencyRaw : this.baseCurrency();
       this.data.transactions.push({
         id: crypto.randomUUID(), date: date, type: type,
         amount: Math.round((type === 'income' ? Math.abs(amt) : -Math.abs(amt)) * 100) / 100,
@@ -251,8 +251,15 @@ Object.assign(window.BlackBook, {
   ratesTableHtml() {
     const rates = this.getRates();
     const enabled = this.data.settings.enabledCurrencies || ['RSD', 'EUR', 'USD'];
+    const used = new Set(enabled);
+    for (const t of (this.data.transactions || [])) if (t.currency) used.add(t.currency);
+    for (const a of (this.data.accounts || [])) if (a.currency) used.add(a.currency);
+    for (const b of (this.data.bills || [])) if (b.currency) used.add(b.currency);
+    for (const g of (this.data.savingsGoals || [])) if (g.currency) used.add(g.currency);
+    for (const d of (this.data.debts || [])) if (d.currency) used.add(d.currency);
+    const enabledList = Array.from(used);
     let rows = '<div class="rate-grid-row rate-grid-head"><span>CUR</span><span>RATE (in EUR)</span><span>SOURCE</span><span>UPDATED</span><span>MANUAL OVERRIDE</span><span></span><span></span><span></span></div>';
-    for (const code of enabled) {
+    for (const code of enabledList) {
       const r = rates[code] || { rate: null, source: null, updated: null };
       const rateVal = code === 'EUR' ? '1.0000 <span class="rate-unit">EUR</span>'
         : (r.rate != null ? r.rate.toLocaleString('en-US', { maximumFractionDigits: 4 }) + ' <span class="rate-unit">EUR</span>' : '--');
@@ -782,7 +789,7 @@ Object.assign(window.BlackBook, {
 
   openAddCurrencyModal() {
     const enabled = new Set(this.data.settings.enabledCurrencies || []);
-    const allCodes = ['AED','AUD','BGN','BRL','CAD','CHF','CNY','CZK','DKK','EUR','GBP','HKD','HRK','HUF','IDR','ILS','INR','ISK','JPY','KRW','MXN','MYR','NOK','NZD','PHP','PLN','RON','RSD','SEK','SGD','THB','TRY','TWD','USD','ZAR'];
+    const allCodes = ['AED','AUD','BGN','BRL','CAD','CHF','CNY','CZK','DKK','EUR','GBP','HKD','HRK','HUF','IDR','ILS','INR','ISK','JPY','KRW','MXN','MYR','NOK','NZD','PHP','PLN','RON','RSD','SEK','SGD','THB','TRY','TWD','USD','XAU','ZAR'];
     const available = allCodes.filter(c => !enabled.has(c));
     if (!available.length) { alert('All common currencies are already enabled.'); return; }
     const list = available.map(c => '<button class="btn btn-sm btn-secondary" style="margin:2px;cursor:pointer;" onclick="BlackBook.addCurrency(\x27' + c + '\x27)">' + c + '</button>').join(' ');
