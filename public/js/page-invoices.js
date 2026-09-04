@@ -29,11 +29,7 @@ Object.assign(window.BlackBook, {
     const el = document.getElementById('page-invoices');
     if (!el) return;
     if (!this.data.invoices) this.data.invoices = [];
-    const offToday = this.vy() !== new Date().getFullYear();
-    let html = '<div class="month-picker">' +
-      '<span class="mp-year"><button class="mp-year-btn" onclick="BlackBook.shiftYear(-1)">&#9664;</button><span class="mp-year-label">' + this.vy() + '</span><button class="mp-year-btn" onclick="BlackBook.shiftYear(1)">&#9654;</button></span>' +
-      '<button class="mp-today' + (offToday ? ' mp-today-active' : '') + '" onclick="BlackBook.gotoToday()">TODAY</button>' +
-      '<span style="flex:1;"></span>' +
+    let html = '<div class="month-picker" style="justify-content:flex-end;">' +
       '<button class="btn btn-primary" onclick="BlackBook.openNewInvoice()">+ NEW INVOICE</button>' +
       '</div>';
     html += this.invoicesSummaryHtml();
@@ -68,14 +64,18 @@ Object.assign(window.BlackBook, {
   invIsPaid(inv) { return this.invTotal(inv) > 0 && this.invRemaining(inv) <= 0.009; },
   invOverdue(inv) { return !this.invIsPaid(inv) && !!inv.dueDate && inv.dueDate < this.today(); },
   invRsd(inv) { return Math.abs(this.toRsd(this.invTotal(inv), inv.currency || 'RSD')); },
+  parseInvNumber(inv) {
+    const num = (inv && inv.number || '').trim();
+    const slash = num.match(/^\s*(\d{1,4})\s*\/\s*(\d{4})\s*$/);
+    if (slash) return { seq: parseInt(slash[1], 10), year: parseInt(slash[2], 10) };
+    const hyphen = num.match(/^\s*(\d{4})\s*-\s*(\d{1,4})\s*$/);
+    if (hyphen) return { year: parseInt(hyphen[1], 10), seq: parseInt(hyphen[2], 10) };
+    return null;
+  },
+
   invYear(inv) {
-    if (inv.number) {
-      const parts = inv.number.split('/').map(s => s.trim());
-      if (parts.length === 2) {
-        const y = parseInt(parts[1], 10);
-        if (!isNaN(y) && y > 1900 && y < 2100) return y;
-      }
-    }
+    const p = this.parseInvNumber(inv);
+    if (p) return p.year;
     if (inv.date) {
       const y = parseInt(inv.date.substring(0, 4), 10);
       if (!isNaN(y)) return y;
@@ -112,9 +112,8 @@ Object.assign(window.BlackBook, {
       const ya = this.invYear(a), yb = this.invYear(b);
       if (ya !== yb) return yb - ya;
       const parseNum = (inv) => {
-        if (!inv.number) return 0;
-        const parts = inv.number.split('/').map(s => s.trim());
-        return parts.length === 2 ? (parseInt(parts[0], 10) || 0) : 0;
+        const p = this.parseInvNumber(inv);
+        return p ? p.seq : 0;
       };
       return parseNum(a) - parseNum(b);
     });
@@ -238,13 +237,9 @@ Object.assign(window.BlackBook, {
     const year = new Date().getFullYear();
     let maxSeq = 0;
     for (const v of (this.data.invoices || [])) {
-      if (v.number) {
-        const parts = v.number.split('/').map(s => s.trim());
-        if (parts.length === 2 && parseInt(parts[1], 10) === year) {
-          const seq = parseInt(parts[0], 10);
-          if (!isNaN(seq) && seq > maxSeq) maxSeq = seq;
-        }
-      }
+      if (!v.number) continue;
+      const p = this.parseInvNumber(v);
+      if (p && p.year === year && p.seq > maxSeq) maxSeq = p.seq;
     }
     document.getElementById('invoice-number').value = String(maxSeq + 1).padStart(3, '0') + ' / ' + year;
     document.getElementById('invoice-date').value = this.fmtDateInput(this.today());
