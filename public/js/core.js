@@ -516,6 +516,13 @@ window.BlackBook = {
           s.rates[code] = { rate: this.rnd4(r.rate / eurRate), source: r.source, updated: r.updated };
         }
       }
+      // Legacy rates only stored EUR/USD/XAU; the base currency rate was implicit (=1 per unit).
+      // Without an explicit EUR-based base rate, toBase()/convertBetweenCurrencies() return the
+      // amount unchanged, silently breaking every conversion.
+      const base = this.baseCurrency();
+      if (base && base !== 'EUR' && (!s.rates[base] || s.rates[base].rate == null)) {
+        s.rates[base] = { rate: this.rnd4(1 / eurRate), source: 'legacy-migration', updated: null };
+      }
     }
     return s.rates;
   },
