@@ -215,8 +215,7 @@ Object.assign(window.BlackBook, {
       }
       if (!type) type = signMode === 'pos' ? (amt > 0 ? 'expense' : 'income') : (amt < 0 ? 'expense' : 'income');
       const currencyRaw = g(r, curCol).toUpperCase();
-      const enabled = this.data.settings.enabledCurrencies || ['RSD', 'EUR', 'USD'];
-      const currency = (enabled.includes(currencyRaw) || currencyRaw === 'XAU') ? currencyRaw : this.baseCurrency();
+      const currency = (this.currencyList().includes(currencyRaw) || currencyRaw === 'XAU') ? currencyRaw : this.baseCurrency();
       this.data.transactions.push({
         id: crypto.randomUUID(), date: date, type: type,
         amount: Math.round((type === 'income' ? Math.abs(amt) : -Math.abs(amt)) * 100) / 100,
@@ -250,7 +249,7 @@ Object.assign(window.BlackBook, {
 
   ratesTableHtml() {
     const rates = this.getRates();
-    const enabled = this.data.settings.enabledCurrencies || ['RSD', 'EUR', 'USD'];
+    const enabled = this.currencyList();
     const used = new Set(enabled);
     for (const t of (this.data.transactions || [])) if (t.currency) used.add(t.currency);
     for (const a of (this.data.accounts || [])) if (a.currency) used.add(a.currency);
@@ -264,7 +263,7 @@ Object.assign(window.BlackBook, {
       const rateVal = code === 'EUR' ? '1.0000 <span class="rate-unit">EUR</span>'
         : (r.rate != null ? r.rate.toLocaleString('en-US', { maximumFractionDigits: 4 }) + ' <span class="rate-unit">EUR</span>' : '--');
       const updated = r.updated ? new Date(r.updated).toLocaleString() : '--';
-      const removable = code !== (this.data.settings.baseCurrency || 'RSD');
+      const removable = code !== (this.data.settings.baseCurrency || 'RSD') && code !== 'XAU';
       rows += '<div class="rate-grid-row">' +
         '<span class="rate-code">' + code + '</span>' +
         '<span class="rate-val">' + rateVal + '</span>' +
@@ -706,7 +705,7 @@ Object.assign(window.BlackBook, {
       '<div class="form-group"><label>Default Account</label><select id="settings-default-account" class="input">' + defaultAccountOpts + '</select></div>' +
       '<div class="form-group"><label>Default Category</label><select id="settings-default-category" class="input">' + defaultCategoryOpts + '</select></div>' +
       '<div class="form-group"><label>Base Currency</label><select id="settings-base-currency" class="input">' +
-      (this.data.settings.enabledCurrencies || ['RSD', 'EUR', 'USD']).map(c =>
+      this.currencyList().map(c =>
         '<option value="' + c + '"' + (c === (this.data.settings.baseCurrency || 'RSD') ? ' selected' : '') + '>' + c + '</option>'
       ).join('') + '</select></div></div></div>' +
 
@@ -788,7 +787,7 @@ Object.assign(window.BlackBook, {
   },
 
   openAddCurrencyModal() {
-    const enabled = new Set(this.data.settings.enabledCurrencies || []);
+    const enabled = new Set(this.currencyList());
     const allCodes = ['AED','AUD','BGN','BRL','CAD','CHF','CNY','CZK','DKK','EUR','GBP','HKD','HRK','HUF','IDR','ILS','INR','ISK','JPY','KRW','MXN','MYR','NOK','NZD','PHP','PLN','RON','RSD','SEK','SGD','THB','TRY','TWD','USD','XAU','ZAR'];
     const available = allCodes.filter(c => !enabled.has(c));
     if (!available.length) { alert('All common currencies are already enabled.'); return; }
@@ -810,8 +809,12 @@ Object.assign(window.BlackBook, {
 
   async addCurrency(code) {
     if (!code) return;
-    const enabled = this.data.settings.enabledCurrencies || [];
+    let enabled = this.data.settings.enabledCurrencies;
+    if (!Array.isArray(enabled) || enabled.length === 0) {
+      enabled = this.currencyList();
+    }
     if (!enabled.includes(code)) {
+      enabled = enabled.slice();
       enabled.push(code);
       this.data.settings.enabledCurrencies = enabled;
     }
@@ -830,7 +833,7 @@ Object.assign(window.BlackBook, {
   },
 
   async removeCurrency(code) {
-    if (!code || code === (this.data.settings.baseCurrency || 'RSD')) return;
+    if (!code || code === (this.data.settings.baseCurrency || 'RSD') || code === 'XAU') return;
     if (!(await this.confirmModal({ title: 'Remove Currency', message: 'Remove ' + code + ' from enabled currencies?\n\nHistorical data is preserved.', confirmText: 'Remove' }))) return;
     this.data.settings.enabledCurrencies = (this.data.settings.enabledCurrencies || []).filter(c => c !== code);
     this.populateCurrencyDropdowns();

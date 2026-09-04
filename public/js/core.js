@@ -36,6 +36,7 @@ window.BlackBook = {
     if (!this.data.invoices) this.data.invoices = [];
     if (this.migrateCreditCards()) await this.save();
     if (this.migrateTransfers()) await this.save();
+    if (this.normalizeLegacyCurrencySettings()) await this.save();
     if (!(this.data.categories || []).some(c => c && c.name && String(c.name).toLowerCase() === 'invoice')) {
       this.invoiceCategory();
       await this.save();
@@ -467,17 +468,50 @@ window.BlackBook = {
     return this.data.settings.baseCurrency || 'RSD';
   },
 
+  normalizeLegacyCurrencySettings() {
+    const s = this.data.settings;
+    if (!s.baseCurrency) s.baseCurrency = 'RSD';
+    const en = s.enabledCurrencies;
+    const degenerate = !Array.isArray(en) || en.length === 0 || (en.length === 1 && en[0] === (s.baseCurrency || 'RSD'));
+    if (degenerate) {
+      s.enabledCurrencies = this.legacyDefaultCurrencies();
+      return true;
+    }
+    return false;
+  },
+
+  legacyDefaultCurrencies() {
+    return ['RSD', 'EUR', 'USD', 'XAU'];
+  },
+
+  currencyList() {
+    const s = this.data.settings;
+    const def = this.legacyDefaultCurrencies();
+    const list = new Set(Array.isArray(s.enabledCurrencies) && s.enabledCurrencies.length ? s.enabledCurrencies : def);
+    list.add(this.baseCurrency());
+    for (const t of (this.data.transactions || [])) { if (t.currency) list.add(t.currency); if (t.currencyIn) list.add(t.currencyIn); }
+    for (const a of (this.data.accounts || [])) if (a.currency) list.add(a.currency);
+    for (const b of (this.data.bills || [])) if (b.currency) list.add(b.currency);
+    for (const g of (this.data.savingsGoals || [])) if (g.currency) list.add(g.currency);
+    for (const d of (this.data.debts || [])) if (d.currency) list.add(d.currency);
+    for (const v of (this.data.invoices || [])) if (v.currency) list.add(v.currency);
+    return Array.from(list);
+  },
+
+  defaultAccountForCurrency(cur) {
+    const vis = this.visibleAccounts();
+    const def = this.data.settings.defaultAccountId;
+    const defAcc = def ? vis.find(a => a.id === def) : null;
+    if (cur) {
+      if (defAcc && (defAcc.currency || this.baseCurrency()) === cur) return defAcc.id;
+      const match = vis.find(a => (a.currency || this.baseCurrency()) === cur);
+      if (match) return match.id;
+    }
+    return defAcc ? defAcc.id : (vis[0] ? vis[0].id : '');
+  },
+
   populateCurrencyDropdowns() {
-    const enabled = this.data.settings.enabledCurrencies || ['RSD', 'EUR', 'USD'];
-    const used = new Set(enabled);
-    for (const t of (this.data.transactions || [])) if (t.currency) used.add(t.currency);
-    for (const t of (this.data.transactions || [])) if (t.currencyIn) used.add(t.currencyIn);
-    for (const a of (this.data.accounts || [])) if (a.currency) used.add(a.currency);
-    for (const b of (this.data.bills || [])) if (b.currency) used.add(b.currency);
-    for (const g of (this.data.savingsGoals || [])) if (g.currency) used.add(g.currency);
-    for (const d of (this.data.debts || [])) if (d.currency) used.add(d.currency);
-    for (const v of (this.data.invoices || [])) if (v.currency) used.add(v.currency);
-    const curs = Array.from(used);
+    const curs = this.currencyList();
     const selects = ['tx-currency-select', 'bill-currency', 'savings-goal-currency', 'settings-account-currency', 'debt-currency', 'invoice-currency'];
     for (const id of selects) {
       const sel = document.getElementById(id);

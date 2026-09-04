@@ -183,7 +183,7 @@ Object.assign(window.BlackBook, {
     const billCat = this.data.categories.find(c => /^bill/i.test(String(c.name).trim()));
     if (billCat) { catHidden.value = billCat.id; catInput.value = billCat.name.toUpperCase(); }
     const paySel = document.getElementById('bill-payfrom');
-    paySel.innerHTML = this.accountSelectOptions(this.data.settings.defaultAccountId || '');
+    paySel.innerHTML = this.accountSelectOptions(this.defaultAccountForCurrency(this.baseCurrency()));
     document.getElementById('bill-modal-title').textContent = 'New Bill';
     this.openModal('bill-modal');
   },
@@ -215,7 +215,10 @@ Object.assign(window.BlackBook, {
       this.initCategoryPicker('bill-category-input', 'bill-category', 'bill-category-dropdown');
     }
     const paySel = document.getElementById('bill-payfrom');
-    paySel.innerHTML = this.accountSelectOptions(bill.payAccountId || this.data.settings.defaultAccountId || '');
+    const payDefault = bill.payAccountId && (bill.payAccountId.startsWith('card:') || this.visibleAccounts().some(a => a.id === bill.payAccountId))
+      ? bill.payAccountId
+      : this.defaultAccountForCurrency(bill.currency || this.baseCurrency());
+    paySel.innerHTML = this.accountSelectOptions(payDefault);
     document.getElementById('bill-modal-title').textContent = 'Edit Bill';
     this.openModal('bill-modal');
   },
@@ -224,6 +227,17 @@ Object.assign(window.BlackBook, {
     const cur = document.getElementById('bill-currency').value || this.baseCurrency() || 'RSD';
     const lbl = document.getElementById('bill-amount-label');
     if (lbl) lbl.textContent = cur === this.baseCurrency() ? 'Amount (empty if unknown)' : 'Amount in ' + cur + ' (empty if unknown)';
+    const paySel = document.getElementById('bill-payfrom');
+    if (paySel && paySel.value && !paySel.value.startsWith('card:')) {
+      const selAcc = this.data.accounts.find(a => a.id === paySel.value);
+      const selCur = (selAcc && selAcc.currency) || this.baseCurrency() || 'RSD';
+      if (selCur !== cur) {
+        const preferred = this.defaultAccountForCurrency(cur);
+        if (preferred && preferred !== paySel.value) {
+          paySel.innerHTML = this.accountSelectOptions(preferred);
+        }
+      }
+    }
   },
 
   async deleteBill(billId) {
@@ -302,6 +316,9 @@ Object.assign(window.BlackBook, {
     const sel = bill.payAccountId;
     if (sel && sel.startsWith('card:')) return sel;
     if (sel && this.visibleAccounts().some(a => a.id === sel)) return sel;
+    const cur = (bill && bill.currency) || this.baseCurrency() || 'RSD';
+    const curAcc = this.visibleAccounts().find(a => (a.currency || this.baseCurrency() || 'RSD') === cur);
+    if (curAcc) return curAcc.id;
     const def = this.data.settings.defaultAccountId;
     const fallback = this.visibleAccounts().find(a => a.id === def) || this.visibleAccounts()[0];
     return fallback ? fallback.id : null;
