@@ -64,7 +64,7 @@ Object.assign(window.BlackBook, {
         const acc = from && !from.startsWith('card:') ? this.data.accounts.find(a => a.id === from) : null;
         const fee = (acc && acc.foreignFee) || 0;
         const feeRes = this.calcForeignFee(b.amount, fee, cur);
-        total += Math.abs(this.toBase(b.amount, cur)) + feeRes.feeRsd;
+        total += Math.abs(this.toBase(b.amount, cur)) + feeRes.feeBase;
       }
     } }
     return '<div class="month-summary">' +
@@ -371,18 +371,18 @@ Object.assign(window.BlackBook, {
         const amtCur = pay.amountCurrency || billCur;
         const nativeAbs = pay.nativeAmount != null ? Math.abs(pay.nativeAmount) : (amtCur !== this.baseCurrency() ? Math.abs(amt) : Math.abs(bill.amount || 0));
         const rsdBase = amtCur === this.baseCurrency() ? Math.abs(amt) : Math.abs(this.toBase(amt, amtCur));
-        let feeRsd;
+        let feeBase;
         if (pay.feeAmountOverride != null) {
-          feeRsd = this.round2(Math.abs(pay.feeAmountOverride));
+          feeBase = this.round2(Math.abs(pay.feeAmountOverride));
         } else if (fee > 0 && nativeAbs > 0) {
-          feeRsd = this.calcForeignFee(nativeAbs, fee, billCur).feeRsd;
+          feeBase = this.calcForeignFee(nativeAbs, fee, billCur).feeBase;
         } else {
-          feeRsd = 0;
+          feeBase = 0;
         }
-        tx.amount = -this.round2(rsdBase + feeRsd);
+        tx.amount = -this.round2(rsdBase + feeBase);
         tx.currency = accCur;
         tx.baseAmount = this.round2(rsdBase);
-        tx.feeAmount = feeRsd;
+        tx.feeAmount = feeBase;
         tx.nativeAmount = -nativeAbs;
         tx.nativeCurrency = billCur;
       } else {
@@ -443,7 +443,7 @@ Object.assign(window.BlackBook, {
                   const acc = from && !from.startsWith('card:') ? this.data.accounts.find(a => a.id === from) : null;
                   const fee = (acc && acc.foreignFee) || 0;
                   const feeRes = this.calcForeignFee(native, fee, cur);
-                  s += Math.abs(this.toBase(native, cur)) + feeRes.feeRsd;
+                  s += Math.abs(this.toBase(native, cur)) + feeRes.feeBase;
                 }
               }
             }
@@ -482,7 +482,7 @@ Object.assign(window.BlackBook, {
           const acc = from && !from.startsWith('card:') ? this.data.accounts.find(a => a.id === from) : null;
           const fee = (acc && acc.foreignFee) || 0;
           const feeRes = this.calcForeignFee(native, fee, cur);
-          return this.round2(Math.abs(this.toBase(native, cur)) + feeRes.feeRsd);
+          return this.round2(Math.abs(this.toBase(native, cur)) + feeRes.feeBase);
         }),
         borderColor: this.billColor(bill),
         backgroundColor: this.billColor(bill),
@@ -558,10 +558,10 @@ Object.assign(window.BlackBook, {
       const manualFee = feeInput.value.trim() ? this.evalAmount(feeInput.value) : null;
       const parts = [];
       if (val > 0 && feePctModal > 0 && (nativeVal > 0 || manualFee > 0)) {
-        const autoRes = nativeVal > 0 ? this.calcForeignFee(nativeVal, feePctModal, cur) : { feeNative: null, feeRsd: 0 };
-        const feeRsd = manualFee > 0 ? manualFee : autoRes.feeRsd;
-        const total = this.round2(val + feeRsd);
-        let feeTxt = 'FEE ' + feeRsd.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' ' + this.baseCurrency();
+        const autoRes = nativeVal > 0 ? this.calcForeignFee(nativeVal, feePctModal, cur) : { feeNative: null, feeBase: 0 };
+        const feeBase = manualFee > 0 ? manualFee : autoRes.feeBase;
+        const total = this.round2(val + feeBase);
+        let feeTxt = 'FEE ' + feeBase.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' ' + this.baseCurrency();
         if (manualFee > 0) feeTxt += ' (manual)';
         else if (autoRes.feeNative != null) feeTxt += ' (' + autoRes.feeNative.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' ' + cur + ')';
         parts.push(feeTxt + ' \u2192 ' + total.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' ' + this.baseCurrency());
@@ -644,7 +644,7 @@ Object.assign(window.BlackBook, {
         if (Math.abs(tx.amount) === buggy) {
           const curR = tx.nativeCurrency || billCur;
           const feeRes = this.calcForeignFee(nativeAbs, fee, curR);
-          const fixed = -this.round2(Math.abs(this.toBase(nativeAbs, curR)) + feeRes.feeRsd);
+          const fixed = -this.round2(Math.abs(this.toBase(nativeAbs, curR)) + feeRes.feeBase);
           if (fixed !== tx.amount) { tx.amount = fixed; changed = true; }
         }
       }

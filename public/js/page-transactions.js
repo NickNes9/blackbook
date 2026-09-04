@@ -101,10 +101,10 @@ Object.assign(window.BlackBook, {
     const fee = (acc && acc.foreignFee) || 0;
     const parts = [];
     if (amtVal > 0 && fee > 0 && (nativeVal > 0 || manualFee > 0)) {
-      const autoRes = nativeVal > 0 ? this.calcForeignFee(nativeVal, fee, cur) : { feeNative: null, feeRsd: 0 };
-      const feeRsd = manualFee > 0 ? manualFee : autoRes.feeRsd;
-      const total = this.round2(amtVal + feeRsd);
-      let feeTxt = 'FEE ' + feeRsd.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' ' + this.baseCurrency();
+      const autoRes = nativeVal > 0 ? this.calcForeignFee(nativeVal, fee, cur) : { feeNative: null, feeBase: 0 };
+      const feeBase = manualFee > 0 ? manualFee : autoRes.feeBase;
+      const total = this.round2(amtVal + feeBase);
+      let feeTxt = 'FEE ' + feeBase.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' ' + this.baseCurrency();
       if (manualFee > 0) feeTxt += ' (manual)';
       else if (autoRes.feeNative != null) feeTxt += ' (' + autoRes.feeNative.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' ' + cur + ')';
       parts.push(feeTxt + ' \u2192 ' + total.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' ' + this.baseCurrency());
@@ -705,16 +705,16 @@ Object.assign(window.BlackBook, {
           const feeEl = document.getElementById('tx-fee-amount');
           const manualFee = feeEl && feeEl.value.trim() ? this.evalAmount(feeEl.value) : null;
           if (fee > 0 || manualFee > 0) {
-            let feeRsd;
+            let feeBase;
             if (manualFee != null) {
-              feeRsd = this.round2(manualFee);
+              feeBase = this.round2(manualFee);
             } else {
               const nativeAbs = nativeVal > 0 ? nativeVal : (this.convertBetweenCurrencies(rawAmt, this.baseCurrency(), txData.currency) || 0);
-              feeRsd = this.calcForeignFee(nativeAbs, fee, txData.currency).feeRsd;
+              feeBase = this.calcForeignFee(nativeAbs, fee, txData.currency).feeBase;
             }
-            txData.amount = txType === 'income' ? this.round2(rawAmt + feeRsd) : -this.round2(rawAmt + feeRsd);
+            txData.amount = txType === 'income' ? this.round2(rawAmt + feeBase) : -this.round2(rawAmt + feeBase);
             txData.baseAmount = rawAmt;
-            txData.feeAmount = feeRsd;
+            txData.feeAmount = feeBase;
           } else {
             txData.amount = txType === 'income' ? rawAmt : -rawAmt;
           }
