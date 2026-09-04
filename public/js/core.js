@@ -468,7 +468,16 @@ window.BlackBook = {
   },
 
   populateCurrencyDropdowns() {
-    const curs = this.data.settings.enabledCurrencies || ['RSD', 'EUR', 'USD'];
+    const enabled = this.data.settings.enabledCurrencies || ['RSD', 'EUR', 'USD'];
+    const used = new Set(enabled);
+    for (const t of (this.data.transactions || [])) if (t.currency) used.add(t.currency);
+    for (const t of (this.data.transactions || [])) if (t.currencyIn) used.add(t.currencyIn);
+    for (const a of (this.data.accounts || [])) if (a.currency) used.add(a.currency);
+    for (const b of (this.data.bills || [])) if (b.currency) used.add(b.currency);
+    for (const g of (this.data.savingsGoals || [])) if (g.currency) used.add(g.currency);
+    for (const d of (this.data.debts || [])) if (d.currency) used.add(d.currency);
+    for (const v of (this.data.invoices || [])) if (v.currency) used.add(v.currency);
+    const curs = Array.from(used);
     const selects = ['tx-currency-select', 'bill-currency', 'savings-goal-currency', 'settings-account-currency', 'debt-currency', 'invoice-currency'];
     for (const id of selects) {
       const sel = document.getElementById(id);
