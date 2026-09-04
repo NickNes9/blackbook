@@ -1002,6 +1002,17 @@ select:disabled {
   text-align: center;
 }
 
+/* Year group header in the invoice list */
+.inv-year-header {
+  padding: 8px 12px;
+  font-size: 12px;
+  font-weight: bold;
+  color: var(--text-muted);
+  letter-spacing: 1px;
+  border-bottom: 1px solid var(--border);
+  margin-top: 8px;
+}
+
 /* Bulk filter bar */
 .bulk-filter-bar {
   display: flex;
