@@ -58,11 +58,6 @@ Object.assign(window.BlackBook, {
     return '<div class="cat-filter" style="margin-bottom:0;margin-right:10px;">' + chip('out', 'INCOMES') + chip('in', 'EXPENSES') + chip('all', 'ALL') + '</div>';
   },
 
-  _invoicesForYear() {
-    const y = String(this.vy());
-    return this.data.invoices.filter(v => String(v.date || '').slice(0, 4) === y);
-  },
-
   invTotal(inv) {
     let t = 0;
     for (const l of (inv.lines || [])) t += (parseFloat(l.qty) || 0) * (parseFloat(l.price) || 0);
@@ -73,6 +68,20 @@ Object.assign(window.BlackBook, {
   invIsPaid(inv) { return this.invTotal(inv) > 0 && this.invRemaining(inv) <= 0.009; },
   invOverdue(inv) { return !this.invIsPaid(inv) && !!inv.dueDate && inv.dueDate < this.today(); },
   invRsd(inv) { return Math.abs(this.toRsd(this.invTotal(inv), inv.currency || 'RSD')); },
+  invYear(inv) {
+    if (inv.number) {
+      const parts = inv.number.split('/').map(s => s.trim());
+      if (parts.length === 2) {
+        const y = parseInt(parts[1], 10);
+        if (!isNaN(y) && y > 1900 && y < 2100) return y;
+      }
+    }
+    if (inv.date) {
+      const y = parseInt(inv.date.substring(0, 4), 10);
+      if (!isNaN(y)) return y;
+    }
+    return new Date().getFullYear();
+  },
 
   invoicesSummaryHtml() {
     let owedMe = 0, iOwe = 0, overdueCnt = 0, overdueAmt = 0;
@@ -97,15 +106,30 @@ Object.assign(window.BlackBook, {
 
   invoicesListHtml() {
     const f = this._invFilter || 'all';
-    const all = f === 'all' ? this._invoicesForYear() : this._invoicesForYear().filter(v => (v.dir === 'out') === (f === 'out'));
-    if (!all.length) return '<div class="empty-state"><div class="empty-state-text">' + (this._invoicesForYear().length ? 'No invoices in this filter.' : 'No invoices issued in ' + this.vy() + '. Click + NEW INVOICE to create one.') + '</div></div>';
+    const all = f === 'all' ? (this.data.invoices || []) : (this.data.invoices || []).filter(v => (v.dir === 'out') === (f === 'out'));
+    if (!all.length) return '<div class="empty-state"><div class="empty-state-text">' + ((this.data.invoices || []).length ? 'No invoices in this filter.' : 'No invoices yet. Click + NEW INVOICE to create one.') + '</div></div>';
     const sorted = all.slice().sort((a, b) => {
-      const pa = this.invIsPaid(a) ? 1 : 0, pb = this.invIsPaid(b) ? 1 : 0;
-      if (pa !== pb) return pa - pb;
-      return String(a.dueDate || a.date || '').localeCompare(String(b.dueDate || b.date || ''));
+      const ya = this.invYear(a), yb = this.invYear(b);
+      if (ya !== yb) return yb - ya;
+      const parseNum = (inv) => {
+        if (!inv.number) return 0;
+        const parts = inv.number.split('/').map(s => s.trim());
+        return parts.length === 2 ? (parseInt(parts[0], 10) || 0) : 0;
+      };
+      return parseNum(a) - parseNum(b);
     });
     if (!this._expandedInvoices) this._expandedInvoices = {};
-    return sorted.map(v => this.invoiceCardHtml(v)).join('');
+    let html = '';
+    let lastYear = null;
+    for (const inv of sorted) {
+      const year = this.invYear(inv);
+      if (year !== lastYear) {
+        html += '<div class="inv-year-header">\u2500\u2500 ' + year + ' \u2500\u2500</div>';
+        lastYear = year;
+      }
+      html += this.invoiceCardHtml(inv);
+    }
+    return html;
   },
 
   invoiceCardHtml(v) {
@@ -212,15 +236,17 @@ Object.assign(window.BlackBook, {
     this._setInvDir('out');
     document.getElementById('invoice-party').value = '';
     const year = new Date().getFullYear();
-    const prefix = year + '-';
     let maxSeq = 0;
     for (const v of (this.data.invoices || [])) {
-      if (v.number && v.number.startsWith(prefix)) {
-        const seq = parseInt(v.number.substring(prefix.length), 10);
-        if (!isNaN(seq) && seq > maxSeq) maxSeq = seq;
+      if (v.number) {
+        const parts = v.number.split('/').map(s => s.trim());
+        if (parts.length === 2 && parseInt(parts[1], 10) === year) {
+          const seq = parseInt(parts[0], 10);
+          if (!isNaN(seq) && seq > maxSeq) maxSeq = seq;
+        }
       }
     }
-    document.getElementById('invoice-number').value = prefix + String(maxSeq + 1).padStart(3, '0');
+    document.getElementById('invoice-number').value = String(maxSeq + 1).padStart(3, '0') + ' / ' + year;
     document.getElementById('invoice-date').value = this.fmtDateInput(this.today());
     const in14 = new Date(Date.now() + 14 * 86400000);
     document.getElementById('invoice-due').value = this.fmtDateInput(in14.toISOString().slice(0, 10));
