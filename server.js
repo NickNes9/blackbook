@@ -1,12 +1,26 @@
-import express from 'express';
+﻿import express from 'express';
 import { readFileSync, writeFileSync, existsSync, readdirSync, renameSync, unlinkSync, mkdirSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
+import http from 'http';
 import { WebSocketServer } from 'ws';
+
+// ---- a parent launcher that redirects our stdio and then exits (any daemon
+// pattern) orphans the pipe read end; a later console write then fails with
+// EPIPE, and without a handler that uncaught error kills the server. Swallow
+// broken-pipe/reset errors on stdio instead of crashing the process.
+for (const stream of [process.stdout, process.stderr]) {
+  stream.on('error', (err) => {
+    if (!err || (err.code !== 'EPIPE' && err.code !== 'ECONNRESET' && err.code !== 'EIO')) {
+      try { logger('[black-book] stdio error:', err && err.message); } catch (_) { }
+    }
+  });
+}
+function logger(...args) { try { console.log(...args); } catch (_) { } }
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const app = express();
-const PORT = 3000;
+const PORT = Number(process.env.PORT) || 3000;
 const PROFILES_DIR = join(__dirname, 'profiles');
 let DATA_FILE = join(__dirname, 'data.json');
 
@@ -15,14 +29,17 @@ mkdirSync(PROFILES_DIR, { recursive: true });
 if (!existsSync(join(PROFILES_DIR, 'data.json')) && existsSync(DATA_FILE)) {
   renameSync(DATA_FILE, join(PROFILES_DIR, 'data.json'));
   if (existsSync(DATA_FILE + '.bak')) renameSync(DATA_FILE + '.bak', join(PROFILES_DIR, 'data.json.bak'));
-  console.log('Migrated main database into profiles/data.json');
+  logger('Migrated main database into profiles/data.json');
 }
 DATA_FILE = join(PROFILES_DIR, 'data.json');
 
 const DEFAULT_DATA = {
   accounts: [],
   categories: [
-    { id: 'cat-invoice', name: 'Invoice', color: '#fa8c3c' }
+    { id: 'cat-invoice', name: 'Invoice', color: '#fa8c3c' },
+    { id: 'cat-transfer', name: 'Transfer', color: '#71717a' },
+    { id: 'cat-debt', name: 'Debt', color: '#facc15' },
+    { id: 'cat-uncategorized', name: 'Uncategorized', color: null }
   ],
   transactions: [],
   bills: [],
@@ -224,7 +241,34 @@ app.get('/api/exchange-rate', async (req, res) => {
   res.json({ ok: true, rates: subset });
 });
 
-const server = app.listen(PORT, () => console.log(`Black Book running at http://localhost:${PORT}`));
+// ---- listen loop: try PORT first, then safe fallback ports (Windows sometimes reserves ranges
+// like 2901-3000 for Hyper-V/WinNAT, making 3000 unbindable). Cycle back if all are blocked.
+const PREFERRED_PORTS = [PORT, 4300, 8400, 8800, 9000, 9900];
+const server = http.createServer(app);
+let listenCursor = -1;
+const failedPorts = new Set();
+function tryListen() {
+  listenCursor = (listenCursor + 1) % PREFERRED_PORTS.length;
+  server.listen(PREFERRED_PORTS[listenCursor]);
+}
+server.on('listening', () => {
+  failedPorts.clear();
+  logger(`Black Book running at http://localhost:${server.address().port}`);
+});
+server.on('error', (err) => {
+  if (err.code === 'EADDRINUSE' || err.code === 'EACCES') {
+    const from = PREFERRED_PORTS[listenCursor];
+    if (!failedPorts.has(from)) {
+      logger(`[black-book] Port ${from} is not available (${err.code}) — trying the next available port.`);
+      failedPorts.add(from);
+    }
+    const backToStart = (listenCursor + 1) % PREFERRED_PORTS.length === 0;
+    setTimeout(tryListen, backToStart ? 5000 : 300);
+  } else {
+    logger('[black-book] Server error:', err.message);
+  }
+});
+tryListen();
 
 // Auto-fetch exchange rates on startup
 (async () => {
@@ -235,40 +279,44 @@ const server = app.listen(PORT, () => console.log(`Black Book running at http://
     for (const [k, v] of Object.entries(fetched)) rates[k] = v;
     if (Object.keys(fetched).length) {
       writeFileSync(DATA_FILE, JSON.stringify(db, null, 2));
-      console.log('Rates auto-fetched: ' + Object.entries(rates).map(([c, r]) => c + '=' + (r.rate ?? '--')).join(' '));
+      logger('Rates auto-fetched: ' + Object.entries(rates).map(([c, r]) => c + '=' + (r.rate ?? '--')).join(' '));
     } else {
-      console.log('Could not auto-fetch exchange rates, using stored values');
+      logger('Could not auto-fetch exchange rates, using stored values');
     }
   } catch (e) {
-    console.log('Could not auto-fetch exchange rate, using stored value');
+    logger('Could not auto-fetch exchange rate, using stored value');
   }
 })();
 
 const wss = new WebSocketServer({ server });
-let browserConnected = false;
+wss.on('error', (err) => {
+  if (err.code !== 'EADDRINUSE' && err.code !== 'EACCES') logger('[black-book] WebSocket server error:', err.message);
+});
 let shutdownTimer = null;
-const IDLE_SHUTDOWN_MS = 60000;
+const IDLE_SHUTDOWN_MS = 600000;
+const clientsConnected = () => wss.clients.size > 0;
 
 wss.on('connection', (ws) => {
-  browserConnected = true;
-  if (shutdownTimer) { clearTimeout(shutdownTimer); shutdownTimer = null; console.log('Browser connected. Idle shutdown cancelled.'); }
+  if (shutdownTimer && clientsConnected()) {
+    clearTimeout(shutdownTimer); shutdownTimer = null;
+    logger('Browser connected. Idle shutdown cancelled.');
+  }
   ws.on('close', () => {
-    browserConnected = false;
-    scheduleShutdown();
+    if (!clientsConnected()) scheduleShutdown();
   });
 });
 
 function scheduleShutdown() {
   if (shutdownTimer) return;
-  console.log('Browser disconnected. Will auto-exit after an idle period unless it reconnects or activity resumes...');
+  logger('Browser disconnected. Will auto-exit after an idle period unless it reconnects or activity resumes...');
   shutdownTimer = setTimeout(() => {
     shutdownTimer = null;
-    if (browserConnected) return;
+    if (clientsConnected()) return;
     if (Date.now() - lastRequest < IDLE_SHUTDOWN_MS) {
       scheduleShutdown();
       return;
     }
-    console.log('Idle for ' + (IDLE_SHUTDOWN_MS / 1000) + 's with no browser. Exiting.');
+    logger('Idle for ' + (IDLE_SHUTDOWN_MS / 1000) + 's with no browser. Exiting.');
     process.exit(0);
   }, IDLE_SHUTDOWN_MS);
 }

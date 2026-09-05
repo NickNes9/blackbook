@@ -24,7 +24,8 @@ window.BlackBook = {
       this.data = await (await fetch('/api/load' + (this.profile ? '?profile=' + encodeURIComponent(this.profile) : ''))).json();
     } catch (e) {
       document.getElementById('page-overview').innerHTML =
-        '<div class="empty-state"><div class="empty-state-title">LOADING FAILED</div><div class="empty-state-text">Could not load data from server.</div></div>';
+        '<div class="empty-state"><div class="empty-state-title">LOADING FAILED</div><div class="empty-state-text">Could not load data from the Black Book server. Reopen the app (Black Book.exe) or retry below.</div>' +
+        '<div style="margin-top:14px;"><button class="btn btn-primary" onclick="location.reload()">RETRY</button></div></div>';
       return;
     }
     if (!this.data.bills) this.data.bills = [];
@@ -55,7 +56,7 @@ window.BlackBook = {
     this.updateNavVisibility();
 
     const rates = this.getRates();
-    if (['EUR', 'USD', 'XAU'].some(c => !rates[c].rate)) {
+    if (['EUR', 'USD', 'XAU'].some(c => !rates[c] || !rates[c].rate)) {
       fetch('/api/exchange-rate').then(r => r.json()).then(result => {
         if (result.rates) {
           Object.assign(this.getRates(), result.rates);
@@ -64,7 +65,8 @@ window.BlackBook = {
       }).catch(() => {});
     }
 
-    this.connectWebSocket();
+this.connectWebSocket();
+    this.bindWsRecovery();
     const hp = document.getElementById('header-profile');
     if (hp) { hp.textContent = '\u00b7 ' + (this.profile ? this.profile.toUpperCase() : 'DEFAULT'); }
     if (window.Chart) {
@@ -85,6 +87,7 @@ window.BlackBook = {
     this.bindSavingsEntryForm();
     this.bindBudgetForm();
     this.bindTransferForm();
+    this.bindSettingsModals();
 
     document.querySelector('#transaction-modal .modal-backdrop').addEventListener('click', () => { document.getElementById('transaction-form').requestSubmit(); });
     document.querySelector('#bill-modal .modal-backdrop').addEventListener('click', () => this.closeModal('bill-modal'));
@@ -178,11 +181,16 @@ window.BlackBook = {
   },
 
   scheduleWsReconnect() {
-    if (this._wsRetry > 10) return;
     const delay = Math.min(1000 * Math.pow(2, this._wsRetry), 15000);
     this._wsRetry++;
     clearTimeout(this._wsReconnectTimer);
     this._wsReconnectTimer = setTimeout(() => this.connectWebSocket(), delay);
+  },
+
+  bindWsRecovery() {
+    const reconnectNow = () => { if (!this._ws) this.connectWebSocket(); };
+    document.addEventListener('visibilitychange', () => { if (!document.hidden) reconnectNow(); });
+    window.addEventListener('focus', reconnectNow);
   },
 
   bindKeyboard() {
@@ -471,6 +479,7 @@ window.BlackBook = {
   normalizeLegacyCurrencySettings() {
     const s = this.data.settings;
     if (!s.baseCurrency) s.baseCurrency = 'RSD';
+    if (s.currencyPreset) return false; // profile created with an explicit currency preset — do not auto-add currencies
     const en = s.enabledCurrencies;
     const degenerate = !Array.isArray(en) || en.length === 0 || (en.length === 1 && en[0] === (s.baseCurrency || 'RSD'));
     if (degenerate) {
@@ -661,6 +670,30 @@ window.BlackBook = {
     this._confirmResolve = null;
     this.closeModal('confirm-modal');
     r(val);
+  },
+
+  promptModal(opts) {
+    return new Promise((resolve) => {
+      opts = opts || {};
+      document.getElementById('prompt-title').textContent = opts.title || 'Enter';
+      const msg = document.getElementById('prompt-message');
+      msg.textContent = (opts.message == null ? '' : String(opts.message));
+      const input = document.getElementById('prompt-input');
+      input.value = (opts.defaultValue == null ? '' : String(opts.defaultValue));
+      input.placeholder = (opts.placeholder == null ? '' : String(opts.placeholder));
+      document.getElementById('prompt-ok').textContent = opts.confirmText || 'OK';
+      this._promptResolve = resolve;
+      this.openModal('prompt-modal');
+      setTimeout(() => { input.focus(); input.select(); }, 30);
+    });
+  },
+
+  _resolvePrompt(value) {
+    if (!this._promptResolve) return;
+    const r = this._promptResolve;
+    this._promptResolve = null;
+    this.closeModal('prompt-modal');
+    r(value);
   },
 
   fmtBase(amount) {

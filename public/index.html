@@ -445,6 +445,43 @@
     </div>
   </div>
 
+  <!-- Prompt Modal -->
+  <div id="prompt-modal" class="modal hidden">
+    <div class="modal-backdrop" onclick="BlackBook._resolvePrompt(null)"></div>
+    <div class="modal-content" style="max-width:420px;">
+      <div class="modal-header">
+        <h2 id="prompt-title">Enter</h2>
+        <button class="modal-close" onclick="BlackBook._resolvePrompt(null)">&times;</button>
+      </div>
+      <div id="prompt-message" class="confirm-message"></div>
+      <input type="text" id="prompt-input" class="input" autocomplete="off" spellcheck="false" autofocus onkeydown="if (event.key === 'Enter') BlackBook._resolvePrompt(this.value); else if (event.key === 'Escape') BlackBook._resolvePrompt(null);">
+      <div class="form-actions">
+        <button type="button" class="btn btn-secondary" onclick="BlackBook._resolvePrompt(null)">Cancel</button>
+        <button type="button" class="btn btn-primary" id="prompt-ok" onclick="BlackBook._resolvePrompt(document.getElementById('prompt-input').value)">OK</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- New Profile Modal -->
+  <div id="new-profile-modal" class="modal hidden">
+    <div class="modal-backdrop" onclick="BlackBook.closeModal('new-profile-modal')"></div>
+    <div class="modal-content" style="max-width:420px;">
+      <div class="modal-header">
+        <h2>New Profile</h2>
+        <button class="modal-close" onclick="BlackBook.closeModal('new-profile-modal')">&times;</button>
+      </div>
+      <form id="new-profile-form">
+        <div class="form-group"><label>Profile name</label><input type="text" id="new-profile-name" class="input" maxlength="40" required autofocus autocomplete="off"></div>
+        <div class="form-group"><label>First account name</label><input type="text" id="new-profile-account" class="input" maxlength="12" required autocomplete="off"></div>
+        <div class="form-group"><label>Default currency</label><select id="new-profile-currency" class="input"><option value="">LOADING...</option></select></div>
+        <div class="form-actions">
+          <button type="button" class="btn btn-secondary" onclick="BlackBook.closeModal('new-profile-modal')">Cancel</button>
+          <button type="submit" class="btn btn-primary">Create</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
   <!-- CSV Import Modal -->
   <div id="csv-import-modal" class="modal hidden">
     <div class="modal-backdrop"></div>

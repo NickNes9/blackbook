@@ -9,6 +9,8 @@ Object.assign(window.BlackBook, {
   },
 
   openNewTransaction(targetId) {
+    const usable = this.visibleAccounts().length + (this.data.creditCards || []).length;
+    if (!usable) { alert('Create an account first — use CREATE FIRST ACCOUNT on the overview, or Settings → Accounts → + ADD.'); return; }
     document.getElementById('tx-id').value = '';
     document.getElementById('tx-date').value = this.fmtDateInput(this.todayForViewedMonth());
     document.getElementById('tx-type').value = 'expense';
