@@ -109,7 +109,7 @@ planBlockHtml(inst) {
       '<span class="inst-count-badge"' + (closed ? ' style="border-color:' + color + ';color:var(--on-fill);background:' + color + ';"' : '') + '>' + paidCount + '/' + inst.months + ' PAID</span>' +
       (closed ? '' : '<button class="btn btn-sm btn-primary" onclick="BlackBook.openPayInstallment(\x27' + inst.id + '\x27)" title="Pay toward this plan">PAY</button>') +
       (tx ? '<button class="btn btn-sm btn-secondary" onclick="BlackBook.openEditCardTx(\x27' + tx.id + '\x27)" title="Edit this purchase">EDIT</button>' : '') +
-      '<button class="btn btn-sm btn-danger" onclick="BlackBook.deleteInstallment(\x27' + inst.id + '\x27)">DEL</button></span></div>';
+      '<button class="btn btn-sm btn-danger btn-icon" title="Delete installment plan" onclick="BlackBook.deleteInstallment(\x27' + inst.id + '\x27)">' + this.xIcon() + '</button></span></div>';
     html += '<div class="savings-progress-text"><span>' + (closed ? '&#10003; FULLY PAID OFF' :
       'LEFT ' + this.fmtBase(this.instOutstanding(inst)) + ' of ' + this.fmtBase(this.instGrandTotal(inst))) + '</span><span>' + pct + '%</span></div>' +
       '<div class="savings-progress-bar"><div class="savings-progress-fill" style="width:' + pct + '%;background:' + color + ';"></div></div>';
