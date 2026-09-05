@@ -19,11 +19,22 @@ Object.assign(window.BlackBook, {
   },
 
   sizeAccountSquares() {
-    const chip = document.querySelector('.account-chip:not(.ov-chip):not(.account-mgr-square)');
     const ov = document.querySelector('.account-chip.ov-chip');
     const sq = document.querySelector('.account-chip.account-mgr-square');
-    if (!chip || !ov || !sq) return;
+    if (!ov || !sq) return;
+    let chip = document.querySelector('.account-chip:not(.ov-chip):not(.account-mgr-square)');
+    let probe = null;
+    if (!chip) {
+      probe = document.createElement('div');
+      probe.className = 'account-chip';
+      probe.style.position = 'absolute';
+      probe.style.visibility = 'hidden';
+      probe.innerHTML = '<span class="chip-name">--</span><span class="chip-balance">--</span>';
+      document.body.appendChild(probe);
+      chip = probe;
+    }
     const side = Math.round(chip.getBoundingClientRect().height);
+    if (probe) probe.remove();
     if (!(side > 0)) return;
     [ov, sq].forEach(el => {
       el.style.width = side + 'px';
@@ -308,7 +319,10 @@ Object.assign(window.BlackBook, {
     if (typeFilter) txs = txs.filter(t => t.type === typeFilter);
     txs = txs.filter(t => { const { y, m } = this.ymOf(t.date); return y === this.vy() && m === this.vm(); });
     if (this._bulkSel && this._bulkSel.size && this._bulkOnly) txs = txs.filter(t => this._bulkSel.has(t.id));
-    if (!txs.length) return '<div class="empty-state" style="padding:20px"><div class="empty-state-text">No transactions this month. Press A to add one.</div></div>';
+    if (!txs.length) {
+      const noAccs = this.visibleAccounts().length + (this.data.creditCards || []).length === 0;
+      return '<div class="empty-state" style="padding:20px"><div class="empty-state-text">' + (noAccs ? 'No accounts yet — create one to get started.' : 'No transactions this month. Press A to add one.') + '</div>' + (noAccs ? '<div style="margin-top:14px"><button class="btn btn-primary" onclick="BlackBook.openNewAccount()">CREATE FIRST ACCOUNT</button></div>' : '') + '</div>';
+    }
     const accounts = Object.fromEntries(this.data.accounts.map(a => [a.id, a]));
     const cards = Object.fromEntries((this.data.creditCards || []).map(c => [c.id, c]));
     const categories = Object.fromEntries(this.data.categories.map(c => [c.id, c]));
@@ -428,6 +442,8 @@ Object.assign(window.BlackBook, {
         if (x === '__SQUARE__') return squareChip;
         return chip(x);
       }).join('') + '</div>').join('');
+    } else if (accts.length === 0) {
+      html = '<div class="account-chips-row">' + overviewChip + '<div class="account-chip-spacer"></div>' + squareChip + '</div>';
     } else {
       html = '<div class="account-chips-row">' + overviewChip + accts.map(chip).join('') + squareChip + '</div>';
     }

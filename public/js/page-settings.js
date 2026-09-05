@@ -41,17 +41,68 @@ Object.assign(window.BlackBook, {
     localStorage.setItem('mb_profile', name || '');
     location.reload();
   },
-  async createProfile() {
-    const name = prompt('New profile name:');
-    if (!name || !name.trim()) return;
-    const res = await fetch('/api/profiles', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'create', name: name.trim() }) });
+  createProfile() {
+    this.populateNewProfileModal();
+    this.openModal('new-profile-modal');
+    setTimeout(() => { const f = document.getElementById('new-profile-name'); if (f) f.focus(); }, 30);
+  },
+
+  allCurrencyCodes() {
+    return ['AED','AUD','BGN','BRL','CAD','CHF','CNY','CZK','DKK','EUR','GBP','HKD','HRK','HUF','IDR','ILS','INR','ISK','JPY','KRW','MXN','MYR','NOK','NZD','PHP','PLN','RON','RSD','SEK','SGD','THB','TRY','TWD','USD','XAU','ZAR'];
+  },
+
+  populateNewProfileModal() {
+    const sel = document.getElementById('new-profile-currency');
+    if (!sel) return;
+    const curs = this.allCurrencyCodes();
+    sel.innerHTML = curs.map(c => '<option value="' + this.escapeHtml(c) + '">' + this.escapeHtml(c) + '</option>').join('');
+    const def = this.baseCurrency();
+    if (curs.includes(def)) sel.value = def;
+  },
+
+  async submitNewProfile(e) {
+    if (e) e.preventDefault();
+    const nameEl = document.getElementById('new-profile-name');
+    const accEl = document.getElementById('new-profile-account');
+    const curEl = document.getElementById('new-profile-currency');
+    const name = nameEl.value.trim();
+    const account = accEl.value.trim();
+    const currency = curEl.value;
+    if (!name) { alert('Enter a name for the new profile.'); nameEl.focus(); return; }
+    if (!account) { alert('Enter a name for the first account.'); accEl.focus(); return; }
+    if (!currency) { alert('Choose a default currency.'); curEl.focus(); return; }
+    try {
+      await this._createProfile(name, account, currency);
+    } catch (err) {
+      alert('Could not create the profile \u2014 the Black Book server appears to be down.');
+      return;
+    }
+    this.closeModal('new-profile-modal');
+  },
+
+  async _createProfile(name, account, currency) {
+    const res = await fetch('/api/profiles', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'create', name: name }) });
     const out = await res.json();
     if (!res.ok) { alert(out.error || 'Failed'); return; }
+    const fresh = await (await fetch('/api/load?profile=' + encodeURIComponent(name))).json();
+    fresh.settings = fresh.settings || {};
+    fresh.settings.baseCurrency = currency;
+    fresh.settings.enabledCurrencies = [currency];
+    fresh.settings.currencyPreset = true;
+    fresh.accounts = fresh.accounts || [];
+    fresh.accounts.push({ id: crypto.randomUUID(), name: account, shortName: account.slice(0, 3).toUpperCase(), currency: currency, type: 'cash', color: null });
+    const saveRes = await fetch('/api/save', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ profile: name, data: fresh }) });
+    if (!saveRes.ok) throw new Error('save failed');
     await this.save();
-    this.switchProfile(name.trim());
+    this.switchProfile(name);
   },
   async renameProfile(name) {
-    const newName = prompt(name ? 'Rename profile:' : 'Name the default profile (becomes a named profile):', name || 'default');
+    const newName = await this.promptModal({
+      title: name ? 'Rename Profile' : 'Name Default Profile',
+      message: name ? 'Rename profile "' + name + '":' : 'Name the default profile (it becomes a named profile):',
+      defaultValue: name || 'default',
+      confirmText: 'Save'
+    });
     if (!newName || !newName.trim() || newName.trim() === name) return;
     const wasActive = this.profile === name;
     const res = await fetch('/api/profiles', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'rename', name: name, newName: newName.trim() }) });
@@ -519,6 +570,11 @@ Object.assign(window.BlackBook, {
   },
 
   bindSettingsModals() {
+    const npForm = document.getElementById('new-profile-form');
+    if (npForm && !npForm._bound) {
+      npForm._bound = true;
+      npForm.addEventListener('submit', (e) => this.submitNewProfile(e));
+    }
     const accForm = document.getElementById('settings-account-form');
     if (accForm && !accForm._bound) {
       accForm._bound = true;
@@ -531,6 +587,15 @@ Object.assign(window.BlackBook, {
         const currency = document.getElementById('settings-account-currency').value;
         const type = document.getElementById('settings-account-type').value;
         if (!name) return;
+        const prevCounts = { accounts: this.data.accounts.length, cards: (this.data.creditCards || []).length, accSnap: null, cardSnap: null };
+        if (idVal && !idVal.startsWith('card:')) {
+          const acc = this.data.accounts.find(a => a.id === idVal);
+          if (acc) prevCounts.accSnap = Object.assign({}, acc);
+        }
+        if (idVal.startsWith('card:')) {
+          const card = this.cardById(idVal.slice(5));
+          if (card) prevCounts.cardSnap = Object.assign({}, card);
+        }
         const colorEl = document.getElementById('settings-account-color');
         const hexEl = document.getElementById('settings-account-color-hex');
         const isAuto = hexEl && hexEl.dataset.auto === '1';
@@ -562,9 +627,24 @@ Object.assign(window.BlackBook, {
             this.data.accounts.push(Object.assign({ id: crypto.randomUUID(), name: name, shortName: shortName, currency: currency, type: type, color: extra.color, description: document.getElementById('settings-account-description').value.trim() || undefined }, extra));
           }
         }
-        await this.save();
-        this.migrateCreditCards();
-        await this.save();
+        try {
+          await this.save();
+          this.migrateCreditCards();
+          await this.save();
+        } catch (e) {
+          if (prevCounts.accSnap) {
+            const acc = this.data.accounts.find(a => a.id === idVal);
+            if (acc) Object.assign(acc, prevCounts.accSnap);
+          } else if (prevCounts.cardSnap) {
+            const card = this.cardById(idVal.slice(5));
+            if (card) Object.assign(card, prevCounts.cardSnap);
+          } else {
+            while (this.data.accounts.length > prevCounts.accounts) this.data.accounts.pop();
+            while ((this.data.creditCards || []).length > prevCounts.cards) this.data.creditCards.pop();
+          }
+          alert('Could not save \u2014 the Black Book server appears to be down. The changes were rolled back; please try again.');
+          return;
+        }
         this.closeModal('settings-account-modal');
         this.renderSettings();
         if (this.currentPage !== 'settings') this.renderPage(this.currentPage);
@@ -616,6 +696,8 @@ Object.assign(window.BlackBook, {
     if (resetBtn) { resetBtn.dataset.name = ''; resetBtn.dataset.kind = 'account'; }
     this.bindColorPicker('settings-account-color', 'settings-account-color-hex', 'settings-account-color-reset');
     document.getElementById('settings-account-currency').value = this.baseCurrency();
+    const firstAcc = this.visibleAccounts()[0];
+    if (firstAcc && firstAcc.currency) document.getElementById('settings-account-currency').value = firstAcc.currency;
     document.getElementById('settings-account-fee').value = '0';
     document.getElementById('settings-account-type').value = 'cash';
     document.getElementById('settings-account-rate').value = '5';
@@ -689,6 +771,10 @@ Object.assign(window.BlackBook, {
   async deleteAccount(id) {
     const acc = this.data.accounts.find(a => a.id === id);
     if (!acc) return;
+    if (this.data.accounts.length <= 1) {
+      await this.confirmModal({ title: 'Cannot Delete', message: 'You need at least one account.', danger: false });
+      return;
+    }
     const txCount = this.data.transactions.filter(t => {
       if (t.type === 'transfer') return t.fromAccountId === id || t.toAccountId === id;
       return t.accountId === id;
@@ -749,7 +835,7 @@ Object.assign(window.BlackBook, {
     const sortedCats = this.data.categories.slice().sort((a, b) => a.name.localeCompare(b.name));
     for (const c of sortedCats) {
       const txCount = this.data.transactions.filter(t => t.categoryId === c.id).length;
-      const isProtected = c.name.toLowerCase() === 'transfer' || c.name.toLowerCase() === 'uncategorized' || c.name.toLowerCase() === 'invoice';
+      const isProtected = c.name.toLowerCase() === 'transfer' || c.name.toLowerCase() === 'uncategorized' || c.name.toLowerCase() === 'invoice' || c.name.toLowerCase() === 'debt';
       categoriesList += '<div class="settings-row">' +
         '<span class="row-swatch" style="background:' + this.categoryColor(c) + ';"></span>' +
         '<span class="settings-row-name">' + this.escapeHtml(c.name) + '</span>' +
@@ -840,7 +926,7 @@ Object.assign(window.BlackBook, {
       '<input type="file" id="settings-import-csv-file" accept=".csv,.txt,.xlsx,.xls,text/csv,text/plain,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel" style="display:none;">' +
       '</div></div>' +
 
-      '<div class="settings-footer">BLACK BOOK v0.7.3 &middot; Created by Nikola Ne&scaron;i&#263;</div>';
+      '<div class="settings-footer">BLACK BOOK v0.8.1 &middot; Created by Nikola Ne&scaron;i&#263;</div>';
   },
 
   async refreshRate(code) {
@@ -871,17 +957,17 @@ Object.assign(window.BlackBook, {
 
   openAddCurrencyModal() {
     const enabled = new Set(this.currencyList());
-    const allCodes = ['AED','AUD','BGN','BRL','CAD','CHF','CNY','CZK','DKK','EUR','GBP','HKD','HRK','HUF','IDR','ILS','INR','ISK','JPY','KRW','MXN','MYR','NOK','NZD','PHP','PLN','RON','RSD','SEK','SGD','THB','TRY','TWD','USD','XAU','ZAR'];
+    const allCodes = this.allCurrencyCodes();
     const available = allCodes.filter(c => !enabled.has(c));
     if (!available.length) { alert('All common currencies are already enabled.'); return; }
     const list = available.map(c => '<button class="btn btn-sm btn-secondary" style="margin:2px;cursor:pointer;" onclick="BlackBook.addCurrency(\x27' + c + '\x27)">' + c + '</button>').join(' ');
     const overlay = document.createElement('div');
     overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:9999;display:flex;align-items:center;justify-content:center;';
     overlay.id = 'add-currency-overlay';
-    overlay.innerHTML = '<div style="background:var(--bg,#111);border:1px solid var(--border,#333);border-radius:8px;padding:20px;max-width:520px;max-height:80vh;overflow-y:auto;">' +
-      '<div style="margin-bottom:12px;font-weight:bold;">SELECT CURRENCY TO ADD</div>' +
-      '<div>' + list + '</div>' +
-      '<div style="margin-top:12px;"><button class="btn btn-sm btn-secondary" onclick="BlackBook.closeAddCurrencyModal()">CLOSE</button></div></div>';
+    overlay.innerHTML = '<div style="background:var(--bg,#111);border:1px solid var(--border,#333);border-radius:8px;width:520px;max-width:90vw;max-height:80vh;display:flex;flex-direction:column;">' +
+      '<div class="modal-header"><span style="font-weight:bold;">SELECT CURRENCY TO ADD</span><button class="modal-close" onclick="BlackBook.closeAddCurrencyModal()">&times;</button></div>' +
+      '<div style="padding:14px 20px;overflow-y:auto;">' + list +
+      '<div style="margin-top:12px;"><button class="btn btn-sm btn-secondary" onclick="BlackBook.closeAddCurrencyModal()">CLOSE</button></div></div></div>';
     document.body.appendChild(overlay);
   },
 
@@ -959,7 +1045,7 @@ Object.assign(window.BlackBook, {
   async deleteCategory(id) {
     const cat = this.data.categories.find(c => c.id === id);
     if (!cat) return;
-    const isProtected = cat.name.toLowerCase() === 'transfer' || cat.name.toLowerCase() === 'uncategorized' || cat.name.toLowerCase() === 'invoice';
+    const isProtected = cat.name.toLowerCase() === 'transfer' || cat.name.toLowerCase() === 'uncategorized' || cat.name.toLowerCase() === 'invoice' || cat.name.toLowerCase() === 'debt';
     if (isProtected) {
       await this.confirmModal({ title: 'Protected Category', message: '"' + cat.name + '" is a system category and cannot be deleted.', danger: false });
       return;

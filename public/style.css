@@ -1544,6 +1544,10 @@ select:disabled {
   flex-wrap: wrap;
 }
 
+.account-chip-spacer {
+  flex: 1;
+}
+
 .account-chip {
   display: flex;
   flex-direction: column;
