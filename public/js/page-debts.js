@@ -160,7 +160,7 @@ Object.assign(window.BlackBook, {
       '<span class="debt-badge" style="background:' + typeColor + ';color:var(--on-fill);">' + (d.type === 'in' ? 'OWED' : 'OWE') + '</span>' +
       (settled ? '<button class="btn btn-sm btn-danger" onclick="BlackBook.toggleDebtPayment(\x27' + d.id + '\x27)" title="Unpay last payment">UNPAY</button>' : '<button class="btn btn-sm btn-primary" onclick="BlackBook.openDebtPayModal(\x27' + d.id + '\x27)">+ PAY</button>') +
       '<button class="btn btn-sm btn-secondary" onclick="BlackBook.openEditDebt(\x27' + d.id + '\x27)">EDIT</button>' +
-      '<button class="btn btn-sm btn-danger" onclick="BlackBook.deleteDebt(\x27' + d.id + '\x27)">DEL</button></span></div>';
+      '<button class="btn btn-sm btn-danger btn-icon" title="Delete debt" onclick="BlackBook.deleteDebt(\x27' + d.id + '\x27)">' + this.xIcon() + '</button></span></div>';
     html += '<div class="savings-progress-text"><span>' + this.fmtAmount(paid, cur) + ' of ' + this.fmtAmount(total, cur) + '</span><span>' + pct + '%</span></div>' +
       '<div class="savings-progress-bar"><div class="savings-progress-fill" style="width:' + pct + '%;background:' + fill + ';"></div></div>';
     html += '<div class="bill-meta-line" style="display:block;margin-top:6px;">' +

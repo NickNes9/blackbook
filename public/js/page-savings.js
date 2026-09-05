@@ -62,7 +62,7 @@ Object.assign(window.BlackBook, {
       ((goal.entries && goal.entries.length) ? '<button class="btn btn-sm btn-secondary" onclick="BlackBook.openSavingsEntries(\x27' + goal.id + '\x27)" title="View entries in transactions">LINK</button>' : '') +
       '<button class="btn btn-sm btn-primary" onclick="BlackBook.openNewSavingsEntry(\x27' + goal.id + '\x27)">+ ADD</button>' +
       '<button class="btn btn-sm btn-secondary" onclick="BlackBook.openEditSavingsGoal(\x27' + goal.id + '\x27)">EDIT</button>' +
-      '<button class="btn btn-sm btn-danger" onclick="BlackBook.deleteSavingsGoal(\x27' + goal.id + '\x27)">DEL</button></span></div>' +
+      '<button class="btn btn-sm btn-danger btn-icon" title="Delete goal" onclick="BlackBook.deleteSavingsGoal(\x27' + goal.id + '\x27)">' + this.xIcon() + '</button></span></div>' +
       '<div class="savings-progress-text"><span>' + this.fmtBase(saved) + ' of ' + this.fmtBase(target) + '</span><span>' + pct + '%</span></div>' +
       '<div class="savings-progress-bar"><div class="savings-progress-fill ' + barClass + '" style="width:' + pct + '%;"></div></div>' +
       '<button class="btn btn-sm btn-secondary savings-expand-btn" onclick="BlackBook.toggleSavingsGoal(\x27' + goal.id + '\x27)">' + (expanded ? '&#9650; HIDE ENTRIES' : '&#9660; SHOW ENTRIES') + ' (' + (goal.entries || []).length + ')</button>';

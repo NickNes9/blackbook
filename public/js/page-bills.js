@@ -113,7 +113,7 @@ Object.assign(window.BlackBook, {
         '<span class="bill-actions-mini">' +
         '<button class="btn btn-sm ' + (bill.autopay ? 'btn-primary' : 'btn-muted') + '" onclick="BlackBook.toggleBillAutopay(\x27' + bill.id + '\x27)" title="Auto-mark upcoming months as paid">' + (bill.autopay ? 'AUTO' : 'MAN') + '</button>' +
         '<button class="btn btn-sm btn-secondary" onclick="BlackBook.openEditBill(\x27' + bill.id + '\x27)">EDIT</button>' +
-        '<button class="btn btn-sm btn-danger" onclick="BlackBook.deleteBill(\x27' + bill.id + '\x27)">DEL</button></span>' +
+        '<button class="btn btn-sm btn-danger btn-icon" title="Delete bill" onclick="BlackBook.deleteBill(\x27' + bill.id + '\x27)">' + this.xIcon() + '</button></span>' +
         '</div>';
       for (let m = 0; m < 12; m++) {
         const mk = this.vy() + '-' + String(m + 1).padStart(2, '0');
@@ -355,7 +355,7 @@ Object.assign(window.BlackBook, {
   attachBillTransaction(bill, pay) {
     if (pay.txId) return;
     const amt = pay.amount != null ? pay.amount : bill.amount;
-    const from = this.billPayFrom(bill);
+    const from = pay.accountId || this.billPayFrom(bill);
     if (amt == null || !from) return;
     const existing = this.billMatchTx(bill, pay.month);
     if (existing) {
@@ -374,7 +374,7 @@ Object.assign(window.BlackBook, {
     const y = parseInt(mp[0]), m = parseInt(mp[1]);
     const day = Math.min(Math.max(parseInt(bill.dueDay) || 1, 1), new Date(y, m, 0).getDate());
     const txId = 'bil-' + crypto.randomUUID();
-    const billCur = bill.currency || this.baseCurrency() || 'RSD';
+    const billCur = pay.payCurrency || bill.currency || this.baseCurrency() || 'RSD';
     const tx = { id: txId, date: y + '-' + String(m).padStart(2, '0') + '-' + String(day).padStart(2, '0'), type: 'expense', categoryId: bill.categoryId || null, note: bill.name };
     if (from.startsWith('card:')) {
       tx.cardId = from.slice(5);
@@ -537,14 +537,57 @@ Object.assign(window.BlackBook, {
   openBillPayModal(billId, mk) {
     const bill = this.data.bills.find(b => b.id === billId);
     if (!bill) return;
+    this._bpayBill = bill;
+    this._bpayMk = mk;
     const existing = this.getBillPayment(billId, mk);
     const cur = bill.currency || this.baseCurrency() || 'RSD';
     const from = this.billPayFrom(bill);
+    const accSel = document.getElementById('bpay-account');
+    const curSel = document.getElementById('bpay-currency');
+    accSel.innerHTML = this.accountSelectOptions(from);
+    curSel.innerHTML = this.currencyList().map(c => '<option value="' + c + '"' + (c === cur ? ' selected' : '') + '>' + c + '</option>').join('');
+    document.getElementById('bpay-bill').value = billId;
+    document.getElementById('bpay-month').value = mk;
+    this.refreshBillPayFields(bill, existing);
+    this.bindBillPayForm();
+    this.openModal('bill-pay-modal');
+    setTimeout(() => { const a = document.getElementById('bpay-amount'); a.focus(); a.select(); }, 50);
+  },
+
+  updateBillPayFromAccount() {
+    const curSel = document.getElementById('bpay-currency');
+    const accSel = document.getElementById('bpay-account');
+    const accVal = accSel.value;
+    const acc = accVal && !accVal.startsWith('card:') ? this.data.accounts.find(a => a.id === accVal) : null;
+    if (acc && curSel) curSel.value = acc.currency || this.baseCurrency() || 'RSD';
+    this.refreshBillPayFields(this._bpayBill, this.getBillPayment(this._bpayBill ? this._bpayBill.id : null, this._bpayMk));
+  },
+
+  updateBillPayFromCurrency() {
+    const curSel = document.getElementById('bpay-currency');
+    const accSel = document.getElementById('bpay-account');
+    if (curSel && accSel && accSel.value && !accSel.value.startsWith('card:')) {
+      const selAcc = this.data.accounts.find(a => a.id === accSel.value);
+      const selCur = (selAcc && selAcc.currency) || this.baseCurrency() || 'RSD';
+      if (selCur !== curSel.value) {
+        const preferred = this.defaultAccountForCurrency(curSel.value);
+        if (preferred && preferred !== accSel.value) {
+          accSel.innerHTML = this.accountSelectOptions(preferred);
+        }
+      }
+    }
+    this.refreshBillPayFields(this._bpayBill, this.getBillPayment(this._bpayBill ? this._bpayBill.id : null, this._bpayMk));
+  },
+
+  refreshBillPayFields(bill, existing) {
+    if (!bill) return;
+    const curSel = document.getElementById('bpay-currency');
+    const accSel = document.getElementById('bpay-account');
+    const cur = curSel.value || bill.currency || this.baseCurrency() || 'RSD';
+    const from = accSel.value || this.billPayFrom(bill);
     const acc = from && !from.startsWith('card:') ? this.data.accounts.find(a => a.id === from) : null;
     const accCur = (acc && acc.currency) || this.baseCurrency() || 'RSD';
     const isForeign = cur !== accCur && cur !== this.baseCurrency() && accCur === this.baseCurrency();
-    document.getElementById('bpay-bill').value = billId;
-    document.getElementById('bpay-month').value = mk;
     document.getElementById('bpay-amount-label').textContent = isForeign ? 'Amount (' + this.baseCurrency() + ')' : 'Amount (' + cur + ')';
     const nativeRow = document.getElementById('bpay-native-row');
     const nativeLabel = document.getElementById('bpay-native-label');
@@ -566,7 +609,7 @@ Object.assign(window.BlackBook, {
       feeRow.style.display = 'none';
       document.getElementById('bpay-amount').value = existing ? (existing.baseAmount != null ? Math.abs(existing.baseAmount) : (existing.amount != null ? existing.amount : (bill.amount != null ? bill.amount : ''))) : (bill.amount != null ? bill.amount : '');
     }
-    document.getElementById('bill-pay-title').textContent = bill.name + ' \u00b7 ' + mk;
+    document.getElementById('bill-pay-title').textContent = bill.name + ' \u00b7 ' + this._bpayMk;
     const previewEl = document.getElementById('bpay-preview');
     const updatePreview = () => {
       if (!isForeign) { previewEl.textContent = ''; return; }
@@ -591,9 +634,6 @@ Object.assign(window.BlackBook, {
     nativeInput.oninput = updatePreview;
     feeInput.oninput = updatePreview;
     updatePreview();
-    this.bindBillPayForm();
-    this.openModal('bill-pay-modal');
-    setTimeout(() => { const a = document.getElementById('bpay-amount'); a.focus(); a.select(); }, 50);
   },
 
   bindBillPayForm() {
@@ -614,6 +654,10 @@ Object.assign(window.BlackBook, {
         this.data.billPayments.splice(idx, 1);
       }
       const pay = { billId: billId, month: mk, paid: true, amount: amt };
+      const accSel = document.getElementById('bpay-account');
+      const curSel = document.getElementById('bpay-currency');
+      if (accSel && accSel.value) pay.accountId = accSel.value;
+      if (curSel) pay.payCurrency = curSel.value;
       const nativeEl = document.getElementById('bpay-native-amount');
       if (nativeEl && nativeEl.offsetParent !== null && nativeEl.value.trim()) {
         const nativeVal = this.evalAmount(nativeEl.value);
@@ -625,8 +669,8 @@ Object.assign(window.BlackBook, {
         if (manualFee >= 0) pay.feeAmountOverride = manualFee;
       }
       if (bill) {
-        const billCur = bill.currency || this.baseCurrency() || 'RSD';
-        const from = this.billPayFrom(bill);
+        const billCur = pay.payCurrency || bill.currency || this.baseCurrency() || 'RSD';
+        const from = pay.accountId || this.billPayFrom(bill);
         const acc = from && !from.startsWith('card:') ? this.data.accounts.find(a => a.id === from) : null;
         const accCur = (acc && acc.currency) || this.baseCurrency() || 'RSD';
         const isForeign = billCur !== accCur && billCur !== this.baseCurrency() && accCur === this.baseCurrency();

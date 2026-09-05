@@ -22,17 +22,17 @@ Object.assign(window.BlackBook, {
       const res = await fetch('/api/profiles');
       profiles = (await res.json()).profiles || [];
     } catch (e) {}
-    let html = '<div class="settings-row"><span class="settings-row-name">DEFAULT' + (!this.profile ? ' &#10003;' : '') + '</span><span class="settings-row-meta">' + (this.profile ? 'switch to default data set' : 'active') + '</span>' +
+    let html = '<div class="settings-row' + (!this.profile ? ' settings-row-active' : '') + '"><span class="settings-row-name">DEFAULT</span><span class="settings-row-meta">' + (this.profile ? 'switch to default data set' : 'active') + '</span>' +
       (!this.profile ? '<button class="btn btn-sm btn-secondary" onclick="BlackBook.renameProfile(\'\')">RENAME</button>' : '<button class="btn btn-sm btn-secondary" onclick="BlackBook.switchProfile(\'\')">OPEN</button>') + '</div>';
     if (!profiles.length) html += '<div style="padding:8px;color:var(--text-muted);font-size:13px;">No extra profiles yet.</div>';
     for (const p of profiles) {
       const active = p.name === this.profile;
-      html += '<div class="settings-row">' +
-        '<span class="settings-row-name">' + this.escapeHtml(p.name).toUpperCase() + (active ? ' &#10003;' : '') + '</span>' +
+      html += '<div class="settings-row' + (active ? ' settings-row-active' : '') + '">' +
+        '<span class="settings-row-name">' + this.escapeHtml(p.name).toUpperCase() + '</span>' +
         '<span class="settings-row-meta">' + (active ? 'active profile' : '') + '</span>' +
         (!active ? '<button class="btn btn-sm btn-secondary" onclick="BlackBook.switchProfile(\x27' + this.escapeHtml(p.name) + '\x27)">OPEN</button>' : '') +
         '<button class="btn btn-sm btn-secondary" onclick="BlackBook.renameProfile(\x27' + this.escapeHtml(p.name) + '\x27)">RENAME</button>' +
-        '<button class="btn btn-sm btn-danger" onclick="BlackBook.deleteProfile(\x27' + this.escapeHtml(p.name) + '\x27)">DEL</button></div>';
+        '<button class="btn btn-sm btn-danger btn-icon" title="Delete profile" onclick="BlackBook.deleteProfile(\x27' + this.escapeHtml(p.name) + '\x27)">' + this.xIcon() + '</button></div>';
     }
     el.innerHTML = html;
   },
@@ -247,6 +247,22 @@ Object.assign(window.BlackBook, {
     a.click();
   },
 
+  refreshIcon() {
+    return '<svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true" style="vertical-align:-2px;fill:currentColor;"><path d="M12 4V1L8 5l4 4V6c3.31 0 6 2.69 6 6 0 1.01-.25 1.97-.7 2.8l1.46 1.46C19.54 15.03 20 13.57 20 12c0-4.42-3.58-8-8-8zm0 14c-3.31 0-6-2.69-6-6 0-1.01.25-1.97.7-2.8L5.24 7.74C4.46 8.97 4 10.43 4 12c0 4.42 3.58 8 8 8v3l4-4-4-4v3z"/></svg>';
+  },
+
+  xIcon() {
+    return '<svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true" style="vertical-align:-2px;fill:none;stroke:currentColor;stroke-width:3.2;stroke-linecap:round;"><path d="M6 6l12 12M18 6L6 18"/></svg>';
+  },
+
+  fmtUpd24(iso) {
+    if (!iso) return '--';
+    const d = new Date(iso);
+    if (isNaN(d)) return '--';
+    const p = n => String(n).padStart(2, '0');
+    return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()) + ' ' + p(d.getHours()) + ':' + p(d.getMinutes());
+  },
+
   ratesTableHtml() {
     const rates = this.getRates();
     const enabled = this.currencyList();
@@ -257,27 +273,115 @@ Object.assign(window.BlackBook, {
     for (const g of (this.data.savingsGoals || [])) if (g.currency) used.add(g.currency);
     for (const d of (this.data.debts || [])) if (d.currency) used.add(d.currency);
     const enabledList = Array.from(used);
-    let rows = '<div class="rate-grid-row rate-grid-head"><span>CUR</span><span>RATE (in EUR)</span><span>SOURCE</span><span>UPDATED</span><span>MANUAL OVERRIDE</span><span></span><span></span><span></span></div>';
+    const base = this.baseCurrency();
+    const baseRate = base === 'EUR' ? 1 : (rates[base] || {}).rate;
+    const orderArr = this.data.settings.enabledCurrencies || [];
+    const shownFor = (code, r) => {
+      if (code === base) return 1;
+      if (!r || r.rate == null || !baseRate) return null;
+      return this.rnd4(r.rate / baseRate);
+    };
+    const fmtRate = (v) => v != null
+      ? v.toLocaleString('en-US', { maximumFractionDigits: 4 }) + ' <span class="rate-unit">' + base + '</span>'
+      : '--';
+    let rows = '<div class="rate-grid-row rate-grid-head"><span>CUR</span><span>RATE (in ' + base + ')</span><span>UPDATED</span><span>SET</span><span>ORDER</span><span></span><span>DEFAULT</span><span></span><span></span></div>';
     for (const code of enabledList) {
       const r = rates[code] || { rate: null, source: null, updated: null };
-      const rateVal = code === 'EUR' ? '1.0000 <span class="rate-unit">EUR</span>'
-        : (r.rate != null ? r.rate.toLocaleString('en-US', { maximumFractionDigits: 4 }) + ' <span class="rate-unit">EUR</span>' : '--');
-      const updated = r.updated ? new Date(r.updated).toLocaleString() : '--';
-      const removable = code !== (this.data.settings.baseCurrency || 'RSD') && code !== 'XAU';
+      const shown = shownFor(code, r);
+      const rateVal = fmtRate(shown);
+      const updated = r.source === 'manual' ? '<span class="rate-manual-tag">manual</span>' : this.fmtUpd24(r.updated);
+      const isBase = code === base;
+      const removable = !isBase;
+      const idx = orderArr.indexOf(code);
+      const canUp = !isBase && idx > 0 && orderArr[idx - 1] !== base;
+      const canDown = !isBase && idx >= 0 && idx < orderArr.length - 1 && orderArr[idx + 1] !== base;
+      const setCell = '<button class="btn btn-sm btn-secondary" ' +
+        (isBase ? 'disabled title="Base currency is always 1"' : 'title="Set manually" onclick="BlackBook.openManualRateModal(\x27' + code + '\x27)"') +
+        '>SET</button>';
+      const orderCell = '<span class="settings-row-order">' +
+        '<button type="button" class="btn btn-sm btn-secondary" ' + (canUp ? 'onclick="BlackBook.moveCurrency(\x27' + code + '\x27,-1)"' : 'disabled') + ' title="Move up">&#9650;</button>' +
+        '<button type="button" class="btn btn-sm btn-secondary" ' + (canDown ? 'onclick="BlackBook.moveCurrency(\x27' + code + '\x27,1)"' : 'disabled') + ' title="Move down">&#9660;</button>' +
+        '</span>';
+      const refreshCell = '<button class="btn btn-sm btn-secondary btn-icon" title="Refresh rate" onclick="BlackBook.refreshRate(\x27' + code + '\x27)">' + this.refreshIcon() + '</button>';
+      const defaultCell = isBase
+        ? '<button class="btn btn-sm btn-muted" disabled title="Current default currency">DEFAULT</button>'
+        : '<button class="btn btn-sm btn-secondary" onclick="BlackBook.setDefaultCurrency(\x27' + code + '\x27)">SET DEFAULT</button>';
       rows += '<div class="rate-grid-row">' +
         '<span class="rate-code">' + code + '</span>' +
         '<span class="rate-val">' + rateVal + '</span>' +
-        '<span class="rate-src">' + this.escapeHtml(r.source || '--') + '</span>' +
         '<span class="rate-upd">' + updated + '</span>' +
-        (code !== 'EUR'
-          ? '<input type="number" step="0.0001" class="input rate-manual-input" id="rate-manual-' + code + '" placeholder="set manually" value="' + (r.rate != null ? r.rate : '') + '">' +
-            '<button class="btn btn-sm btn-secondary" onclick="BlackBook.saveManualRate(\x27' + code + '\x27)">SET</button>' +
-            '<button class="btn btn-sm btn-secondary" onclick="BlackBook.refreshRate(\x27' + code + '\x27)">REFRESH</button>'
-          : '<span></span><span></span><span></span>') +
-        (removable ? '<button class="btn btn-sm btn-danger" onclick="BlackBook.removeCurrency(\x27' + code + '\x27)">RM</button>' : '') +
+        setCell +
+        orderCell +
+        refreshCell +
+        defaultCell +
+        (removable ? '<button class="btn btn-sm btn-danger btn-icon" title="Remove currency" onclick="BlackBook.removeCurrency(\x27' + code + '\x27)">' + this.xIcon() + '</button>' : '<span></span>') +
+        '<span></span>' +
         '</div>';
     }
     return rows;
+  },
+
+  openManualRateModal(code) {
+    if (!code) return;
+    const rates = this.getRates();
+    const base = this.baseCurrency();
+    const baseRate = (base === 'EUR' ? 1 : (rates[base] || {}).rate);
+    const r = rates[code];
+    const shown = (r && r.rate != null && baseRate) ? this.rnd4(r.rate / baseRate) : '';
+    const html = '<div class="modal-backdrop" onclick="BlackBook.closeManualRateModal()"></div>' +
+      '<div class="modal-content" style="max-width:340px;">' +
+      '<div class="modal-header"><span class="modal-title">Set ' + code + ' rate</span><button class="modal-close" onclick="BlackBook.closeManualRateModal()">&times;</button></div>' +
+      '<div class="modal-body" style="padding:14px;">' +
+      '<div style="font-size:13px;color:var(--text-muted);margin-bottom:10px;">1 ' + code + ' = <input type="number" step="any" min="0" id="manual-rate-input" class="input" style="width:120px;display:inline-block;" value="' + (shown || '') + '" autofocus> ' + base + '</div>' +
+      '<div style="display:flex;gap:8px;margin-top:10px;justify-content:flex-end;">' +
+      '<button class="btn btn-sm btn-secondary" onclick="BlackBook.closeManualRateModal()">CANCEL</button>' +
+      '<button class="btn btn-sm btn-primary" onclick="BlackBook.confirmManualRate(\x27' + code + '\x27)">SAVE</button>' +
+      '</div></div></div>';
+    const wrapper = document.createElement('div');
+    wrapper.id = 'manual-rate-modal';
+    wrapper.className = 'modal hidden';
+    wrapper.innerHTML = html;
+    document.body.appendChild(wrapper);
+    this.openModal('manual-rate-modal');
+    const inp = document.getElementById('manual-rate-input');
+    if (inp) { inp.focus(); inp.select(); inp.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); this.confirmManualRate(code); } }); }
+  },
+
+  closeManualRateModal() { this.closeModal('manual-rate-modal'); },
+
+  async confirmManualRate(code) {
+    const input = document.getElementById('manual-rate-input');
+    const val = parseFloat(input ? input.value : NaN);
+    this.closeManualRateModal();
+    if (isNaN(val) || val <= 0) { alert('Invalid rate value.'); return; }
+    const base = this.baseCurrency();
+    const baseRate = (base === 'EUR' ? 1 : (this.getRates()[base] || {}).rate);
+    const eurPerUnit = baseRate ? val * baseRate : val;
+    this.getRates()[code] = { rate: eurPerUnit, source: 'manual', updated: new Date().toISOString() };
+    await this.save();
+    this.renderSettings();
+  },
+
+  async moveCurrency(code, dir) {
+    const arr = this.data.settings.enabledCurrencies;
+    if (!Array.isArray(arr)) return;
+    const i = arr.indexOf(code);
+    const j = i + dir;
+    if (i < 0 || j < 0 || j >= arr.length) return;
+    if (arr[i] === this.baseCurrency() || arr[j] === this.baseCurrency()) return;
+    const tmp = arr[i]; arr[i] = arr[j]; arr[j] = tmp;
+    await this.save();
+    this.renderPage(this.currentPage);
+    this.populateCurrencyDropdowns();
+  },
+
+  async setDefaultCurrency(code) {
+    if (!code || code === this.baseCurrency()) return;
+    this.data.settings.baseCurrency = code;
+    this.populateCurrencyDropdowns();
+    this.updateBaseCurrencyLabels();
+    await this.save();
+    this.renderSettings();
   },
 
   bindSettingsEvents(el) {
@@ -410,16 +514,6 @@ Object.assign(window.BlackBook, {
       defaultCat.addEventListener('change', async () => {
         this.data.settings.defaultCategoryId = defaultCat.value || null;
         await this.save();
-      });
-    }
-    const baseCurSelect = el.querySelector('#settings-base-currency');
-    if (baseCurSelect) {
-      baseCurSelect.addEventListener('change', async () => {
-        this.data.settings.baseCurrency = baseCurSelect.value || 'RSD';
-        this.populateCurrencyDropdowns();
-        this.updateBaseCurrencyLabels();
-        await this.save();
-        this.renderSettings();
       });
     }
   },
@@ -639,7 +733,7 @@ Object.assign(window.BlackBook, {
         '<button type="button" class="btn btn-sm btn-secondary" ' + (canDown ? 'onclick="BlackBook.moveAccount(\x27' + a.id + '\x27,1)"' : 'disabled') + ' title="Move down">&#9660;</button>' +
         '</span>' +
         '<button class="btn btn-sm btn-secondary" onclick="BlackBook.openEditAccount(\x27' + a.id + '\x27)">EDIT</button>' +
-        '<button class="btn btn-sm btn-danger" onclick="BlackBook.deleteAccount(\x27' + a.id + '\x27)">DEL</button></div>';
+        '<button class="btn btn-sm btn-danger btn-icon" title="Delete account" onclick="BlackBook.deleteAccount(\x27' + a.id + '\x27)">' + this.xIcon() + '</button></div>';
     }
     for (const c of (this.data.creditCards || [])) {
       accountsList += '<div class="settings-row">' +
@@ -647,7 +741,7 @@ Object.assign(window.BlackBook, {
         '<span class="settings-row-name">' + this.escapeHtml(c.name) + '</span>' +
         '<span class="settings-row-meta">CREDIT CARD &middot; INT ' + (c.ratePct != null ? c.ratePct : 5) + '%</span>' +
         '<button class="btn btn-sm btn-secondary" onclick="BlackBook.openEditAccount(\x27card:' + c.id + '\x27)">EDIT</button>' +
-        '<button class="btn btn-sm btn-danger" onclick="BlackBook.deleteCard(\x27' + c.id + '\x27)">DEL</button></div>';
+        '<button class="btn btn-sm btn-danger btn-icon" title="Delete card" onclick="BlackBook.deleteCard(\x27' + c.id + '\x27)">' + this.xIcon() + '</button></div>';
     }
     if (!visibleAccts.length && !(this.data.creditCards || []).length) accountsList = '<div style="padding:8px;color:var(--text-muted);font-size:13px;">No accounts yet.</div>';
 
@@ -661,7 +755,7 @@ Object.assign(window.BlackBook, {
         '<span class="settings-row-name">' + this.escapeHtml(c.name) + '</span>' +
         '<span class="settings-row-meta">' + txCount + ' transaction' + (txCount === 1 ? '' : 's') + '</span>' +
         '<button class="btn btn-sm btn-secondary" onclick="BlackBook.openEditCategory(\x27' + c.id + '\x27)">EDIT</button>' +
-        (isProtected ? '<button class="btn btn-sm btn-danger" onclick="BlackBook.deleteCategory(\x27' + c.id + '\x27)" disabled style="opacity:0.5;cursor:not-allowed;" title="Protected category">DEL</button>' : '<button class="btn btn-sm btn-danger" onclick="BlackBook.deleteCategory(\x27' + c.id + '\x27)">DEL</button>') + '</div>';
+        (isProtected ? '<button class="btn btn-sm btn-danger btn-icon" onclick="BlackBook.deleteCategory(\x27' + c.id + '\x27)" disabled style="opacity:0.5;cursor:not-allowed;" title="Protected category">' + this.xIcon() + '</button>' : '<button class="btn btn-sm btn-danger btn-icon" title="Delete category" onclick="BlackBook.deleteCategory(\x27' + c.id + '\x27)">' + this.xIcon() + '</button>') + '</div>';
     }
     if (!this.data.categories.length) categoriesList = '<div style="padding:8px;color:var(--text-muted);font-size:13px;">No categories yet.</div>';
 
@@ -704,10 +798,7 @@ Object.assign(window.BlackBook, {
       '<div style="display:flex;gap:12px;flex-wrap:wrap;">' +
       '<div class="form-group"><label>Default Account</label><select id="settings-default-account" class="input">' + defaultAccountOpts + '</select></div>' +
       '<div class="form-group"><label>Default Category</label><select id="settings-default-category" class="input">' + defaultCategoryOpts + '</select></div>' +
-      '<div class="form-group"><label>Base Currency</label><select id="settings-base-currency" class="input">' +
-      this.currencyList().map(c =>
-        '<option value="' + c + '"' + (c === (this.data.settings.baseCurrency || 'RSD') ? ' selected' : '') + '>' + c + '</option>'
-      ).join('') + '</select></div></div></div>' +
+      '</div></div>' +
 
       '<div class="settings-section">' +
       '<div class="settings-section-header"><span class="settings-section-title">PAGES &middot; PROFILE ' + this.escapeHtml((this.profile || 'default').toUpperCase()) + '</span></div>' +
@@ -716,9 +807,11 @@ Object.assign(window.BlackBook, {
 
       '<div>' +
       '<div class="settings-section">' +
-      '<div class="settings-section-header"><span class="settings-section-title">EXCHANGE RATES &middot; 1 UNIT IN EUR</span>' +
-      '<button class="btn btn-sm btn-secondary" id="settings-refresh-all-rates">REFRESH ALL</button>' +
-      '<button class="btn btn-sm btn-primary" onclick="BlackBook.openAddCurrencyModal()">+ ADD CURRENCY</button></div>' +
+      '<div class="settings-section-header"><span class="settings-section-title">EXCHANGE RATES</span>' +
+      '<span style="display:inline-flex;gap:6px;align-items:center;">' +
+      '<button class="btn btn-sm btn-secondary btn-icon" id="settings-refresh-all-rates" title="Refresh all rates">' + this.refreshIcon() + '</button>' +
+      '<button class="btn btn-sm btn-primary" onclick="BlackBook.openAddCurrencyModal()">+ ADD CURRENCY</button>' +
+      '</span></div>' +
       '<div class="settings-rate-card">' + this.ratesTableHtml() + '</div></div>' +
 
       '<div class="settings-section">' +
@@ -776,16 +869,6 @@ Object.assign(window.BlackBook, {
     this.renderSettings();
   },
 
-  async saveManualRate(code) {
-    const input = document.getElementById('rate-manual-' + code);
-    if (!input) return;
-    const val = parseFloat(input.value);
-    if (isNaN(val) || val <= 0) { alert('Invalid rate value.'); return; }
-    this.getRates()[code] = { rate: val, source: 'manual', updated: new Date().toISOString() };
-    await this.save();
-    this.renderSettings();
-  },
-
   openAddCurrencyModal() {
     const enabled = new Set(this.currencyList());
     const allCodes = ['AED','AUD','BGN','BRL','CAD','CHF','CNY','CZK','DKK','EUR','GBP','HKD','HRK','HUF','IDR','ILS','INR','ISK','JPY','KRW','MXN','MYR','NOK','NZD','PHP','PLN','RON','RSD','SEK','SGD','THB','TRY','TWD','USD','XAU','ZAR'];
@@ -833,7 +916,7 @@ Object.assign(window.BlackBook, {
   },
 
   async removeCurrency(code) {
-    if (!code || code === (this.data.settings.baseCurrency || 'RSD') || code === 'XAU') return;
+    if (!code || code === (this.data.settings.baseCurrency || 'RSD')) return;
     if (!(await this.confirmModal({ title: 'Remove Currency', message: 'Remove ' + code + ' from enabled currencies?\n\nHistorical data is preserved.', confirmText: 'Remove' }))) return;
     this.data.settings.enabledCurrencies = (this.data.settings.enabledCurrencies || []).filter(c => c !== code);
     this.populateCurrencyDropdowns();

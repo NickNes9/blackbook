@@ -29,7 +29,11 @@ Object.assign(window.BlackBook, {
     const el = document.getElementById('page-invoices');
     if (!el) return;
     if (!this.data.invoices) this.data.invoices = [];
-    let html = '<div class="month-picker" style="justify-content:flex-end;">' +
+    const offToday = this.vy() !== new Date().getFullYear();
+    let html = '<div class="month-picker">' +
+      '<span class="mp-year"><button class="mp-year-btn" onclick="BlackBook.shiftYear(-1)">&#9664;</button><span class="mp-year-label">' + this.vy() + '</span><button class="mp-year-btn" onclick="BlackBook.shiftYear(1)">&#9654;</button></span>' +
+      '<button class="mp-today' + (offToday ? ' mp-today-active' : '') + '" onclick="BlackBook.gotoToday()">TODAY</button>' +
+      '<span style="flex:1;"></span>' +
       '<button class="btn btn-primary" onclick="BlackBook.openNewInvoice()">+ NEW INVOICE</button>' +
       '</div>';
     html += this.invoicesSummaryHtml();
@@ -84,8 +88,10 @@ Object.assign(window.BlackBook, {
   },
 
   invoicesSummaryHtml() {
+    const year = this.vy();
     let owedMe = 0, iOwe = 0, overdueCnt = 0, overdueAmt = 0;
     for (const v of this.data.invoices) {
+      if (this.invYear(v) !== year) continue;
       const rem = this.invRemaining(v);
       if (rem <= 0.009) continue;
       const remBase = Math.abs(this.toBase(rem, v.currency || this.baseCurrency() || 'RSD'));
@@ -106,11 +112,11 @@ Object.assign(window.BlackBook, {
 
   invoicesListHtml() {
     const f = this._invFilter || 'all';
-    const all = f === 'all' ? (this.data.invoices || []) : (this.data.invoices || []).filter(v => (v.dir === 'out') === (f === 'out'));
-    if (!all.length) return '<div class="empty-state"><div class="empty-state-text">' + ((this.data.invoices || []).length ? 'No invoices in this filter.' : 'No invoices yet. Click + NEW INVOICE to create one.') + '</div></div>';
+    const year = this.vy();
+    const filtered = f === 'all' ? (this.data.invoices || []) : (this.data.invoices || []).filter(v => (v.dir === 'out') === (f === 'out'));
+    const all = filtered.filter(v => this.invYear(v) === year);
+    if (!all.length) return '<div class="empty-state"><div class="empty-state-text">' + ((this.data.invoices || []).length ? 'No invoices for ' + year + '.' : 'No invoices yet. Click + NEW INVOICE to create one.') + '</div></div>';
     const sorted = all.slice().sort((a, b) => {
-      const ya = this.invYear(a), yb = this.invYear(b);
-      if (ya !== yb) return yb - ya;
       const parseNum = (inv) => {
         const p = this.parseInvNumber(inv);
         return p ? p.seq : 0;
@@ -119,13 +125,7 @@ Object.assign(window.BlackBook, {
     });
     if (!this._expandedInvoices) this._expandedInvoices = {};
     let html = '';
-    let lastYear = null;
     for (const inv of sorted) {
-      const year = this.invYear(inv);
-      if (year !== lastYear) {
-        html += '<div class="inv-year-header">\u2500\u2500 ' + year + ' \u2500\u2500</div>';
-        lastYear = year;
-      }
       html += this.invoiceCardHtml(inv);
     }
     return html;
@@ -146,7 +146,7 @@ Object.assign(window.BlackBook, {
       '<button class="btn btn-sm ' + (isPaid ? 'btn-secondary' : 'btn-primary') + ' invoice-paid-btn" onclick="BlackBook.toggleInvoicePaid(\x27' + v.id + '\x27)" title="' + (isPaid ? 'Mark as unpaid' : 'Mark as paid') + '">' + (isPaid ? 'UNPAID' : 'PAID') + '</button>' +
       (v.fileName ? '<button class="btn btn-sm btn-secondary" onclick="BlackBook.openInvoiceFile(\x27' + v.id + '\x27)" title="Open attached file: ' + this.escapeHtml(v.fileName) + '">INVOICE</button>' : '') +
       '<button class="btn btn-sm btn-secondary" onclick="BlackBook.openEditInvoice(\x27' + v.id + '\x27)">EDIT</button>' +
-      '<button class="btn btn-sm btn-danger" onclick="BlackBook.deleteInvoice(\x27' + v.id + '\x27)">DEL</button>' +
+      '<button class="btn btn-sm btn-danger btn-icon" title="Delete invoice" onclick="BlackBook.deleteInvoice(\x27' + v.id + '\x27)">' + this.xIcon() + '</button>' +
       '<button class="btn btn-sm btn-secondary savings-expand-btn" onclick="BlackBook.toggleInvoiceExpanded(\x27' + v.id + '\x27)">' + (expanded ? '&#9650; HIDE' : '&#9660; SHOW') + ' DETAILS</button></span></div>';
     html += '<div class="savings-progress-text"><span>' + this.fmtAmount(total, cur) + '</span><span>' + (isPaid ? 'PAID' : (paid > 0.009 ? 'PARTIAL (' + this.fmtAmount(paid, cur) + ' paid)' : 'UNPAID')) + '</span></div>';
     if (expanded) {
