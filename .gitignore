@@ -11,6 +11,7 @@ node_modules/
 # Local tooling / logs
 .superpowers/
 *.log
+Black Book.pid
 
 # OS junk
 Thumbs.db

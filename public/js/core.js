@@ -438,20 +438,33 @@ this.connectWebSocket();
     const ind = document.getElementById('save-indicator');
     if (!ind) return;
     ind.classList.toggle('saving', state === 'saving');
+    ind.classList.toggle('failed', state === 'failed');
     const label = ind.querySelector('.save-label');
     const dot = ind.querySelector('.save-dot');
-    if (label) label.textContent = state === 'saving' ? 'SAVING\u2026' : 'SAVED';
+    if (label) label.textContent = state === 'saving' ? 'SAVING\u2026' : state === 'failed' ? 'UNSAVED' : 'SAVED';
   },
 
   async save() {
+    const sequence = (this._saveSequence || 0) + 1;
+    this._saveSequence = sequence;
     this._pendingSaves = (this._pendingSaves || 0) + 1;
     this.setSaveState('saving');
     const payload = this.stripTransient(this.data);
     try {
-      await fetch('/api/save', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(this.profile ? { profile: this.profile, data: payload } : payload) });
+      const response = await fetch('/api/save', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(this.profile ? { profile: this.profile, data: payload } : payload) });
+      if (!response.ok) throw new Error((await response.json().catch(() => ({}))).error || 'Save failed');
+      this._lastSaveSuccess = Math.max(this._lastSaveSuccess || 0, sequence);
+      return true;
+    } catch (error) {
+      this._lastSaveFailure = Math.max(this._lastSaveFailure || 0, sequence);
+      console.error('Save failed:', error);
+      return false;
     } finally {
       this._pendingSaves = (this._pendingSaves || 0) - 1;
-      if (this._pendingSaves <= 0) { this._pendingSaves = 0; this.setSaveState('saved'); }
+      if (this._pendingSaves <= 0) {
+        this._pendingSaves = 0;
+        this.setSaveState((this._lastSaveFailure || 0) > (this._lastSaveSuccess || 0) ? 'failed' : 'saved');
+      }
     }
   },
 
@@ -1077,13 +1090,7 @@ this.connectWebSocket();
   },
 
   evalAmount(input) {
-    const s = String(input == null ? '' : input).trim().replace(/\s+/g, '').replace(',', '.').replace(/(^|[^0-9.])0+([0-9])/g, '$1$2');
-    if (!s) return NaN;
-    if (!/^[0-9+\-*/().]+$/.test(s)) { const v = parseFloat(s); return isNaN(v) ? NaN : Math.round(v * 100) / 100; }
-    try {
-      const v = Function('"use strict";return (' + s + ')')();
-      return typeof v === 'number' && isFinite(v) ? Math.round(v * 100) / 100 : NaN;
-    } catch (e) { return NaN; }
+    return window.BlackBookAmount.evaluateAmount(input);
   },
 
   ordinalDay(n) {
@@ -1713,7 +1720,12 @@ this.connectWebSocket();
     if (!input || !dropdown) return;
     this._catPickBound.add(inputId);
 
-    const sortedCats = () => this.data.categories.slice().sort((a, b) => a.name.localeCompare(b.name));
+    const sortedCats = (query = '') => {
+      const needle = query.trim().toLocaleLowerCase();
+      return this.data.categories.slice()
+        .filter((cat) => !needle || cat.name.toLocaleLowerCase().includes(needle))
+        .sort((a, b) => a.name.localeCompare(b.name));
+    };
     const closeDropdown = () => dropdown.classList.add('hidden');
     const pick = (cat) => {
       if (!cat) return;
@@ -1730,8 +1742,8 @@ this.connectWebSocket();
       pick(cats[next]);
     };
 
-    const openDropdown = () => {
-      const cats = sortedCats();
+    const openDropdown = (query = '') => {
+      const cats = sortedCats(query);
       dropdown.innerHTML = cats.length ? cats.map(c =>
         '<div class="category-dropdown-item' + (c.id === hidden.value ? ' active' : '') + '" data-id="' + c.id + '"><span class="cat-dot" style="background:' + this.categoryColor(c) + ';"></span>' + this.escapeHtml(c.name) + '</div>'
       ).join('') : '<div class="category-dropdown-empty">No categories yet</div>';
@@ -1740,8 +1752,13 @@ this.connectWebSocket();
       dropdown.classList.remove('hidden');
     };
 
-    input.addEventListener('click', openDropdown);
-    input.addEventListener('focus', openDropdown);
+    input.addEventListener('click', () => openDropdown());
+    input.addEventListener('focus', () => { input.select(); openDropdown(); });
+    input.addEventListener('input', () => {
+      hidden.value = '';
+      input.classList.toggle('pick-empty', !input.value.trim());
+      openDropdown(input.value);
+    });
     input.addEventListener('wheel', (e) => { e.preventDefault(); cycle(e.deltaY > 0 ? 1 : -1); }, { passive: false });
     input.addEventListener('keydown', (e) => {
       if (e.key === 'ArrowDown') { e.preventDefault(); cycle(1); }
@@ -1750,7 +1767,9 @@ this.connectWebSocket();
         if (!dropdown.classList.contains('hidden')) { e.preventDefault(); e.stopPropagation(); }
         closeDropdown();
       } else if (e.key === 'Enter' && !dropdown.classList.contains('hidden')) {
-        e.preventDefault(); closeDropdown();
+        e.preventDefault(); e.stopPropagation();
+        const cats = sortedCats(input.value);
+        if (cats[0]) pick(cats[0]); else closeDropdown();
       }
     });
 

@@ -1,38 +1,24 @@
-﻿import express from 'express';
-import { readFileSync, writeFileSync, existsSync, readdirSync, renameSync, unlinkSync, mkdirSync } from 'fs';
-import { join, dirname } from 'path';
-import { fileURLToPath } from 'url';
-import http from 'http';
+import express from 'express';
+import { existsSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs';
+import http from 'node:http';
+import { join } from 'node:path';
 import { WebSocketServer } from 'ws';
+import { APP_DIR, HOST, LEGACY_DATA_FILE, PID_FILE, PROFILES_DIR, preferredPorts } from './lib/server-config.js';
+import { createProfileStore, isProfileDocument, StorageError } from './lib/storage.js';
 
-// ---- a parent launcher that redirects our stdio and then exits (any daemon
-// pattern) orphans the pipe read end; a later console write then fails with
-// EPIPE, and without a handler that uncaught error kills the server. Swallow
-// broken-pipe/reset errors on stdio instead of crashing the process.
+// A launcher can outlive its console pipe. Ignore expected broken-pipe errors
+// so a harmless log write never terminates the finance server.
+function logger(...args) { try { console.log(...args); } catch (_) { } }
 for (const stream of [process.stdout, process.stderr]) {
-  stream.on('error', (err) => {
-    if (!err || (err.code !== 'EPIPE' && err.code !== 'ECONNRESET' && err.code !== 'EIO')) {
-      try { logger('[black-book] stdio error:', err && err.message); } catch (_) { }
-    }
+  stream.on('error', (error) => {
+    if (!error || !['EPIPE', 'ECONNRESET', 'EIO'].includes(error.code)) logger('[black-book] stdio error:', error?.message);
   });
 }
-function logger(...args) { try { console.log(...args); } catch (_) { } }
 
-const __dirname = dirname(fileURLToPath(import.meta.url));
-const app = express();
 const PORT = Number(process.env.PORT) || 3000;
-const PROFILES_DIR = join(__dirname, 'profiles');
-let DATA_FILE = join(__dirname, 'data.json');
-
-// ---- storage layout: everything lives in profiles/ ; default profile = profiles/data.json
-mkdirSync(PROFILES_DIR, { recursive: true });
-if (!existsSync(join(PROFILES_DIR, 'data.json')) && existsSync(DATA_FILE)) {
-  renameSync(DATA_FILE, join(PROFILES_DIR, 'data.json'));
-  if (existsSync(DATA_FILE + '.bak')) renameSync(DATA_FILE + '.bak', join(PROFILES_DIR, 'data.json.bak'));
-  logger('Migrated main database into profiles/data.json');
-}
-DATA_FILE = join(PROFILES_DIR, 'data.json');
-
+const RATE_TIMEOUT_MS = 8_000;
+const IDLE_SHUTDOWN_MS = 600_000;
+const OZ_TO_GRAM = 31.1034768;
 const DEFAULT_DATA = {
   accounts: [],
   categories: [
@@ -41,282 +27,179 @@ const DEFAULT_DATA = {
     { id: 'cat-debt', name: 'Debt', color: '#facc15' },
     { id: 'cat-uncategorized', name: 'Uncategorized', color: null }
   ],
-  transactions: [],
-  bills: [],
-  billPayments: [],
-  savingsGoals: [],
-  budgets: [],
-  installments: [],
-  debts: [],
-  settings: { baseCurrency: 'RSD', enabledCurrencies: ['RSD', 'EUR', 'USD', 'GBP', 'CHF', 'JPY', 'CNY', 'AUD', 'CAD', 'SEK', 'NOK', 'PLN', 'CZK', 'TRY', 'INR'], eurToRsdRate: 117.2, eurToRsdRateSource: 'manual', eurToRsdRateUpdated: null, defaultAccountId: null, defaultCategoryId: null, dateSeparator: '/' }
+  transactions: [], bills: [], billPayments: [], savingsGoals: [], budgets: [], installments: [], debts: [],
+  settings: {
+    baseCurrency: 'RSD',
+    enabledCurrencies: ['RSD', 'EUR', 'USD', 'GBP', 'CHF', 'JPY', 'CNY', 'AUD', 'CAD', 'SEK', 'NOK', 'PLN', 'CZK', 'TRY', 'INR'],
+    eurToRsdRate: 117.2, eurToRsdRateSource: 'manual', eurToRsdRateUpdated: null,
+    defaultAccountId: null, defaultCategoryId: null, dateSeparator: '/'
+  }
 };
 
-app.use(express.json({ limit: '50mb' }));
+const store = createProfileStore({ profilesDir: PROFILES_DIR, legacyDataFile: LEGACY_DATA_FILE, defaultData: DEFAULT_DATA });
+const app = express();
 let lastRequest = Date.now();
+
+app.use(express.json({ limit: '50mb' }));
+app.use((error, req, res, next) => {
+  if (error instanceof SyntaxError && 'body' in error) return res.status(400).json({ error: 'Request body must be valid JSON' });
+  return next(error);
+});
 app.use((req, res, next) => { lastRequest = Date.now(); next(); });
-app.use(express.static(join(__dirname, 'public'), {
-  setHeaders(res) { res.setHeader('Cache-Control', 'no-store'); }
-}));
+app.use((req, res, next) => {
+  res.setHeader('Content-Security-Policy', "default-src 'self'; base-uri 'self'; connect-src 'self'; font-src 'self' data: https://cdn.jsdelivr.net; img-src 'self' data: blob:; object-src 'none'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net");
+  next();
+});
+app.use(express.static(join(APP_DIR, 'public'), { setHeaders(res) { res.setHeader('Cache-Control', 'no-store'); } }));
+
+function sendError(res, error) {
+  const status = error instanceof StorageError ? error.status : 500;
+  if (status >= 500) logger('[black-book] request failed:', error?.message);
+  return res.status(status).json({ error: error instanceof StorageError ? error.message : 'The server could not complete that request.' });
+}
+
+function loadDefaultData() {
+  const db = store.readDefaultOrFresh();
+  if (!Array.isArray(db.debts)) db.debts = [];
+  if (!isProfileDocument(db.settings)) db.settings = {};
+  if (!isProfileDocument(db.settings.rates)) db.settings.rates = {};
+  return db;
+}
 
 app.get('/api/load', (req, res) => {
-  const file = profileFile(req.query.profile);
-  if (!existsSync(file)) {
-    const fresh = JSON.parse(JSON.stringify(DEFAULT_DATA));
-    writeFileSync(file, JSON.stringify(fresh, null, 2));
-    return res.json(fresh);
-  }
-  const data = JSON.parse(readFileSync(file, 'utf-8'));
-  res.json(data);
+  try { return res.json(store.read(req.query.profile || '')); }
+  catch (error) { return sendError(res, error); }
 });
 
 app.post('/api/save', (req, res) => {
   try {
-    const { profile, data } = req.body && req.body.data ? req.body : { profile: '', data: req.body };
-    const file = profileFile(profile);
-    if (existsSync(file)) {
-      writeFileSync(file + '.bak', readFileSync(file, 'utf-8'));
-    }
-    writeFileSync(file, JSON.stringify(data, null, 2));
-    res.json({ ok: true });
-  } catch (e) {
-    res.status(500).json({ error: e.message });
-  }
+    const envelope = isProfileDocument(req.body) && Object.hasOwn(req.body, 'profile') && Object.hasOwn(req.body, 'data');
+    const profile = envelope ? req.body.profile : '';
+    const data = envelope ? req.body.data : req.body;
+    if (!isProfileDocument(data)) throw new StorageError('Profile data must be a JSON object', 400);
+    store.write(profile, data);
+    return res.json({ ok: true });
+  } catch (error) { return sendError(res, error); }
 });
-
-function safeProfileName(p) {
-  const name = String(p || '').trim();
-  if (!name) return '';
-  if (!/^[a-zA-Z0-9 _.-]+$/.test(name)) return null;
-  if (name.toLowerCase() === 'data') return null; // reserved: profiles/data.json is the default profile
-  return name;
-}
-
-function profileFile(p) {
-  const name = safeProfileName(p);
-  if (name === null) throw new Error('Invalid profile name');
-  return name === '' ? DATA_FILE : join(PROFILES_DIR, name + '.json');
-}
-
-function listProfiles() {
-  if (!existsSync(PROFILES_DIR)) return [];
-  const profiles = [];
-  for (const f of readdirSync(PROFILES_DIR)) {
-    const m = f.match(/^(.+)\.json$/);
-    if (m && f !== 'data.json' && !f.endsWith('.bak')) profiles.push({ name: m[1] });
-  }
-  profiles.sort((a, b) => a.name.localeCompare(b.name));
-  return profiles;
-}
 
 app.get('/api/profiles', (req, res) => {
-  res.json({ profiles: listProfiles() });
+  try { return res.json({ profiles: store.list() }); }
+  catch (error) { return sendError(res, error); }
 });
 
-app.post('/api/profiles', async (req, res) => {
+app.post('/api/profiles', (req, res) => {
   try {
     const { action, name, newName } = req.body || {};
-    if (action === 'create') {
-      const clean = safeProfileName(name);
-      if (!clean) return res.status(400).json({ error: 'Invalid profile name' });
-      mkdirSync(PROFILES_DIR, { recursive: true });
-      const file = profileFile(clean);
-      if (existsSync(file)) return res.status(400).json({ error: 'Profile already exists' });
-      writeFileSync(file, JSON.stringify(JSON.parse(JSON.stringify(DEFAULT_DATA)), null, 2));
-      return res.json({ ok: true });
-    }
-    if (action === 'rename') {
-      const clean = safeProfileName(name); // '' allowed = default profile (data.json)
-      const cleanNew = safeProfileName(newName);
-      if (clean === null || !cleanNew) return res.status(400).json({ error: 'Invalid profile name' });
-      if (clean === cleanNew) return res.status(400).json({ error: 'Same name' });
-      const src = profileFile(clean);
-      const dst = profileFile(cleanNew);
-      if (!existsSync(src)) return res.status(404).json({ error: 'Profile not found' });
-      if (existsSync(dst)) return res.status(400).json({ error: 'Target profile already exists' });
-      renameSync(src, dst);
-      if (existsSync(src + '.bak')) renameSync(src + '.bak', dst + '.bak');
-      return res.json({ ok: true });
-    }
-    if (action === 'delete') {
-      const clean = safeProfileName(name);
-      if (!clean) return res.status(400).json({ error: 'Cannot delete the default profile' });
-      const file = profileFile(clean);
-      if (!existsSync(file)) return res.status(404).json({ error: 'Profile not found' });
-      unlinkSync(file);
-      return res.json({ ok: true });
-    }
-    res.status(400).json({ error: 'Unknown action' });
-  } catch (e) {
-    res.status(500).json({ error: e.message });
-  }
+    if (action === 'create') store.create(name);
+    else if (action === 'rename') store.rename(name, newName);
+    else if (action === 'delete') store.delete(name);
+    else throw new StorageError('Unknown action', 400);
+    return res.json({ ok: true });
+  } catch (error) { return sendError(res, error); }
 });
 
-const OZ_TO_GRAM = 31.1034768;
-
-
-function loadDB() {
-  const db = existsSync(DATA_FILE)
-    ? JSON.parse(readFileSync(DATA_FILE, 'utf-8'))
-    : JSON.parse(JSON.stringify(DEFAULT_DATA));
-  if (!db.debts) db.debts = [];
-  return db;
+const round4 = (value) => Math.round(value * 10_000) / 10_000;
+async function fetchJson(url) {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), RATE_TIMEOUT_MS);
+  try {
+    const response = await fetch(url, { signal: controller.signal });
+    return response.ok ? await response.json() : null;
+  } catch (_) {
+    return null;
+  } finally {
+    clearTimeout(timeout);
+  }
 }
-
-function ensureRates(db) {
-  if (!db.settings.rates) db.settings.rates = {};
-  return db.settings.rates;
-}
-
-const rnd4 = (v) => Math.round(v * 10000) / 10000;
-
 async function fetchFiatRates() {
-  try {
-    const resp = await fetch('https://open.er-api.com/v6/latest/EUR');
-    const data = await resp.json();
-    if (data?.rates) {
-      return { rates: data.rates, source: 'open.er-api.com' };
-    }
-  } catch (e) {}
-  try {
-    const resp = await fetch('https://cdn.jsdelivr.net/npm/@fawazahmed0/currency-api@latest/v1/currencies/eur.json');
-    const data = await resp.json();
-    if (data?.eur) {
-      return { rates: data.eur, source: 'jsdelivr currency-api' };
-    }
-  } catch (e) {}
-  return null;
+  const primary = await fetchJson('https://open.er-api.com/v6/latest/EUR');
+  if (primary?.rates) return { rates: primary.rates, source: 'open.er-api.com' };
+  const fallback = await fetchJson('https://cdn.jsdelivr.net/npm/@fawazahmed0/currency-api@latest/v1/currencies/eur.json');
+  return fallback?.eur ? { rates: fallback.eur, source: 'jsdelivr currency-api' } : null;
 }
-
-async function fetchGoldUsdPerOz() {
-  try {
-    const resp = await fetch('https://api.gold-api.com/price/XAU');
-    const gold = await resp.json();
-    if (gold?.price) return gold.price;
-  } catch (e) {}
-  return null;
-}
-
-async function fetchRates(cur, db, force) {
-  const out = {};
-  const rates = ensureRates(db);
+async function fetchRates(currency, db, force) {
+  const output = {};
+  const rates = db.settings.rates;
   const updated = new Date().toISOString();
-  const shouldUpdate = (code) => {
-    if (cur && cur !== code) return false;
-    return force || cur === code || !rates[code] || rates[code].source !== 'manual';
-  };
+  const shouldUpdate = (code) => (!currency || currency === code) && (force || !rates[code] || rates[code].source !== 'manual');
   const fiat = await fetchFiatRates();
   if (fiat) {
-    // API returns units per EUR (e.g. USD=1.1619 means 1 EUR = 1.1619 USD).
-    // Store inverts so rate = EUR per 1 unit (1 USD = 0.86 EUR) — matches client pivot.
     for (const [code, rate] of Object.entries(fiat.rates)) {
-      if (code === 'EUR') continue;
-      if (shouldUpdate(code)) {
-        out[code] = { rate: rnd4(1 / rate), source: fiat.source, updated };
-      }
+      if (code !== 'EUR' && shouldUpdate(code) && Number.isFinite(rate) && rate > 0) output[code] = { rate: round4(1 / rate), source: fiat.source, updated };
     }
-    if (shouldUpdate('EUR')) out.EUR = { rate: 1, source: fiat.source, updated };
+    if (shouldUpdate('EUR')) output.EUR = { rate: 1, source: fiat.source, updated };
   }
-  if (!cur || cur === 'XAU') {
-    if (shouldUpdate('XAU')) {
-      const usdPerOz = await fetchGoldUsdPerOz();
-      if (usdPerOz && fiat?.rates?.USD) {
-        const eurPerGram = usdPerOz / fiat.rates.USD / OZ_TO_GRAM;
-        out.XAU = { rate: rnd4(eurPerGram), source: 'gold-api.com', updated };
-      }
-    }
+  if ((!currency || currency === 'XAU') && shouldUpdate('XAU')) {
+    const gold = await fetchJson('https://api.gold-api.com/price/XAU');
+    if (gold?.price && fiat?.rates?.USD) output.XAU = { rate: round4(gold.price / fiat.rates.USD / OZ_TO_GRAM), source: 'gold-api.com', updated };
   }
-  return out;
+  return output;
 }
 
 app.get('/api/exchange-rate', async (req, res) => {
-  const cur = String(req.query.cur || '').toUpperCase();
-  const db = loadDB();
-  const fetched = await fetchRates(cur, db, Boolean(cur));
-  const rates = ensureRates(db);
-  for (const [k, v] of Object.entries(fetched)) rates[k] = v;
-  if (Object.keys(fetched).length) {
-    writeFileSync(DATA_FILE, JSON.stringify(db, null, 2));
-  }
-  const subset = cur && rates[cur] ? { [cur]: rates[cur] } : rates;
-  res.json({ ok: true, rates: subset });
+  try {
+    const value = String(req.query.cur || '').toUpperCase();
+    const currency = /^[A-Z]{3}$/.test(value) ? value : '';
+    const db = loadDefaultData();
+    const fetched = await fetchRates(currency, db, Boolean(currency));
+    if (Object.keys(fetched).length) {
+      Object.assign(db.settings.rates, fetched);
+      store.write('', db);
+    }
+    const rates = currency && db.settings.rates[currency] ? { [currency]: db.settings.rates[currency] } : db.settings.rates;
+    return res.json({ ok: true, rates });
+  } catch (error) { return sendError(res, error); }
 });
 
-// ---- listen loop: try PORT first, then safe fallback ports (Windows sometimes reserves ranges
-// like 2901-3000 for Hyper-V/WinNAT, making 3000 unbindable). Cycle back if all are blocked.
-const PREFERRED_PORTS = [PORT, 4300, 8400, 8800, 9000, 9900];
 const server = http.createServer(app);
+const ports = preferredPorts(PORT);
 let listenCursor = -1;
 const failedPorts = new Set();
 function tryListen() {
-  listenCursor = (listenCursor + 1) % PREFERRED_PORTS.length;
-  server.listen(PREFERRED_PORTS[listenCursor]);
+  listenCursor = (listenCursor + 1) % ports.length;
+  server.listen(ports[listenCursor], HOST);
+}
+function writePid() {
+  try { writeFileSync(PID_FILE, JSON.stringify({ pid: process.pid, startedAt: Date.now() }), 'utf8'); } catch (error) { logger('[black-book] Could not write PID file:', error.message); }
+}
+function clearPid() {
+  try {
+    const record = JSON.parse(readFileSync(PID_FILE, 'utf8'));
+    if (record.pid === process.pid) unlinkSync(PID_FILE);
+  } catch (_) { }
 }
 server.on('listening', () => {
   failedPorts.clear();
+  writePid();
   logger(`Black Book running at http://localhost:${server.address().port}`);
 });
-server.on('error', (err) => {
-  if (err.code === 'EADDRINUSE' || err.code === 'EACCES') {
-    const from = PREFERRED_PORTS[listenCursor];
-    if (!failedPorts.has(from)) {
-      logger(`[black-book] Port ${from} is not available (${err.code}) — trying the next available port.`);
-      failedPorts.add(from);
-    }
-    const backToStart = (listenCursor + 1) % PREFERRED_PORTS.length === 0;
-    setTimeout(tryListen, backToStart ? 5000 : 300);
-  } else {
-    logger('[black-book] Server error:', err.message);
-  }
+server.on('error', (error) => {
+  if (error.code === 'EADDRINUSE' || error.code === 'EACCES') {
+    const port = ports[listenCursor];
+    if (!failedPorts.has(port)) logger(`[black-book] Port ${port} is not available (${error.code}) — trying the next available port.`);
+    failedPorts.add(port);
+    setTimeout(tryListen, (listenCursor + 1) % ports.length === 0 ? 5_000 : 300);
+  } else logger('[black-book] Server error:', error.message);
 });
+process.once('exit', clearPid);
 tryListen();
 
-// Auto-fetch exchange rates on startup
-(async () => {
-  try {
-    const db = loadDB();
-    const fetched = await fetchRates(null, db, false);
-    const rates = ensureRates(db);
-    for (const [k, v] of Object.entries(fetched)) rates[k] = v;
-    if (Object.keys(fetched).length) {
-      writeFileSync(DATA_FILE, JSON.stringify(db, null, 2));
-      logger('Rates auto-fetched: ' + Object.entries(rates).map(([c, r]) => c + '=' + (r.rate ?? '--')).join(' '));
-    } else {
-      logger('Could not auto-fetch exchange rates, using stored values');
-    }
-  } catch (e) {
-    logger('Could not auto-fetch exchange rate, using stored value');
-  }
-})();
-
 const wss = new WebSocketServer({ server });
-wss.on('error', (err) => {
-  if (err.code !== 'EADDRINUSE' && err.code !== 'EACCES') logger('[black-book] WebSocket server error:', err.message);
-});
 let shutdownTimer = null;
-const IDLE_SHUTDOWN_MS = 600000;
 const clientsConnected = () => wss.clients.size > 0;
-
+wss.on('error', (error) => { if (!['EADDRINUSE', 'EACCES'].includes(error.code)) logger('[black-book] WebSocket error:', error.message); });
 wss.on('connection', (ws) => {
-  if (shutdownTimer && clientsConnected()) {
-    clearTimeout(shutdownTimer); shutdownTimer = null;
-    logger('Browser connected. Idle shutdown cancelled.');
-  }
-  ws.on('close', () => {
-    if (!clientsConnected()) scheduleShutdown();
-  });
+  if (shutdownTimer && clientsConnected()) { clearTimeout(shutdownTimer); shutdownTimer = null; logger('Browser connected. Idle shutdown cancelled.'); }
+  ws.on('close', () => { if (!clientsConnected()) scheduleShutdown(); });
 });
-
 function scheduleShutdown() {
   if (shutdownTimer) return;
   logger('Browser disconnected. Will auto-exit after an idle period unless it reconnects or activity resumes...');
   shutdownTimer = setTimeout(() => {
     shutdownTimer = null;
     if (clientsConnected()) return;
-    if (Date.now() - lastRequest < IDLE_SHUTDOWN_MS) {
-      scheduleShutdown();
-      return;
-    }
-    logger('Idle for ' + (IDLE_SHUTDOWN_MS / 1000) + 's with no browser. Exiting.');
+    if (Date.now() - lastRequest < IDLE_SHUTDOWN_MS) return scheduleShutdown();
+    logger(`Idle for ${IDLE_SHUTDOWN_MS / 1000}s with no browser. Exiting.`);
     process.exit(0);
   }, IDLE_SHUTDOWN_MS);
 }

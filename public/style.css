@@ -347,6 +347,7 @@ body.sb-collapsed .header-logo-mark { transform: rotate(-90deg); }
   color: var(--expense, #ef4444);
   animation: savePulse 1s ease-in-out infinite;
 }
+.save-status.failed .save-label { color: var(--expense, #ef4444); }
 @keyframes savePulse {
   0%, 100% { opacity: 1; }
   50% { opacity: 0.25; }
