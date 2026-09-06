@@ -18,7 +18,6 @@
     </div>
 <div class="header-center">
       </div>
-    </div>
     <div class="header-right">
       <span class="header-status save-status" id="save-indicator" title="Save status"><span class="save-label">SAVED</span></span>
     </div>
@@ -71,7 +70,7 @@
         <div id="tx-preview" style="font-size:12px;color:var(--text-dim);padding:2px 0;"></div>
         <div class="quick-entry-row qe-full-row">
           <div class="category-autocomplete" id="category-autocomplete">
-            <input type="text" id="tx-category-input" class="input cat-pick-input" placeholder="CATEGORY..." autocomplete="off" readonly>
+            <input type="text" id="tx-category-input" class="input cat-pick-input" placeholder="CATEGORY..." autocomplete="off">
             <input type="hidden" id="tx-category">
             <div id="category-dropdown" class="category-dropdown hidden"></div>
           </div>
@@ -102,7 +101,7 @@
         <div class="form-group"><label><input type="checkbox" id="bill-autopay" style="vertical-align:middle;"> AUTO-PAY</label></div>
         <div class="form-group"><label>Category</label>
 <div class="category-autocomplete" id="bill-category-autocomplete">
-  <input type="text" id="bill-category-input" class="input cat-pick-input" placeholder="CATEGORY..." autocomplete="off" readonly>
+  <input type="text" id="bill-category-input" class="input cat-pick-input" placeholder="CATEGORY..." autocomplete="off">
   <input type="hidden" id="bill-category">
   <div id="bill-category-dropdown" class="category-dropdown hidden"></div>
 </div></div>
@@ -208,7 +207,7 @@
         <div class="form-group"><label>Note</label><input type="text" id="ctx-note" class="input" placeholder="What did you buy?"></div>
         <div class="form-group"><label>Category</label>
 <div class="category-autocomplete" id="ctx-category-autocomplete">
-  <input type="text" id="ctx-category-input" class="input cat-pick-input" placeholder="CATEGORY..." autocomplete="off" readonly>
+  <input type="text" id="ctx-category-input" class="input cat-pick-input" placeholder="CATEGORY..." autocomplete="off">
   <input type="hidden" id="ctx-category">
   <div id="ctx-category-dropdown" class="category-dropdown hidden"></div>
 </div></div>
@@ -275,7 +274,7 @@
         </div>
         <div class="form-group"><label>Category</label>
 <div class="category-autocomplete" id="debt-category-autocomplete">
-  <input type="text" id="debt-category-input" class="input cat-pick-input" placeholder="CATEGORY..." autocomplete="off" readonly>
+  <input type="text" id="debt-category-input" class="input cat-pick-input" placeholder="CATEGORY..." autocomplete="off">
   <input type="hidden" id="debt-category">
   <div id="debt-category-dropdown" class="category-dropdown hidden"></div>
 </div></div>
@@ -331,7 +330,7 @@
         </div>
         <div class="form-group"><label>Category</label>
 <div class="category-autocomplete" id="invoice-category-autocomplete">
-  <input type="text" id="invoice-category-input" class="input cat-pick-input" placeholder="CATEGORY..." autocomplete="off" readonly>
+  <input type="text" id="invoice-category-input" class="input cat-pick-input" placeholder="CATEGORY..." autocomplete="off">
   <input type="hidden" id="invoice-category">
   <div id="invoice-category-dropdown" class="category-dropdown hidden"></div>
 </div></div>
@@ -617,6 +616,7 @@
 
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <script src="/js/amount-parser.js"></script>
   <script src="/js/core.js"></script>
   <script src="/js/page-overview.js"></script>
   <script src="/js/page-transactions.js"></script>
