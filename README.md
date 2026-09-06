@@ -19,6 +19,14 @@ A local-first personal finance console. Terminal aesthetic with light/dark theme
 - **Profiles** — isolated data sets (default + named profiles) stored as separate files, per-profile page visibility
 - **Command palette** — `/` or `Ctrl-K`: search transactions, pages, quick commands (`t 500 cash bank`, `pay electricity`, `bg groceries 20000`, `csv`, …)
 
+## What's new in 0.8.2
+
+- **Safer local storage** — profile saves are atomic and preserve the previous version as a `.bak` recovery copy; invalid or corrupted data is reported without being overwritten.
+- **Local-only server** — Black Book now listens only on this computer, and its stop script no longer terminates unrelated Node programs.
+- **Reliable amount entry** — normal values, decimal commas, and math expressions such as `50+20*3` work again under the app’s security safeguards.
+- **Searchable categories** — type in any category field to filter choices, then press Enter or click a result to select it.
+- **Automated verification** — built-in syntax and regression tests run without reading your personal profiles.
+
 ## Keyboard
 
 | Key | Action |
@@ -62,6 +70,6 @@ The tests use temporary fixture profiles and do not access your `profiles/` dire
 
 ---
 
-**BLACK BOOK v0.8.1**
+**BLACK BOOK v0.8.2**
 
 Created by Nikola Nešić
