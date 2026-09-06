@@ -1090,13 +1090,7 @@ this.connectWebSocket();
   },
 
   evalAmount(input) {
-    const s = String(input == null ? '' : input).trim().replace(/\s+/g, '').replace(',', '.').replace(/(^|[^0-9.])0+([0-9])/g, '$1$2');
-    if (!s) return NaN;
-    if (!/^[0-9+\-*/().]+$/.test(s)) { const v = parseFloat(s); return isNaN(v) ? NaN : Math.round(v * 100) / 100; }
-    try {
-      const v = Function('"use strict";return (' + s + ')')();
-      return typeof v === 'number' && isFinite(v) ? Math.round(v * 100) / 100 : NaN;
-    } catch (e) { return NaN; }
+    return window.BlackBookAmount.evaluateAmount(input);
   },
 
   ordinalDay(n) {
@@ -1726,7 +1720,12 @@ this.connectWebSocket();
     if (!input || !dropdown) return;
     this._catPickBound.add(inputId);
 
-    const sortedCats = () => this.data.categories.slice().sort((a, b) => a.name.localeCompare(b.name));
+    const sortedCats = (query = '') => {
+      const needle = query.trim().toLocaleLowerCase();
+      return this.data.categories.slice()
+        .filter((cat) => !needle || cat.name.toLocaleLowerCase().includes(needle))
+        .sort((a, b) => a.name.localeCompare(b.name));
+    };
     const closeDropdown = () => dropdown.classList.add('hidden');
     const pick = (cat) => {
       if (!cat) return;
@@ -1743,8 +1742,8 @@ this.connectWebSocket();
       pick(cats[next]);
     };
 
-    const openDropdown = () => {
-      const cats = sortedCats();
+    const openDropdown = (query = '') => {
+      const cats = sortedCats(query);
       dropdown.innerHTML = cats.length ? cats.map(c =>
         '<div class="category-dropdown-item' + (c.id === hidden.value ? ' active' : '') + '" data-id="' + c.id + '"><span class="cat-dot" style="background:' + this.categoryColor(c) + ';"></span>' + this.escapeHtml(c.name) + '</div>'
       ).join('') : '<div class="category-dropdown-empty">No categories yet</div>';
@@ -1753,8 +1752,13 @@ this.connectWebSocket();
       dropdown.classList.remove('hidden');
     };
 
-    input.addEventListener('click', openDropdown);
-    input.addEventListener('focus', openDropdown);
+    input.addEventListener('click', () => openDropdown());
+    input.addEventListener('focus', () => { input.select(); openDropdown(); });
+    input.addEventListener('input', () => {
+      hidden.value = '';
+      input.classList.toggle('pick-empty', !input.value.trim());
+      openDropdown(input.value);
+    });
     input.addEventListener('wheel', (e) => { e.preventDefault(); cycle(e.deltaY > 0 ? 1 : -1); }, { passive: false });
     input.addEventListener('keydown', (e) => {
       if (e.key === 'ArrowDown') { e.preventDefault(); cycle(1); }
@@ -1763,7 +1767,9 @@ this.connectWebSocket();
         if (!dropdown.classList.contains('hidden')) { e.preventDefault(); e.stopPropagation(); }
         closeDropdown();
       } else if (e.key === 'Enter' && !dropdown.classList.contains('hidden')) {
-        e.preventDefault(); closeDropdown();
+        e.preventDefault(); e.stopPropagation();
+        const cats = sortedCats(input.value);
+        if (cats[0]) pick(cats[0]); else closeDropdown();
       }
     });
 
