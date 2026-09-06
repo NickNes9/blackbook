@@ -41,15 +41,24 @@ npm install
 node server.js
 ```
 
-Open http://localhost:3000 — or just run **Black Book.exe**, which starts the server hidden and opens your browser. `Stop Black Book.bat` shuts it down.
+Open http://localhost:3000 — or just run **Black Book.exe**, which starts the server hidden and opens your browser. `Stop Black Book.bat` shuts down that Black Book server only; it does not stop other Node programs.
 
 ## Data & privacy
 
-All data lives in `profiles/*.json` next to `server.js` (`profiles/data.json` = default profile). This folder is **gitignored** — code backups never contain your finances. For data backups use Settings → EXPORT JSON / EXPORT CSV. Attached invoice files are stored in your browser's IndexedDB (per browser profile) and exposed via the INVOICE button on each invoice card.
+All data lives in `profiles/*.json` next to `server.js` (`profiles/data.json` = default profile). This folder is **gitignored** — code backups never contain your finances. Each successful save first retains the immediately previous file as `.bak`; if a profile is corrupted, restore it from that backup instead of saving over it. For portable data backups use Settings → EXPORT JSON / EXPORT CSV. Attached invoice files are stored in your browser's IndexedDB (per browser profile) and exposed via the INVOICE button on each invoice card.
 
-## Hosting notes
+## Local-only operation
 
-Any Node-capable machine can host it: clone, `npm install`, `node server.js`, expose port 3000. There is no built-in authentication — if you expose it beyond localhost, put it behind a reverse proxy/Tailscale/Cloudflare Tunnel.
+Black Book binds to `127.0.0.1`, so it is available only on this computer. It deliberately has no network hosting or login mode.
+
+## Verification
+
+```bash
+npm run check
+npm test
+```
+
+The tests use temporary fixture profiles and do not access your `profiles/` directory.
 
 ---
 
