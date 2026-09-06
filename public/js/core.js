@@ -438,20 +438,33 @@ this.connectWebSocket();
     const ind = document.getElementById('save-indicator');
     if (!ind) return;
     ind.classList.toggle('saving', state === 'saving');
+    ind.classList.toggle('failed', state === 'failed');
     const label = ind.querySelector('.save-label');
     const dot = ind.querySelector('.save-dot');
-    if (label) label.textContent = state === 'saving' ? 'SAVING\u2026' : 'SAVED';
+    if (label) label.textContent = state === 'saving' ? 'SAVING\u2026' : state === 'failed' ? 'UNSAVED' : 'SAVED';
   },
 
   async save() {
+    const sequence = (this._saveSequence || 0) + 1;
+    this._saveSequence = sequence;
     this._pendingSaves = (this._pendingSaves || 0) + 1;
     this.setSaveState('saving');
     const payload = this.stripTransient(this.data);
     try {
-      await fetch('/api/save', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(this.profile ? { profile: this.profile, data: payload } : payload) });
+      const response = await fetch('/api/save', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(this.profile ? { profile: this.profile, data: payload } : payload) });
+      if (!response.ok) throw new Error((await response.json().catch(() => ({}))).error || 'Save failed');
+      this._lastSaveSuccess = Math.max(this._lastSaveSuccess || 0, sequence);
+      return true;
+    } catch (error) {
+      this._lastSaveFailure = Math.max(this._lastSaveFailure || 0, sequence);
+      console.error('Save failed:', error);
+      return false;
     } finally {
       this._pendingSaves = (this._pendingSaves || 0) - 1;
-      if (this._pendingSaves <= 0) { this._pendingSaves = 0; this.setSaveState('saved'); }
+      if (this._pendingSaves <= 0) {
+        this._pendingSaves = 0;
+        this.setSaveState((this._lastSaveFailure || 0) > (this._lastSaveSuccess || 0) ? 'failed' : 'saved');
+      }
     }
   },
 
