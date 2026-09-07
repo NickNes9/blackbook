@@ -3,7 +3,9 @@
     forecastResult() {
       return window.ForecastEngine.buildForecast(this.data, {
         startDate: this.today(), days: this._forecastDays || 30,
-        accountIds: this._forecastAccountIds || [], baseCurrency: this.baseCurrency(), rates: this.getRates()
+        accountIds: this._forecastAccountIds || [], baseCurrency: this.baseCurrency(), rates: this.getRates(),
+        includeInvoices: !!this._forecastIncludeInvoices, includeDebts: !!this._forecastIncludeDebts,
+        forecastAccountId: this._forecastSettlementAccount || this.data.settings.defaultAccountId
       });
     },
 
@@ -21,6 +23,7 @@
         [30, 60, 90].map(days => '<button class="btn btn-sm ' + ((this._forecastDays || 30) === days ? 'btn-primary' : 'btn-secondary') + '" onclick="BlackBook.setForecastDays(' + days + ')">' + days + ' DAYS</button>').join(' ') +
         '<button class="btn btn-sm btn-secondary" onclick="BlackBook.openRecurringTemplate()">+ RECURRING</button></div>' +
         '<div class="forecast-account-filters">' + accounts.map(account => '<label><input type="checkbox" ' + (!selected.size || selected.has(account.id) ? 'checked' : '') + ' onchange="BlackBook.toggleForecastAccount(\'' + account.id + '\', this.checked)"> ' + this.escapeHtml(account.name) + '</label>').join('') + '</div>' +
+        '<div class="forecast-account-filters"><label><input type="checkbox" ' + (this._forecastIncludeInvoices ? 'checked' : '') + ' onchange="BlackBook.toggleForecastOption(\'invoices\', this.checked)"> Include unpaid invoices</label><label><input type="checkbox" ' + (this._forecastIncludeDebts ? 'checked' : '') + ' onchange="BlackBook.toggleForecastOption(\'debts\', this.checked)"> Include open personal debts</label><span class="forecast-kind">These use the default account.</span></div>' +
         '<div class="month-summary"><div class="month-summary-item"><span class="month-summary-label">OPENING</span><span class="month-summary-value">' + this.fmtBase(Object.values(result.openingBalances).reduce((sum, amount) => sum + amount, 0)) + '</span></div><div class="month-summary-item"><span class="month-summary-label">ENDING</span><span class="month-summary-value ' + (final && final.total < 0 ? 'amount-negative' : 'amount-positive') + '">' + this.fmtBase(final ? final.total : 0) + '</span></div><div class="month-summary-item"><span class="month-summary-label">SHORTFALLS</span><span class="month-summary-value ' + (result.shortfalls.length ? 'amount-negative' : 'amount-positive') + '">' + result.shortfalls.length + '</span></div></div>' +
         (result.warnings.length ? '<div class="forecast-warning">' + this.escapeHtml(result.warnings.join(' · ')) + '. Amounts without a rate are excluded.</div>' : '') +
         '<div class="list-sep"></div><div class="page-scroll-wrap"><div class="forecast-list">' + eventRows + '</div></div>';
@@ -33,6 +36,7 @@
       if (checked) selected.add(id); else selected.delete(id);
       this._forecastAccountIds = [...selected]; this.renderForecast();
     },
+    toggleForecastOption(name, checked) { if (name === 'invoices') this._forecastIncludeInvoices = checked; if (name === 'debts') this._forecastIncludeDebts = checked; this.renderForecast(); },
 
     async openRecurringTemplate() {
       const name = await this.promptModal({ title: 'Recurring forecast item', message: 'Name (for example, salary or groceries)', placeholder: 'Name' });

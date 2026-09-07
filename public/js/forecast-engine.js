@@ -102,6 +102,27 @@
       }
     }
 
+    // Invoices and personal debts have no account field today. When enabled, they
+    // deliberately use the selected/default cash account rather than silently
+    // affecting every account.
+    const forecastAccountId = options && options.forecastAccountId || settings.defaultAccountId;
+    if (forecastAccountId && included.has(forecastAccountId) && options && options.includeInvoices) {
+      for (const invoice of profile.invoices || []) {
+        const total = (invoice.lines || []).reduce((sum, line) => sum + Number(line.qty || 0) * Number(line.price || 0), 0);
+        const remaining = Math.max(0, total - Math.abs(Number(invoice.amountPaid || 0)));
+        if (!remaining || !invoice.dueDate) continue;
+        push({ kind: 'invoice', name: invoice.party || 'Invoice', date: invoice.dueDate, amount: invoice.dir === 'out' ? remaining : -remaining, currency: invoice.currency, accountId: forecastAccountId, sourceId: invoice.id });
+      }
+    }
+    if (forecastAccountId && included.has(forecastAccountId) && options && options.includeDebts) {
+      for (const debt of profile.debts || []) {
+        const paid = (debt.payments || []).reduce((sum, payment) => sum + Math.abs(Number(payment.amount || 0)), 0);
+        const remaining = Math.max(0, Math.abs(Number(debt.amount || 0)) - paid);
+        if (!remaining || !debt.dueDate) continue;
+        push({ kind: 'debt', name: debt.person || 'Debt', date: debt.dueDate, amount: debt.type === 'in' ? remaining : -remaining, currency: debt.currency, accountId: forecastAccountId, sourceId: debt.id });
+      }
+    }
+
     events.sort((a, b) => a.date.localeCompare(b.date) || a.name.localeCompare(b.name));
     const daily = [];
     const running = { ...balances };

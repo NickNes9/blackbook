@@ -19,3 +19,9 @@ test('forecast tracks recurring entries and reports account shortfalls', () => {
   assert.equal(result.events.length, 4);
   assert.equal(result.shortfalls[0].date, '2026-09-03');
 });
+
+test('forecast includes invoices only when explicitly enabled', () => {
+  const data = { settings: { baseCurrency: 'RSD', defaultAccountId: 'cash' }, accounts: [{ id: 'cash' }], transactions: [], invoices: [{ id: 'invoice', party: 'Client', dir: 'out', dueDate: '2026-09-04', currency: 'RSD', lines: [{ qty: 1, price: 300 }] }] };
+  assert.equal(buildForecast(data, { startDate: '2026-09-01', days: 10 }).events.length, 0);
+  assert.equal(buildForecast(data, { startDate: '2026-09-01', days: 10, includeInvoices: true }).events[0].baseAmount, 300);
+});
