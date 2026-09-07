@@ -968,9 +968,10 @@ Object.assign(window.BlackBook, {
       '<div class="settings-list">' + categoriesList + '</div></div>' +
     '</div>' +
 
-      '<div class="settings-section">' +
+      '<div class="settings-cols settings-cols-import-rules"><div class="settings-section">' +
       '<div class="settings-section-header"><span class="settings-section-title">IMPORT RULES</span><button class="btn btn-sm btn-primary" onclick="BlackBook.openImportRule()">+ RULE</button></div>' +
       '<div class="settings-list">' + ((this.data.importRules || []).map(rule => { const cat = this.data.categories.find(c => c.id === rule.categoryId); return '<div class="settings-row"><span class="settings-row-name">IF DESCRIPTION HAS “' + this.escapeHtml(rule.match) + '”</span><span class="settings-row-meta">→ ' + this.escapeHtml(cat ? cat.name : 'missing category') + '</span><button class="btn btn-sm btn-danger btn-icon" onclick="BlackBook.deleteImportRule(\'' + rule.id + '\')">' + this.xIcon() + '</button></div>'; }).join('') || '<div style="padding:8px;color:var(--text-muted);font-size:13px;">No rules yet. Rules apply while rows are staged for import.</div>') + '</div></div>' +
+      '<div></div></div>' +
 
       '<div class="settings-footer">BLACK BOOK v0.8.2 &middot; Created by Nikola Ne&scaron;i&#263;</div>';
   },

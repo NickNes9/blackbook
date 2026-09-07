@@ -7,10 +7,12 @@ Object.assign(window.BlackBook, {
     if (this.overviewLineChart) { this.overviewLineChart.destroy(); this.overviewLineChart = null; }
     const hideGraph = !!(this.data.settings && this.data.settings.hideOverviewGraph);
     el.innerHTML = this.accountCardsHtml() + this.monthPickerHtml() + this.monthSummaryHtml() + this.categoryBreakdownHtml() +
-      this.categoryFilterHtml() + this.reconciliationFilterHtml() + '<div class="tx-list-wrap">' + this.recentTransactionsHtml() + '</div>' +
+      this.categoryFilterHtml() + '<div class="tx-list-wrap">' + this.recentTransactionsHtml() + '</div>' +
       (hideGraph
         ? ''
         : '<div class="list-sep"></div><div class="overview-charts"><div class="chart-panel overview-line-panel"><div class="chart-head-row"><span class="chart-title-text">INCOME VS EXPENSES</span></div><canvas id="overview-line-chart"></canvas></div></div>');
+    const txWrap = el.querySelector('.tx-list-wrap');
+    if (txWrap && txWrap.querySelector('.empty-state')) txWrap.classList.add('tx-list-wrap-empty');
     this.bindBarTooltip(el);
     this.bindAccountsPanelDismiss();
     this.sizeAccountSquares();
@@ -134,11 +136,11 @@ Object.assign(window.BlackBook, {
       '</div>';
   },
 
-  reconciliationFilterHtml() {
+  reconciliationSwitchHtml() {
     if (!this.reconciliationEnabled()) return '';
     const filter = this._reconciliationFilter || 'all';
     const item = (value, label) => '<button class="btn btn-sm ' + (filter === value ? 'btn-primary' : 'btn-secondary') + '" onclick="BlackBook.setReconciliationFilter(\'' + value + '\')">' + label + '</button>';
-    return '<div class="reconciliation-filter"><span>RECONCILIATION</span>' + item('all', 'ALL') + item('cleared', 'MARKED') + item('uncleared', 'UNMARKED') + '</div>';
+    return '<span class="reconciliation-switch">' + item('all', 'ALL') + item('cleared', 'MARKED') + item('uncleared', 'UNMARKED') + '</span>';
   },
 
   setReconciliationFilter(filter) { this._reconciliationFilter = filter; this.renderOverview(); },
@@ -200,6 +202,7 @@ Object.assign(window.BlackBook, {
       (this._bulkSel && this._bulkSel.size ? '<div class="cat-filter-chip bulk-filter-chip' + (this._bulkOnly ? ' selected' : '') + '" onclick="BlackBook.toggleBulkOnly()">SELECTED (' + this._bulkSel.size + ')</div>' : '') +
       '<div class="cat-filter-chip' + (this._ovInc ? ' selected' : '') + '" onclick="BlackBook.toggleOvType(\x27income\x27)" title="Filter the graph and the list to income only">INCOME</div>' +
       '<div class="cat-filter-chip' + (this._ovExp ? ' selected' : '') + '" onclick="BlackBook.toggleOvType(\x27expense\x27)" title="Filter the graph and the list to expenses only">EXPENSES</div>' +
+      this.reconciliationSwitchHtml() +
       '<button class="btn btn-sm btn-secondary ov-sort-cycle" onclick="BlackBook.cycleOvSort()" title="Cycle sort: Date → Value">' + sortLabel + '</button>' +
       '<button class="btn btn-sm btn-secondary ov-sort-dir" onclick="BlackBook.toggleOvSortDir()" title="' + (this._ovSortDir === 'asc' ? 'Descending' : 'Ascending') + '">' + (this._ovSortDir === 'asc' ? '&#9650;' : '&#9660;') + '</button>' +
       '</span></div>';

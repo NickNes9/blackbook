@@ -246,6 +246,7 @@ input[type="checkbox"]:checked {
   margin-top: 7px;
   margin-bottom: 5px;
 }
+.tx-list-wrap.tx-list-wrap-empty { flex: 0 1 50%; }
 
 .overview-charts .chart-panel { flex: 1; height: 180px; min-width: 0; }
 .overview-charts .chart-panel.chart-panel-resizing { flex: 0 0 auto; }
@@ -279,12 +280,12 @@ input[type="checkbox"]:checked {
 .forecast-event > :last-child { text-align:right; }
 .forecast-kind { color:var(--text-muted); font-size:10px; }
 .forecast-warning { color:var(--accent); font-size:12px; padding:8px 0; }
-.reconciliation-filter { display:flex; align-items:center; gap:6px; padding:5px 0; color:var(--text-muted); font-size:10px; }
+.reconciliation-switch { display:inline-flex; gap:3px; }
+.reconciliation-switch .btn { min-width:76px; justify-content:center; }
 .reconcile-mark { min-width:24px; width:24px; padding:2px 0; color:transparent; border-color:var(--divider); }
 .reconcile-mark.marked { color:var(--income); border-color:var(--income); }
 .reconcile-mark:hover { color:var(--text-dim); }
-.forecast-chart-wrap { margin:6px 0 8px; }
-.forecast-chart-wrap .chart-panel { height:150px; }
+.forecast-chart-wrap { margin:7px 0 5px; }
 
 .header-right {
   display: flex;
