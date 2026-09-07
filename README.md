@@ -12,9 +12,9 @@ A local-first personal finance console. Terminal aesthetic with light/dark theme
 - **Credit cards** — installment plans with interest baked into the debt (100 @ 5% = 105; first installment carries the interest), PAY/PAID slots, greedy custom payments, edit plans, advance credit
 - **Debts / Invoices** — OWED · I OWE and INCOMES · EXPENSES · ALL filters inline with the period controls; debts carry a category; invoices support line items and attached files (openable from the card)
 - **Overview** — metric panels, category breakdown bar, month filters that drive both the income-vs-expenses graph and the transaction list, sort by category or date, `H` hides the graph
-- **Forecast** — a separate 30/60/90-day cash timeline using current balances, unpaid scheduled bills, remaining card-installment slots, and optional recurring income/expenses; account filters and missing-rate warnings keep projections explicit.
+- **Forecast** — a separate 30/60/90-day cash timeline and balance graph using current balances, unpaid scheduled bills, remaining card-installment slots, and optional recurring income/expenses; account filters and missing-rate warnings keep projections explicit.
 - **Attention bar** — the header shows up to three highest-priority items (urgent first, then nearest date), with a `+N MORE` summary and a per-profile hide option.
-- **Reconciliation** — select an account on Overview, mark transactions `CLR`, then record a statement date and balance; unmatched statements stay visibly in progress until their difference is zero.
+- **Reconciliation** — optionally enable it in Settings, then use visual marks and marked/unmarked filters on Overview before recording a statement date and balance; unmatched statements stay visibly in progress until their difference is zero.
 - **Categories** — picker everywhere (transactions, debts, invoices, purchases), auto-created during import, palette of theme-aware colors
 - **Import / Export** — Settings → EXPORT CSV (transactions) and EXPORT JSON (full backup, restore via IMPORT JSON); IMPORT CSV/XLSX stages valid rows, applies reusable description-to-category rules, and warns about likely duplicates before anything is saved.
 - **Themes** — dark (default) and light, device-level toggle in Settings; customizable highlight, income and expense colors used across UI *and* charts; all native dropdowns themed to match
@@ -32,7 +32,7 @@ A local-first personal finance console. Terminal aesthetic with light/dark theme
 
 ## In development on the next version
 
-- Forecasting, reconciliation, import review/rules, and the priority attention bar are currently being built on a separate local feature branch. Existing `profiles/*.json` history remains the source of truth; the new fields are optional and additive.
+- Forecasting, reconciliation, import review/rules, and the priority attention bar are being refined on a separate local feature branch. Existing `profiles/*.json` history remains the source of truth; the new fields are optional and additive.
 
 ## Keyboard
 

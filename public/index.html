@@ -25,13 +25,13 @@
   <aside class="app-sidebar">
     <nav class="sidebar-nav">
       <button data-page="overview" class="sidebar-nav-item active">OVERVIEW</button>
-      <button data-page="forecast" class="sidebar-nav-item">FORECAST</button>
       <button data-page="bills" class="sidebar-nav-item">BILLS</button>
       <button data-page="budget" class="sidebar-nav-item">BUDGET</button>
       <button data-page="cards" class="sidebar-nav-item">CREDIT CARDS</button>
       <button data-page="savings" class="sidebar-nav-item">SAVINGS</button>
       <button data-page="debts" class="sidebar-nav-item">DEBTS</button>
       <button data-page="invoices" class="sidebar-nav-item">INVOICES</button>
+      <button data-page="forecast" class="sidebar-nav-item">FORECAST</button>
       <button data-page="settings" class="sidebar-nav-item">SETTINGS</button>
     </nav>
   </aside>
@@ -613,7 +613,20 @@
     <span class="hotkey"><kbd>TAB</kbd> ACCOUNT</span>
     <span class="hotkey"><kbd>1–8</kbd> PAGES</span>
     <span class="hotkey"><kbd>Space</kbd> COMMAND</span>
+    <button id="footer-graph-toggle" class="btn btn-sm btn-secondary footer-graph-toggle hidden" type="button"></button>
   </footer>
+
+  <div id="import-rule-modal" class="modal hidden">
+    <div class="modal-backdrop"></div>
+    <div class="modal-content">
+      <div class="modal-header"><h2>Import Rule</h2><button class="modal-close" onclick="BlackBook.closeModal('import-rule-modal')">&times;</button></div>
+      <form id="import-rule-form">
+        <div class="form-group"><label>When description contains</label><input id="import-rule-match" class="input" maxlength="80" required autocomplete="off"></div>
+        <div class="form-group"><label>Category</label><select id="import-rule-category" class="input" required></select></div>
+        <div class="form-actions"><button type="button" class="btn btn-secondary" onclick="BlackBook.closeModal('import-rule-modal')">Cancel</button><button class="btn btn-primary" type="submit">Save Rule</button></div>
+      </form>
+    </div>
+  </div>
 
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>

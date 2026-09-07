@@ -13,6 +13,7 @@ window.BlackBook = {
   billsChart: null,
   overviewPieChart: null,
   overviewLineChart: null,
+  forecastChart: null,
   savingsChart: null,
   _cmdPaletteIndex: -1,
   _cmdPaletteItems: [],
@@ -326,7 +327,7 @@ this.connectWebSocket();
     return '#' + [r, g, b].map(x => Math.round(x * 255).toString(16).padStart(2, '0')).join('');
   },
 
-  pageList() { return ['overview', 'forecast', 'bills', 'budget', 'cards', 'savings', 'debts', 'invoices', 'settings']; },
+  pageList() { return ['overview', 'bills', 'budget', 'cards', 'savings', 'debts', 'invoices', 'forecast', 'settings']; },
 
   isPageEnabled(page) {
     if (page === 'settings' || page === 'overview') return true;
@@ -371,6 +372,7 @@ this.connectWebSocket();
     if (this.overviewLineChart) { this.overviewLineChart.destroy(); this.overviewLineChart = null; }
     if (this.billsChart) { this.billsChart.destroy(); this.billsChart = null; }
     if (this.savingsChart) { this.savingsChart.destroy(); this.savingsChart = null; }
+    if (this.forecastChart) { this.forecastChart.destroy(); this.forecastChart = null; }
     this.currentPage = page;
     document.querySelectorAll('.page').forEach(p => {
       const active = p.id === 'page-' + page;
@@ -435,10 +437,29 @@ this.connectWebSocket();
       const pageEl = document.getElementById('page-' + page);
       if (pageEl) this.upgradeAllSelects(pageEl);
       this.refreshAttention();
+      this.updateGraphFooter();
     } catch (err) {
       console.error('renderPage failed:', err);
       if (!this._renderErrShown) { this._renderErrShown = true; alert('Render error: ' + err.message); }
     }
+  },
+
+  updateGraphFooter() {
+    const button = document.getElementById('footer-graph-toggle');
+    if (!button) return;
+    const graphPage = this.currentPage === 'overview' || this.currentPage === 'bills';
+    button.classList.toggle('hidden', !graphPage);
+    if (!graphPage) return;
+    const hidden = this.currentPage === 'overview' ? !!this.data.settings.hideOverviewGraph : !!this.data.settings.hideBillsGraph;
+    button.textContent = hidden ? 'SHOW GRAPH' : 'HIDE GRAPH';
+    button.onclick = () => this.currentPage === 'overview' ? this.toggleOverviewGraph() : this.toggleBillsGraph();
+  },
+
+  reconciliationEnabled() { return this.data && this.data.settings && this.data.settings.reconciliationEnabled !== false; },
+  async toggleReconciliationEnabled() {
+    this.data.settings.reconciliationEnabled = !this.reconciliationEnabled();
+    await this.save();
+    this.renderPage(this.currentPage);
   },
 
   attentionItems() {
@@ -475,7 +496,7 @@ this.connectWebSocket();
     const visible = items.slice(0, 3);
     bar.innerHTML = visible.map(item => '<button class="attention-item severity-' + item.severity + '" onclick="BlackBook.navigateTo(\'' + item.page + '\')">' + this.escapeHtml(item.label) + '</button>').join('') +
       (items.length > 3 ? '<button class="attention-more" onclick="BlackBook.showAttention()">+' + (items.length - 3) + ' MORE</button>' : '') +
-      '<button class="attention-hide" onclick="BlackBook.hideAttentionBar()" title="Hide attention bar">×</button>';
+      '<button class="btn btn-sm btn-danger btn-icon attention-hide" onclick="BlackBook.hideAttentionBar()" title="Hide attention bar">' + (this.xIcon ? this.xIcon() : '×') + '</button>';
   },
 
   async hideAttentionBar() { this.data.settings.attentionBarHidden = true; await this.save(); this.refreshAttention(); },
