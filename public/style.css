@@ -2348,11 +2348,71 @@ select:disabled {
 }
 
 @media (max-width: 768px) {
-  .app-sidebar { display: none; }
-  .app-workspace { margin-left: 0; }
   .charts-grid { grid-template-columns: 1fr; }
   .metrics-grid { grid-template-columns: 1fr 1fr; }
   .header-command-input { width: 200px; }
+}
+.month-name-short { display:none; }
+
+/* ===== RESPONSIVE SHELL ===== */
+@media (max-width: 1180px) {
+  .app-workspace { padding-left: 16px; padding-right: 16px; }
+  .app-footer { gap: 14px; }
+  .app-footer .hotkey { font-size: 10px; gap: 4px; }
+  .month-summary { gap: 14px; flex-wrap: wrap; }
+  .month-summary-item { min-width: 0; }
+  .attention-item { max-width: 155px; overflow: hidden; text-overflow: ellipsis; }
+}
+
+@media (max-width: 980px) {
+  .app-workspace { margin-left: 0; }
+  .app-sidebar {
+    width: 220px;
+    transform: translateX(-100%);
+    transition: transform .18s ease;
+    box-shadow: 2px 0 12px rgba(0,0,0,.28);
+    z-index: 60;
+  }
+  body.mobile-nav-open .app-sidebar { transform: translateX(0); overflow-y: auto; }
+  .header-center { min-width: 0; justify-content:flex-start; }
+  .attention-bar { min-width:0; width:100%; }
+  .header-left { min-width: 175px; }
+  .header-profile { display:none; }
+  .settings-cols { grid-template-columns: 1fr; }
+}
+
+@media (max-width: 760px) {
+  .app-header { display:grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 74px; }
+  .header-left { min-width:0; gap:8px; }
+  .header-logo { font-size:13px; overflow:hidden; text-overflow:ellipsis; }
+  .attention-item { max-width:105px; }
+  .attention-item:nth-of-type(n+2), .attention-more { display:none; }
+  .app-workspace { padding:12px 10px calc(var(--footer-h) + 14px); }
+  .app-footer { justify-content:flex-start; overflow-x:auto; gap:12px; padding:0 84px 0 10px; white-space:nowrap; }
+  .app-footer .hotkey { flex:0 0 auto; }
+  .footer-graph-toggle { right:8px; }
+  .month-picker { gap:6px; margin-bottom:8px; }
+  .month-name-full { display:none; }
+  .month-name-short { display:inline; }
+  .month-summary { gap:8px 14px; margin-bottom:8px; font-size:14px; }
+  .month-summary-label { font-size:11px; }
+  .month-summary-value { font-size:14px; }
+  .reconciliation-switch .btn { min-width:62px; padding-left:5px; padding-right:5px; }
+  .tx-list-wrap { padding-right:0; overflow:auto; }
+  .tx-list { min-width:650px; }
+  .forecast-event { min-width:560px; }
+  .forecast-list { overflow-x:auto; }
+  .forecast-account-filters { gap:8px; }
+}
+
+@media (max-width: 520px) {
+  .header-center { display:none; }
+  .app-header { grid-template-columns:minmax(0, 1fr) 74px; }
+  .month-summary { display:grid; grid-template-columns:1fr 1fr; }
+  .month-summary > span[style] { display:none; }
+  .month-summary > span:last-child { grid-column:1 / -1; flex-wrap:wrap; }
+  .overview-charts .chart-panel { height:150px; }
+  .page-fixed, #page-overview { height:calc(100vh - var(--header-h) - var(--footer-h) - 24px); }
 }
 
 /* ===== HEADINGS ===== */
