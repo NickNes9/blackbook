@@ -148,10 +148,13 @@ It shows a compact count and the highest-priority items:
 ATTENTION · 3   Internet due tomorrow · Dining budget 84% · Cash low in 9 days
 ```
 
-Item priority: overdue bill, due-soon bill, budget warning, forecast low
-balance, import review waiting, then reconciliation in progress. Clicking an
-item navigates to and focuses its source record. Settings offers `SHOW/HIDE
-ATTENTION BAR` per profile.
+Show at most three items. Items are ranked by severity first, then nearest
+relevant date: overdue bill or invoice payment; forecast account shortfall;
+bill due today or within three days; reconciliation difference or import review
+waiting; then budget warning. If more items remain, the strip ends with a
+`+N MORE` control that opens a complete Attention panel grouped by severity.
+Clicking an item navigates to and focuses its source record. Settings offers
+`SHOW/HIDE ATTENTION BAR` per profile.
 
 ## 6. Deferred: Backup History
 
@@ -201,6 +204,7 @@ retention behavior.
 5. Import review catches exact and near-date duplicates without blocking user
    choice.
 6. Rules apply only to staged import rows and never change older transactions.
-7. The attention strip is useful, navigable, and hideable without changing
-   the application layout.
+7. The attention strip shows no more than three severity-ranked items, exposes
+   all remaining items through `+N MORE`, and is hideable without changing the
+   application layout.
 8. `npm run check` and `npm test` cover the new pure financial calculations.
