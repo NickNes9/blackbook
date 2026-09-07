@@ -374,6 +374,7 @@ this.connectWebSocket();
     if (this.savingsChart) { this.savingsChart.destroy(); this.savingsChart = null; }
     if (this.forecastChart) { this.forecastChart.destroy(); this.forecastChart = null; }
     this.currentPage = page;
+    document.body.classList.remove('mobile-nav-open');
     document.querySelectorAll('.page').forEach(p => {
       const active = p.id === 'page-' + page;
       p.classList.toggle('hidden', !active);
@@ -403,6 +404,10 @@ this.connectWebSocket();
   },
 
   toggleSidebar() {
+    if (window.matchMedia && window.matchMedia('(max-width: 980px)').matches) {
+      document.body.classList.toggle('mobile-nav-open');
+      return;
+    }
     const collapsed = document.body.classList.toggle('sb-collapsed');
     try {
       localStorage.setItem('bb-sidebar-collapsed', collapsed ? '1' : '0');
@@ -1687,12 +1692,13 @@ this.connectWebSocket();
 
   monthPickerHtml() {
     const months = ['JANUARY', 'FEBRUARY', 'MARCH', 'APRIL', 'MAY', 'JUNE', 'JULY', 'AUGUST', 'SEPTEMBER', 'OCTOBER', 'NOVEMBER', 'DECEMBER'];
+    const shortMonths = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
     const now = new Date();
     let btns = '';
     for (let i = 0; i < 12; i++) {
       const sel = i === this.vm();
       const isCur = now.getFullYear() === this.vy() && now.getMonth() === i;
-      btns += '<button class="mp-month' + (sel ? ' selected' : '') + (isCur && !sel ? ' current' : '') + '" onclick="BlackBook.pickMonth(' + i + ')">' + months[i] + '</button>';
+      btns += '<button class="mp-month' + (sel ? ' selected' : '') + (isCur && !sel ? ' current' : '') + '" onclick="BlackBook.pickMonth(' + i + ')"><span class="month-name-full">' + months[i] + '</span><span class="month-name-short">' + shortMonths[i] + '</span></button>';
     }
     const offToday = !(now.getFullYear() === this.vy() && now.getMonth() === this.vm());
     return '<div class="month-picker">' +
