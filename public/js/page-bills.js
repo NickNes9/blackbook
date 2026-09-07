@@ -14,7 +14,6 @@ Object.assign(window.BlackBook, {
       html += '<div class="cat-filter-chip' + (on ? ' selected' : '') + '" style="--cc:' + color + ';' + (on ? 'background:' + color + ';color:var(--on-fill);' : '') + (on ? '' : 'opacity:0.55;') + '" onclick="BlackBook.toggleBillActive(\x27' + b.id + '\x27)" title="' + this.escapeHtml(b.name) + amt + ' \u00b7 click to show/hide in graph">' + this.escapeHtml(b.name) + '</div>';
     }
     html += '<span style="flex:1;"></span>';
-    html += '<button class="btn btn-sm btn-secondary" style="margin-left:4px;" onclick="BlackBook.toggleBillsGraph()" title="Hide bills graph (H)">HIDE</button>';
     return html + '</div>';
   },
 
@@ -40,7 +39,7 @@ Object.assign(window.BlackBook, {
       '<div class="page-scroll-wrap"><div class="bills-grid-wrap">' + this.billsGridHtml() + '</div></div>' +
       '<div class="list-sep"></div>' +
       (hideGraph
-        ? '<div class="graph-show-row"><button class="btn btn-sm btn-secondary" onclick="BlackBook.toggleBillsGraph()">SHOW GRAPH</button></div>'
+        ? ''
         : this.billsChipsHtml() +
           '<div class="overview-charts"><div class="chart-panel chart-panel-full"><canvas id="bills-chart"></canvas></div></div>');
     if (!hideGraph) setTimeout(() => this.renderBillsChart(), 50);
@@ -52,6 +51,7 @@ Object.assign(window.BlackBook, {
     this.data.settings.hideBillsGraph = !(this.data.settings && this.data.settings.hideBillsGraph);
     await this.save();
     this.renderPage('bills');
+    this.updateGraphFooter();
   },
 
   billsSummaryHtml() {

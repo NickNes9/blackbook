@@ -297,14 +297,13 @@ Object.assign(window.BlackBook, {
   },
 
   async openImportRule() {
-    const match = await this.promptModal({ title: 'Import rule', message: 'When the description contains:', placeholder: 'for example, supermarket' });
-    if (!match) return;
-    const categoryName = await this.promptModal({ title: 'Import rule', message: 'Assign matching rows to this category:', placeholder: 'Category name' });
-    if (!categoryName) return;
-    let category = this.data.categories.find(c => c.name.toLowerCase() === String(categoryName).trim().toLowerCase());
-    if (!category) { category = { id: crypto.randomUUID(), name: String(categoryName).trim(), color: this.nextCategoryColor() }; this.data.categories.push(category); }
-    this.data.importRules.push({ id: crypto.randomUUID(), match: String(match).trim(), categoryId: category.id, active: true });
-    await this.save(); this.renderSettings();
+    const category = document.getElementById('import-rule-category');
+    if (!category) return;
+    document.getElementById('import-rule-match').value = '';
+    category.innerHTML = this.sortedCategories().map(item => '<option value="' + item.id + '">' + this.escapeHtml(item.name) + '</option>').join('');
+    this.upgradeSelect(category);
+    this.openModal('import-rule-modal');
+    setTimeout(() => document.getElementById('import-rule-match').focus(), 20);
   },
 
   async deleteImportRule(id) {
@@ -601,6 +600,18 @@ Object.assign(window.BlackBook, {
   },
 
   bindSettingsModals() {
+    const ruleForm = document.getElementById('import-rule-form');
+    if (ruleForm && !ruleForm._bound) {
+      ruleForm._bound = true;
+      ruleForm.addEventListener('submit', async (event) => {
+        event.preventDefault();
+        const match = document.getElementById('import-rule-match').value.trim();
+        const categoryId = document.getElementById('import-rule-category').value;
+        if (!match || !categoryId) return;
+        this.data.importRules.push({ id: crypto.randomUUID(), match, categoryId, active: true });
+        await this.save(); this.closeModal('import-rule-modal'); this.renderSettings();
+      });
+    }
     const npForm = document.getElementById('new-profile-form');
     if (npForm && !npForm._bound) {
       npForm._bound = true;
@@ -888,6 +899,7 @@ Object.assign(window.BlackBook, {
         '<span class="settings-row-name">' + PAGE_LABELS[p] + '</span>' +
         '<button class="btn btn-sm ' + (on ? 'btn-paid' : 'btn-muted') + '" style="width:56px;margin-left:auto;" onclick="BlackBook.togglePageEnabled(\'' + p + '\')" title="Show/hide this page for the current profile">' + (on ? 'ON' : 'OFF') + '</button></div>';
     }
+    pagesList += '<div class="settings-row"><span class="row-swatch" style="visibility:hidden;"></span><span class="settings-row-name">Reconciliation</span><button class="btn btn-sm ' + (this.reconciliationEnabled() ? 'btn-paid' : 'btn-muted') + '" style="width:56px;margin-left:auto;" onclick="BlackBook.toggleReconciliationEnabled()">' + (this.reconciliationEnabled() ? 'ON' : 'OFF') + '</button></div>';
 
     return '<div class="settings-cols">' +
       '<div>' +
@@ -934,10 +946,15 @@ Object.assign(window.BlackBook, {
       '<div class="settings-section">' +
       '<div class="settings-section-header"><span class="settings-section-title">PROFILES</span><button class="btn btn-sm btn-primary" onclick="BlackBook.createProfile()">+ NEW PROFILE</button></div>' +
       '<div class="settings-list" id="profiles-list">' + this.profilesListHtml() + '</div></div>' +
-
       '<div class="settings-section">' +
-      '<div class="settings-section-header"><span class="settings-section-title">IMPORT RULES</span><button class="btn btn-sm btn-primary" onclick="BlackBook.openImportRule()">+ RULE</button></div>' +
-      '<div class="settings-list">' + ((this.data.importRules || []).map(rule => { const cat = this.data.categories.find(c => c.id === rule.categoryId); return '<div class="settings-row"><span class="settings-row-name">IF DESCRIPTION HAS “' + this.escapeHtml(rule.match) + '”</span><span class="settings-row-meta">→ ' + this.escapeHtml(cat ? cat.name : 'missing category') + '</span><button class="btn btn-sm btn-danger btn-icon" onclick="BlackBook.deleteImportRule(\'' + rule.id + '\')">' + this.xIcon() + '</button></div>'; }).join('') || '<div style="padding:8px;color:var(--text-muted);font-size:13px;">No rules yet. Rules apply while rows are staged for import.</div>') + '</div></div>' +
+      '<div class="settings-section-header"><span class="settings-section-title">DATA</span></div>' +
+      '<div class="settings-data-actions"><button class="btn btn-secondary" id="settings-export">EXPORT JSON</button>' +
+      '<button class="btn btn-secondary" id="settings-export-csv">EXPORT CSV</button>' +
+      '<button class="btn btn-secondary" id="settings-import-btn">IMPORT JSON</button>' +
+      '<input type="file" id="settings-import-file" accept=".json" style="display:none;">' +
+      '<button class="btn btn-secondary" id="settings-import-csv-btn">IMPORT CSV/XLSX</button>' +
+      '<input type="file" id="settings-import-csv-file" accept=".csv,.txt,.xlsx,.xls,text/csv,text/plain,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel" style="display:none;">' +
+      '</div></div>' +
       '</div>' +
     '</div>' +
 
@@ -952,14 +969,8 @@ Object.assign(window.BlackBook, {
     '</div>' +
 
       '<div class="settings-section">' +
-      '<div class="settings-section-header"><span class="settings-section-title">DATA</span></div>' +
-      '<div class="settings-data-actions"><button class="btn btn-secondary" id="settings-export">EXPORT JSON</button>' +
-      '<button class="btn btn-secondary" id="settings-export-csv">EXPORT CSV</button>' +
-      '<button class="btn btn-secondary" id="settings-import-btn">IMPORT JSON</button>' +
-      '<input type="file" id="settings-import-file" accept=".json" style="display:none;">' +
-      '<button class="btn btn-secondary" id="settings-import-csv-btn">IMPORT CSV/XLSX</button>' +
-      '<input type="file" id="settings-import-csv-file" accept=".csv,.txt,.xlsx,.xls,text/csv,text/plain,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel" style="display:none;">' +
-      '</div></div>' +
+      '<div class="settings-section-header"><span class="settings-section-title">IMPORT RULES</span><button class="btn btn-sm btn-primary" onclick="BlackBook.openImportRule()">+ RULE</button></div>' +
+      '<div class="settings-list">' + ((this.data.importRules || []).map(rule => { const cat = this.data.categories.find(c => c.id === rule.categoryId); return '<div class="settings-row"><span class="settings-row-name">IF DESCRIPTION HAS “' + this.escapeHtml(rule.match) + '”</span><span class="settings-row-meta">→ ' + this.escapeHtml(cat ? cat.name : 'missing category') + '</span><button class="btn btn-sm btn-danger btn-icon" onclick="BlackBook.deleteImportRule(\'' + rule.id + '\')">' + this.xIcon() + '</button></div>'; }).join('') || '<div style="padding:8px;color:var(--text-muted);font-size:13px;">No rules yet. Rules apply while rows are staged for import.</div>') + '</div></div>' +
 
       '<div class="settings-footer">BLACK BOOK v0.8.2 &middot; Created by Nikola Ne&scaron;i&#263;</div>';
   },
