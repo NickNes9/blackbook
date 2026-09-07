@@ -240,7 +240,10 @@ Object.assign(window.BlackBook, {
     if (!accountId) { alert('Choose a target account.'); return; }
     const catMap = {};
     for (const c of this.data.categories) catMap[String(c.name).trim().toLowerCase()] = c.id;
-    const catByName = (cell) => {
+    const newCategories = [];
+    const catByName = (cell, note) => {
+      const rule = (this.data.importRules || []).find(r => r.active !== false && r.categoryId && r.match && String(note || '').toLowerCase().includes(String(r.match).toLowerCase()));
+      if (rule) return rule.categoryId;
       if (!cell) return null;
       const s = cell.toLowerCase();
       if (catMap[s]) return catMap[s];
@@ -248,11 +251,12 @@ Object.assign(window.BlackBook, {
         if (name.length > 3 && (s.includes(name) || name.includes(s))) return id;
       }
       const cat = { id: crypto.randomUUID(), name: cell.trim(), color: this.nextCategoryColor() };
-      this.data.categories.push(cat);
+      newCategories.push(cat);
       catMap[s] = cat.id;
       return cat.id;
     };
-    let imported = 0, skipped = 0;
+    const staged = [];
+    let skipped = 0;
     for (let i = skipHeader ? 1 : 0; i < rows.length; i++) {
       const r = rows[i];
       const date = this.normalizeCsvDate(g(r, dateCol), dateFmt);
@@ -267,18 +271,45 @@ Object.assign(window.BlackBook, {
       if (!type) type = signMode === 'pos' ? (amt > 0 ? 'expense' : 'income') : (amt < 0 ? 'expense' : 'income');
       const currencyRaw = g(r, curCol).toUpperCase();
       const currency = (this.currencyList().includes(currencyRaw) || currencyRaw === 'XAU') ? currencyRaw : this.baseCurrency();
-      this.data.transactions.push({
+      const note = g(r, descCol);
+      staged.push({
         id: crypto.randomUUID(), date: date, type: type,
         amount: Math.round((type === 'income' ? Math.abs(amt) : -Math.abs(amt)) * 100) / 100,
         currency: currency, accountId: accountId, cardId: null,
-        categoryId: catByName(g(r, catCol)), note: g(r, descCol)
+        categoryId: catByName(g(r, catCol), note), note: note
       });
-      imported++;
     }
+    const duplicateCount = staged.filter(candidate => (this.data.transactions || []).some(existing => {
+      if (existing.accountId !== candidate.accountId || existing.currency !== candidate.currency || Math.abs(Number(existing.amount) - candidate.amount) > 0.009) return false;
+      const days = Math.abs((new Date(existing.date + 'T00:00:00') - new Date(candidate.date + 'T00:00:00')) / 86400000);
+      return days <= 3;
+    })).length;
+    if (!staged.length) { alert('No valid rows to import.'); return; }
+    const ok = await this.confirmModal({ title: 'Review import', message: staged.length + ' valid row' + (staged.length === 1 ? '' : 's') + ' ready. ' + (duplicateCount ? duplicateCount + ' may duplicate existing transactions (same account, amount, currency, within 3 days). ' : '') + 'Import all staged rows?', confirmText: 'Import all', danger: false });
+    if (!ok) return;
+    this.data.categories.push(...newCategories);
+    this.data.transactions.push(...staged);
+    const imported = staged.length;
     await this.save();
     this.closeModal('csv-import-modal');
     this.renderPage(this.currentPage);
     alert('Imported ' + imported + ' transaction' + (imported === 1 ? '' : 's') + (skipped ? ' \u00b7 skipped ' + skipped + ' unparseable row' + (skipped === 1 ? '' : 's') : '') + '.');
+  },
+
+  async openImportRule() {
+    const match = await this.promptModal({ title: 'Import rule', message: 'When the description contains:', placeholder: 'for example, supermarket' });
+    if (!match) return;
+    const categoryName = await this.promptModal({ title: 'Import rule', message: 'Assign matching rows to this category:', placeholder: 'Category name' });
+    if (!categoryName) return;
+    let category = this.data.categories.find(c => c.name.toLowerCase() === String(categoryName).trim().toLowerCase());
+    if (!category) { category = { id: crypto.randomUUID(), name: String(categoryName).trim(), color: this.nextCategoryColor() }; this.data.categories.push(category); }
+    this.data.importRules.push({ id: crypto.randomUUID(), match: String(match).trim(), categoryId: category.id, active: true });
+    await this.save(); this.renderSettings();
+  },
+
+  async deleteImportRule(id) {
+    this.data.importRules = this.data.importRules.filter(rule => rule.id !== id);
+    await this.save(); this.renderSettings();
   },
 
   exportCsv() {
@@ -849,7 +880,7 @@ Object.assign(window.BlackBook, {
     const defaultCategoryOpts = '<option value="">None</option>' + this.sortedCategories().map(c => '<option value="' + c.id + '"' + (c.id === defaultCategoryId ? ' selected' : '') + '>' + this.escapeHtml(c.name) + '</option>').join('');
 
     let pagesList = '';
-    const PAGE_LABELS = { bills: 'Bills', budget: 'Budget', cards: 'Credit Cards', savings: 'Savings', debts: 'Debts', invoices: 'Invoices' };
+    const PAGE_LABELS = { forecast: 'Forecast', bills: 'Bills', budget: 'Budget', cards: 'Credit Cards', savings: 'Savings', debts: 'Debts', invoices: 'Invoices' };
     for (const p of Object.keys(PAGE_LABELS)) {
       const on = this.isPageEnabled(p);
       pagesList += '<div class="settings-row">' +
@@ -877,7 +908,7 @@ Object.assign(window.BlackBook, {
       '<option value=","' + ((this.data.settings.dateSeparator || '/') === ',' ? ' selected' : '') + '>, (' + this.fmtDateInput(this.today()).replace(/\//g, ',') + ')</option>' +
       '<option value="|"' + ((this.data.settings.dateSeparator || '/') === '|' ? ' selected' : '') + '>| (' + this.fmtDateInput(this.today()).replace(/\//g, '|') + ')</option>' +
       '</select></div>' +
-      '</div></div>' +
+      '</div><div class="form-group"><label>Attention Bar</label><button class="btn btn-sm ' + (this.data.settings.attentionBarHidden ? 'btn-secondary' : 'btn-primary') + '" onclick="BlackBook.' + (this.data.settings.attentionBarHidden ? 'showAttentionBar()' : 'hideAttentionBar()') + '">' + (this.data.settings.attentionBarHidden ? 'SHOW' : 'HIDE') + '</button></div></div>' +
 
       '<div class="settings-section">' +
       '<div class="settings-section-header"><span class="settings-section-title">DEFAULTS</span></div>' +
@@ -903,6 +934,10 @@ Object.assign(window.BlackBook, {
       '<div class="settings-section">' +
       '<div class="settings-section-header"><span class="settings-section-title">PROFILES</span><button class="btn btn-sm btn-primary" onclick="BlackBook.createProfile()">+ NEW PROFILE</button></div>' +
       '<div class="settings-list" id="profiles-list">' + this.profilesListHtml() + '</div></div>' +
+
+      '<div class="settings-section">' +
+      '<div class="settings-section-header"><span class="settings-section-title">IMPORT RULES</span><button class="btn btn-sm btn-primary" onclick="BlackBook.openImportRule()">+ RULE</button></div>' +
+      '<div class="settings-list">' + ((this.data.importRules || []).map(rule => { const cat = this.data.categories.find(c => c.id === rule.categoryId); return '<div class="settings-row"><span class="settings-row-name">IF DESCRIPTION HAS “' + this.escapeHtml(rule.match) + '”</span><span class="settings-row-meta">→ ' + this.escapeHtml(cat ? cat.name : 'missing category') + '</span><button class="btn btn-sm btn-danger btn-icon" onclick="BlackBook.deleteImportRule(\'' + rule.id + '\')">' + this.xIcon() + '</button></div>'; }).join('') || '<div style="padding:8px;color:var(--text-muted);font-size:13px;">No rules yet. Rules apply while rows are staged for import.</div>') + '</div></div>' +
       '</div>' +
     '</div>' +
 
