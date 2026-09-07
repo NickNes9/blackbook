@@ -123,12 +123,52 @@ Object.assign(window.BlackBook, {
       if (t.type === 'transfer') return t.fromAccountId === a.id || t.toAccountId === a.id;
       return t.accountId === a.id;
     }).length;
+    const latestRecon = (this.data.reconciliations || []).filter(r => r.accountId === a.id).sort((x, y) => String(y.statementDate).localeCompare(String(x.statementDate)))[0];
     return '<div class="account-detail">' +
       '<div class="account-detail-header"><span class="account-detail-name">' + this.escapeHtml(a.name) + '</span>' +
       '<span class="account-detail-type">' + this.escapeHtml(a.currency) + ' ' + this.escapeHtml(a.type || 'cash') + '</span>' +
       '<span class="account-detail-balance ' + (bal >= 0 ? 'amount-positive' : 'amount-negative') + '">' + this.fmtAmount(bal, currency) + '</span></div>' +
-      '<div class="account-detail-meta">' + txCount + ' transactions</div>' +
+      '<div class="account-detail-meta">' + txCount + ' transactions' + (latestRecon ? ' · last reconciliation ' + this.escapeHtml(latestRecon.status.toUpperCase()) : '') + '</div>' +
+      '<button class="btn btn-sm btn-secondary" onclick="BlackBook.reconcileAccount(\'' + a.id + '\')">RECONCILE</button>' +
       '</div>';
+  },
+
+  clearedBalanceNative(accountId) {
+    const account = this.data.accounts.find(a => a.id === accountId);
+    if (!account) return 0;
+    let total = 0;
+    for (const tx of this.data.transactions || []) {
+      if (!tx.cleared) continue;
+      if (tx.type === 'transfer') {
+        if (tx.fromAccountId === accountId) total -= Number(tx.amount || 0);
+        if (tx.toAccountId === accountId) total += Number(tx.amountIn == null ? tx.amount : tx.amountIn || 0);
+      } else if (tx.accountId === accountId) total += Number(tx.amount || 0);
+    }
+    return this.round2(total);
+  },
+
+  async toggleTransactionCleared(txId, checked) {
+    const tx = this.data.transactions.find(t => t.id === txId);
+    if (!tx) return;
+    tx.cleared = !!checked;
+    tx.clearedAt = checked ? this.today() : null;
+    await this.save();
+    this.renderPage(this.currentPage);
+  },
+
+  async reconcileAccount(accountId) {
+    const account = this.data.accounts.find(a => a.id === accountId);
+    if (!account) return;
+    const statementDate = await this.promptModal({ title: 'Reconcile ' + account.name, message: 'Statement closing date (YYYY-MM-DD)', defaultValue: this.today() });
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(String(statementDate || ''))) { if (statementDate) alert('Use YYYY-MM-DD.'); return; }
+    const balanceText = await this.promptModal({ title: 'Reconcile ' + account.name, message: 'Statement balance in ' + (account.currency || this.baseCurrency()), defaultValue: String(this.clearedBalanceNative(accountId)) });
+    const statementBalance = Number(String(balanceText || '').replace(',', '.'));
+    if (!Number.isFinite(statementBalance)) { alert('Enter a valid statement balance.'); return; }
+    const clearedBalance = this.clearedBalanceNative(accountId);
+    const difference = this.round2(statementBalance - clearedBalance);
+    this.data.reconciliations.push({ id: crypto.randomUUID(), accountId, statementDate, statementBalance, clearedBalance, difference, status: Math.abs(difference) < 0.01 ? 'complete' : 'in-progress', createdAt: new Date().toISOString() });
+    await this.save(); this.refreshAttention(); this.renderPage(this.currentPage);
+    alert(Math.abs(difference) < 0.01 ? 'Reconciliation complete.' : 'Saved as in progress. Mark cleared transactions on Overview, then reconcile again. Difference: ' + this.fmtAmount(difference, account.currency || this.baseCurrency()));
   },
 
   monthSummaryHtml() {
@@ -386,7 +426,7 @@ Object.assign(window.BlackBook, {
           const mBill = this.matchingUnpaidBill(tx);
           if (mBill) billChip = '<button class="btn btn-sm bill-link-chip" title="Match unpaid bill: ' + this.escapeHtml(mBill.name) + '" onclick="event.stopPropagation();BlackBook.linkTxToBill(\x27' + tx.id + '\x27)">BILL: ' + this.escapeHtml(mBill.name) + '</button>';
         }
-        rows += '<div class="tx-row' + (this._bulkSel && this._bulkSel.has(tx.id) ? ' bulk-selected' : '') + '" onclick="BlackBook.bulkToggle(\x27' + tx.id + '\x27, event.shiftKey)" onmouseenter="BlackBook.hoveredTxId=\x27' + tx.id + '\x27" onmouseleave="BlackBook.hoveredTxId=null"><span class="tx-num">' + rowNum + '</span><div class="tx-acct-stripe" style="background:' + this.accountColor(acc) + '"><span class="tx-acct-label">' + this.escapeHtml((acc.shortName || '?').toUpperCase()) + '</span></div><span class="tx-date">' + this.fmtDateInput(tx.date) + '</span><span class="tx-cat" style="color:' + this.categoryColor(cat) + '">' + this.escapeHtml(cat.name) + catLink + '</span><span class="tx-note">' + this.escapeHtml(tx.note || '') + '</span><span class="tx-actions" onclick="event.stopPropagation()">' + billChip + '<button class="btn btn-sm btn-secondary" onclick="BlackBook.' + editFn + '(\x27' + tx.id + '\x27)">EDIT</button><button class="btn btn-sm btn-danger btn-icon" title="Delete transaction" onclick="BlackBook.deleteTransaction(\x27' + tx.id + '\x27)">' + this.xIcon() + '</button></span><span class="tx-amt ' + amtClass + wtClass + '">' + txAmtDisplay + '</span></div>';
+        rows += '<div class="tx-row' + (this._bulkSel && this._bulkSel.has(tx.id) ? ' bulk-selected' : '') + '" onclick="BlackBook.bulkToggle(\x27' + tx.id + '\x27, event.shiftKey)" onmouseenter="BlackBook.hoveredTxId=\x27' + tx.id + '\x27" onmouseleave="BlackBook.hoveredTxId=null"><span class="tx-num">' + rowNum + '</span><div class="tx-acct-stripe" style="background:' + this.accountColor(acc) + '"><span class="tx-acct-label">' + this.escapeHtml((acc.shortName || '?').toUpperCase()) + '</span></div><span class="tx-date">' + this.fmtDateInput(tx.date) + '</span><span class="tx-cat" style="color:' + this.categoryColor(cat) + '">' + this.escapeHtml(cat.name) + catLink + '</span><span class="tx-note">' + this.escapeHtml(tx.note || '') + '</span><span class="tx-actions" onclick="event.stopPropagation()"><label class="cleared-toggle" title="Cleared for reconciliation"><input type="checkbox" ' + (tx.cleared ? 'checked' : '') + ' onchange="BlackBook.toggleTransactionCleared(\x27' + tx.id + '\x27,this.checked)"> CLR</label>' + billChip + '<button class="btn btn-sm btn-secondary" onclick="BlackBook.' + editFn + '(\x27' + tx.id + '\x27)">EDIT</button><button class="btn btn-sm btn-danger btn-icon" title="Delete transaction" onclick="BlackBook.deleteTransaction(\x27' + tx.id + '\x27)">' + this.xIcon() + '</button></span><span class="tx-amt ' + amtClass + wtClass + '">' + txAmtDisplay + '</span></div>';
       }
     }
     return '<div class="tx-list">' + rows + '</div>';

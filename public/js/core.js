@@ -35,6 +35,10 @@ window.BlackBook = {
     if (!this.data.installments) this.data.installments = [];
     if (!this.data.debts) this.data.debts = [];
     if (!this.data.invoices) this.data.invoices = [];
+    if (!this.data.recurringTemplates) this.data.recurringTemplates = [];
+    if (!this.data.reconciliations) this.data.reconciliations = [];
+    if (!this.data.importRules) this.data.importRules = [];
+    if (!this.data.settings) this.data.settings = {};
     if (this.migrateCreditCards()) await this.save();
     if (this.migrateTransfers()) await this.save();
     if (this.normalizeLegacyCurrencySettings()) await this.save();
@@ -75,6 +79,7 @@ this.connectWebSocket();
       Chart.defaults.color = '#777777';
     }
     this.bindNav();
+    this.refreshAttention();
     this.bindSidebarToggle();
     this.bindKeyboard();
     this.bindGlobalSelectWheel();
@@ -321,7 +326,7 @@ this.connectWebSocket();
     return '#' + [r, g, b].map(x => Math.round(x * 255).toString(16).padStart(2, '0')).join('');
   },
 
-  pageList() { return ['overview', 'bills', 'budget', 'cards', 'savings', 'debts', 'invoices', 'settings']; },
+  pageList() { return ['overview', 'forecast', 'bills', 'budget', 'cards', 'savings', 'debts', 'invoices', 'settings']; },
 
   isPageEnabled(page) {
     if (page === 'settings' || page === 'overview') return true;
@@ -419,6 +424,7 @@ this.connectWebSocket();
   renderPage(page) {
     try {
       if (page === 'overview') this.renderOverview();
+      else if (page === 'forecast') this.renderForecast();
       else if (page === 'budget') this.renderBudget();
       else if (page === 'bills') this.renderBills();
       else if (page === 'cards') this.renderCards();
@@ -428,10 +434,60 @@ this.connectWebSocket();
       else if (page === 'settings') this.renderSettings();
       const pageEl = document.getElementById('page-' + page);
       if (pageEl) this.upgradeAllSelects(pageEl);
+      this.refreshAttention();
     } catch (err) {
       console.error('renderPage failed:', err);
       if (!this._renderErrShown) { this._renderErrShown = true; alert('Render error: ' + err.message); }
     }
+  },
+
+  attentionItems() {
+    const today = this.today();
+    const inDays = (date) => Math.round((new Date(date + 'T00:00:00') - new Date(today + 'T00:00:00')) / 86400000);
+    const items = [];
+    for (const bill of this.data.bills || []) {
+      if (bill.active === false || !bill.amount) continue;
+      const due = new Date(today + 'T00:00:00'); due.setDate(Math.min(Number(bill.dueDay) || 1, new Date(due.getFullYear(), due.getMonth() + 1, 0).getDate()));
+      let date = due.getFullYear() + '-' + String(due.getMonth() + 1).padStart(2, '0') + '-' + String(due.getDate()).padStart(2, '0');
+      const paid = (this.data.billPayments || []).some(p => p.billId === bill.id && p.month === date.slice(0, 7));
+      if (paid) continue;
+      let distance = inDays(date);
+      if (distance < 0) { due.setMonth(due.getMonth() + 1); date = due.getFullYear() + '-' + String(due.getMonth() + 1).padStart(2, '0') + '-' + String(due.getDate()).padStart(2, '0'); distance = inDays(date); }
+      if (distance <= 3) items.push({ severity: distance < 0 ? 1 : 3, date, label: bill.name + (distance < 0 ? ' is overdue' : distance === 0 ? ' is due today' : ' is due in ' + distance + ' days'), page: 'bills' });
+    }
+    if (window.ForecastEngine) {
+      const forecast = window.ForecastEngine.buildForecast(this.data, { startDate: today, days: 30, baseCurrency: this.baseCurrency(), rates: this.getRates() });
+      for (const shortfall of forecast.shortfalls.slice(0, 1)) {
+        const account = this.data.accounts.find(a => a.id === shortfall.accountId);
+        items.push({ severity: 2, date: shortfall.date, label: (account ? account.name : 'An account') + ' is forecast below zero', page: 'forecast' });
+      }
+    }
+    for (const recon of this.data.reconciliations || []) if (recon.status === 'in-progress') items.push({ severity: 4, date: recon.statementDate || today, label: 'Reconciliation needs review', page: 'overview' });
+    return items.sort((a, b) => a.severity - b.severity || a.date.localeCompare(b.date));
+  },
+
+  refreshAttention() {
+    const bar = document.getElementById('attention-bar');
+    if (!bar || !this.data) return;
+    const hidden = this.data.settings && this.data.settings.attentionBarHidden;
+    const items = this.attentionItems();
+    if (hidden || !items.length) { bar.innerHTML = ''; return; }
+    const visible = items.slice(0, 3);
+    bar.innerHTML = visible.map(item => '<button class="attention-item severity-' + item.severity + '" onclick="BlackBook.navigateTo(\'' + item.page + '\')">' + this.escapeHtml(item.label) + '</button>').join('') +
+      (items.length > 3 ? '<button class="attention-more" onclick="BlackBook.showAttention()">+' + (items.length - 3) + ' MORE</button>' : '') +
+      '<button class="attention-hide" onclick="BlackBook.hideAttentionBar()" title="Hide attention bar">×</button>';
+  },
+
+  async hideAttentionBar() { this.data.settings.attentionBarHidden = true; await this.save(); this.refreshAttention(); },
+  async showAttentionBar() { this.data.settings.attentionBarHidden = false; await this.save(); this.refreshAttention(); },
+  showAttention() {
+    const groups = ['URGENT', 'FORECAST', 'DUE SOON', 'REVIEW'];
+    const items = this.attentionItems();
+    const text = groups.map((name, index) => {
+      const group = items.filter(item => item.severity === index + 1);
+      return group.length ? name + '\n' + group.map(item => '• ' + item.label + ' (' + item.date + ')').join('\n') : '';
+    }).filter(Boolean).join('\n\n');
+    alert(text || 'Nothing needs attention.');
   },
 
   setSaveState(state) {

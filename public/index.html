@@ -16,8 +16,7 @@
       <span class="header-logo">BLACK BOOK</span>
       <span id="header-profile" class="header-profile"></span>
     </div>
-<div class="header-center">
-      </div>
+    <div class="header-center"><div id="attention-bar" class="attention-bar"></div></div>
     <div class="header-right">
       <span class="header-status save-status" id="save-indicator" title="Save status"><span class="save-label">SAVED</span></span>
     </div>
@@ -26,6 +25,7 @@
   <aside class="app-sidebar">
     <nav class="sidebar-nav">
       <button data-page="overview" class="sidebar-nav-item active">OVERVIEW</button>
+      <button data-page="forecast" class="sidebar-nav-item">FORECAST</button>
       <button data-page="bills" class="sidebar-nav-item">BILLS</button>
       <button data-page="budget" class="sidebar-nav-item">BUDGET</button>
       <button data-page="cards" class="sidebar-nav-item">CREDIT CARDS</button>
@@ -38,6 +38,7 @@
 
   <main class="app-workspace">
     <div id="page-overview" class="page"></div>
+    <div id="page-forecast" class="page page-fixed hidden"></div>
     <div id="page-budget" class="page page-fixed hidden"></div>
     <div id="page-bills" class="page page-fixed hidden"></div>
     <div id="page-cards" class="page page-fixed hidden"></div>
@@ -617,8 +618,10 @@
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <script src="/js/amount-parser.js"></script>
+  <script src="/js/forecast-engine.js"></script>
   <script src="/js/core.js"></script>
   <script src="/js/page-overview.js"></script>
+  <script src="/js/page-forecast.js"></script>
   <script src="/js/page-transactions.js"></script>
   <script src="/js/page-budget.js"></script>
   <script src="/js/page-bills.js"></script>
