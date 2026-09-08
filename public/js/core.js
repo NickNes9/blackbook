@@ -452,12 +452,20 @@ this.connectWebSocket();
   updateGraphFooter() {
     const button = document.getElementById('footer-graph-toggle');
     if (!button) return;
-    const graphPage = this.currentPage === 'overview' || this.currentPage === 'bills';
+    const graphPage = this.currentPage === 'overview' || this.currentPage === 'bills' || this.currentPage === 'budget';
     button.classList.toggle('hidden', !graphPage);
     if (!graphPage) return;
-    const hidden = this.currentPage === 'overview' ? !!this.data.settings.hideOverviewGraph : !!this.data.settings.hideBillsGraph;
+    const hidden = this.currentPage === 'overview'
+      ? !!this.data.settings.hideOverviewGraph
+      : this.currentPage === 'bills'
+        ? !!this.data.settings.hideBillsGraph
+        : !!this.data.settings.hideBudgetGraph;
     button.textContent = hidden ? 'SHOW GRAPH' : 'HIDE GRAPH';
-    button.onclick = () => this.currentPage === 'overview' ? this.toggleOverviewGraph() : this.toggleBillsGraph();
+    button.onclick = () => this.currentPage === 'overview'
+      ? this.toggleOverviewGraph()
+      : this.currentPage === 'bills'
+        ? this.toggleBillsGraph()
+        : this.toggleBudgetGraph();
   },
 
   reconciliationEnabled() { return this.data && this.data.settings && this.data.settings.reconciliationEnabled !== false; },
@@ -1698,7 +1706,7 @@ this.connectWebSocket();
     for (let i = 0; i < 12; i++) {
       const sel = i === this.vm();
       const isCur = now.getFullYear() === this.vy() && now.getMonth() === i;
-      btns += '<button class="mp-month' + (sel ? ' selected' : '') + (isCur && !sel ? ' current' : '') + '" onclick="BlackBook.pickMonth(' + i + ')"><span class="month-name-full">' + months[i] + '</span><span class="month-name-short">' + shortMonths[i] + '</span></button>';
+      btns += '<button class="mp-month' + (sel ? ' selected' : '') + (isCur && !sel ? ' current' : '') + '" onclick="BlackBook.pickMonth(' + i + ')"><span class="month-name-full">' + months[i] + '</span><span class="month-name-short">' + shortMonths[i] + '</span><span class="month-name-number">' + (i + 1) + '</span></button>';
     }
     const offToday = !(now.getFullYear() === this.vy() && now.getMonth() === this.vm());
     return '<div class="month-picker">' +
