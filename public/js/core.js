@@ -799,8 +799,20 @@ this.connectWebSocket();
     r(value);
   },
 
+  useCompactNumbers() {
+    return typeof window !== 'undefined' && window.matchMedia('(max-width: 760px)').matches;
+  },
+
+  fmtNumber(amount) {
+    const value = Number(amount) || 0;
+    if (this.useCompactNumbers()) {
+      return new Intl.NumberFormat('en-US', { notation: 'compact', maximumFractionDigits: 1 }).format(value).toLowerCase();
+    }
+    return value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  },
+
   fmtBase(amount) {
-    return amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' ' + this.baseCurrency();
+    return this.fmtNumber(amount) + ' ' + this.baseCurrency();
   },
 
   round2(amount) {
@@ -813,7 +825,7 @@ this.connectWebSocket();
   },
 
   fmtAmount(amount, currency) {
-    return amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' ' + currency;
+    return this.fmtNumber(amount) + ' ' + currency;
   },
 
   fmtDualCurrency(amount, currency, accountCurrency, nativeAmount, nativeCurrency) {
@@ -823,12 +835,12 @@ this.connectWebSocket();
     if (nativeCurrency && nativeCurrency !== accCur) {
       const natAbs = Math.abs(nativeAmount);
       const baseAbs = Math.abs(amount);
-      return sign + natAbs.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' ' + nativeCurrency + ' (' + baseAbs.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' ' + accCur + ')';
+      return sign + this.fmtNumber(natAbs) + ' ' + nativeCurrency + ' (' + this.fmtNumber(baseAbs) + ' ' + accCur + ')';
     }
     const abs = Math.abs(amount);
-    if (cur === accCur) return sign + abs.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' ' + cur;
+    if (cur === accCur) return sign + this.fmtNumber(abs) + ' ' + cur;
     const base = Math.abs(this.toBase(abs, cur));
-    return sign + base.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' ' + accCur + ' (' + abs.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' ' + cur + ')';
+    return sign + this.fmtNumber(base) + ' ' + accCur + ' (' + this.fmtNumber(abs) + ' ' + cur + ')';
   },
 
   accountBalance(accountId) {
@@ -1022,7 +1034,7 @@ this.connectWebSocket();
       for (const tx of txResults) {
         const cat = this.data.categories.find(c => c.id === tx.categoryId);
         const sign = tx.type === 'income' ? '+' : '-';
-        const label = tx.date + '  ' + sign + this.toBase(tx.amount, tx.currency).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + '  ' + (cat ? cat.name : '?') + (tx.note ? '  ' + tx.note : '');
+        const label = tx.date + '  ' + sign + this.fmtNumber(this.toBase(tx.amount, tx.currency)) + '  ' + (cat ? cat.name : '?') + (tx.note ? '  ' + tx.note : '');
         searchHtml += this._paletteItemHtml(label, '');
         this._cmdPaletteItems.push({ execute: (_txId => () => { this.closeCommandPalette(); this.openEditTransaction(_txId); })(tx.id) });
       }

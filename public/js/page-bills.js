@@ -37,11 +37,10 @@ Object.assign(window.BlackBook, {
       this.billsSummaryHtml() +
       '<div class="list-sep"></div>' +
       '<div class="page-scroll-wrap"><div class="bills-grid-wrap">' + this.billsGridHtml() + '</div></div>' +
-      '<div class="list-sep"></div>' +
       (hideGraph
         ? ''
-        : this.billsChipsHtml() +
-          '<div class="overview-charts"><div class="chart-panel chart-panel-full"><canvas id="bills-chart"></canvas></div></div>');
+        : '<div class="list-sep"></div>' + this.billsChipsHtml() +
+          '<div class="overview-charts"><div class="chart-panel overview-line-panel"><div class="chart-head-row"><span class="chart-title-text">BILLS BY MONTH</span></div><canvas id="bills-chart"></canvas></div></div>');
     if (!hideGraph) setTimeout(() => this.renderBillsChart(), 50);
     setTimeout(() => this.fitElems('.bill-cell'), 20);
     this.finishFocus('bill');
@@ -526,7 +525,7 @@ Object.assign(window.BlackBook, {
             usePointStyle: true,
             boxPadding: 3,
             callbacks: {
-              label: (c) => ' ' + c.dataset.label + ': ' + this.round2(c.parsed.y).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+              label: (c) => ' ' + c.dataset.label + ': ' + this.fmtNumber(c.parsed.y)
             }
           }
         },
@@ -625,12 +624,12 @@ Object.assign(window.BlackBook, {
         const autoRes = nativeVal > 0 ? this.calcForeignFee(nativeVal, feePctModal, cur) : { feeNative: null, feeBase: 0 };
         const feeBase = manualFee > 0 ? manualFee : autoRes.feeBase;
         const total = this.round2(val + feeBase);
-        let feeTxt = 'FEE ' + feeBase.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' ' + this.baseCurrency();
+        let feeTxt = 'FEE ' + this.fmtNumber(feeBase) + ' ' + this.baseCurrency();
         if (manualFee > 0) feeTxt += ' (manual)';
-        else if (autoRes.feeNative != null) feeTxt += ' (' + autoRes.feeNative.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' ' + cur + ')';
-        parts.push(feeTxt + ' \u2192 ' + total.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' ' + this.baseCurrency());
+        else if (autoRes.feeNative != null) feeTxt += ' (' + this.fmtNumber(autoRes.feeNative) + ' ' + cur + ')';
+        parts.push(feeTxt + ' \u2192 ' + this.fmtNumber(total) + ' ' + this.baseCurrency());
       } else if (nativeVal > 0) {
-        parts.push('\u2248 ' + nativeVal.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' ' + cur);
+        parts.push('\u2248 ' + this.fmtNumber(nativeVal) + ' ' + cur);
       }
       previewEl.textContent = parts.join(' \u00b7 ');
     };
@@ -721,7 +720,7 @@ Object.assign(window.BlackBook, {
     }
     if (changed) this.save();
   },
-  fmtBillAmount(bill) { const rsd = this.toBase(bill.amount, bill.currency); return rsd.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' ' + this.baseCurrency() + (bill.currency && bill.currency !== this.baseCurrency() ? ' (' + bill.amount + ' ' + bill.currency + ')' : ''); },
+  fmtBillAmount(bill) { const rsd = this.toBase(bill.amount, bill.currency); return this.fmtNumber(rsd) + ' ' + this.baseCurrency() + (bill.currency && bill.currency !== this.baseCurrency() ? ' (' + this.fmtNumber(bill.amount) + ' ' + bill.currency + ')' : ''); },
 
   // ==================== SAVINGS ====================
 });
