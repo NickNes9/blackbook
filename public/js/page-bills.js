@@ -74,6 +74,10 @@ Object.assign(window.BlackBook, {
   },
 
   billsGridHtml() {
+    const compactAmounts = window.innerWidth <= 760;
+    const formatGridAmount = (amount) => compactAmounts
+      ? new Intl.NumberFormat('en-US', { notation: 'compact', maximumFractionDigits: 1 }).format(amount).toLowerCase()
+      : amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     const MONTHS_F = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
     let html = '<div class="bills-grid">';
     html += '<div class="bills-grid-head">BILL</div>';
@@ -135,9 +139,9 @@ Object.assign(window.BlackBook, {
             nativeAbs = paid.nativeAmount != null ? Math.abs(paid.nativeAmount) : null;
           }
           const natCur = (tx && tx.nativeCurrency) || paid.nativeCurrency || bill.currency || this.baseCurrency() || 'RSD';
-          const rsd = rsdAmount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+          const rsd = formatGridAmount(rsdAmount);
           amtLabel = nativeAbs != null && natCur !== this.baseCurrency()
-            ? rsd + '<br>(' + nativeAbs.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' ' + natCur + ')'
+            ? rsd + (compactAmounts ? '' : '<br>(' + formatGridAmount(nativeAbs) + ' ' + natCur + ')')
             : rsd;
         } else {
           amtLabel = '';
@@ -149,7 +153,7 @@ Object.assign(window.BlackBook, {
           (paid ? ' \u00b7 paid \u00b7 click to unpay' : ' \u00b7 click to mark paid') +
           ' &middot; right-click for custom amount">' + amtLabel + '</div>';
       }
-      html += '<div class="bill-cell-total' + alt + '"' + (yearHasPaid ? ' style="background:' + color + '22;color:' + color + ';font-weight:700;"' : '') + '>' + (yearHasPaid ? yearTotal.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '') + '</div>';
+      html += '<div class="bill-cell-total' + alt + '"' + (yearHasPaid ? ' style="background:' + color + '22;color:' + color + ';font-weight:700;"' : '') + '>' + (yearHasPaid ? formatGridAmount(yearTotal) : '') + '</div>';
       bi++;
     }
     html += '</div>';

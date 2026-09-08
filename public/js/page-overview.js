@@ -139,11 +139,16 @@ Object.assign(window.BlackBook, {
   reconciliationSwitchHtml() {
     if (!this.reconciliationEnabled()) return '';
     const filter = this._reconciliationFilter || 'all';
-    const item = (value, label) => '<button class="btn btn-sm ' + (filter === value ? 'btn-primary' : 'btn-secondary') + '" onclick="BlackBook.setReconciliationFilter(\'' + value + '\')">' + label + '</button>';
-    return '<span class="reconciliation-switch">' + item('all', 'ALL') + item('cleared', 'MARKED') + item('uncleared', 'UNMARKED') + '</span>';
+    const label = filter === 'cleared' ? 'MARKED' : filter === 'uncleared' ? 'UNMARKED' : 'ALL';
+    return '<button class="btn btn-sm btn-secondary reconciliation-switch" onclick="BlackBook.cycleReconciliationFilter()" title="Cycle: All → Marked → Unmarked">' + label + '</button>';
   },
 
   setReconciliationFilter(filter) { this._reconciliationFilter = filter; this.renderOverview(); },
+  cycleReconciliationFilter() {
+    const states = ['all', 'cleared', 'uncleared'];
+    const current = this._reconciliationFilter || 'all';
+    this.setReconciliationFilter(states[(states.indexOf(current) + 1) % states.length]);
+  },
 
   clearedBalanceNative(accountId) {
     const account = this.data.accounts.find(a => a.id === accountId);
@@ -474,16 +479,17 @@ Object.assign(window.BlackBook, {
   accountCardsHtml() {
     const allSelected = !this.selectedAccount;
     const accts = this.visibleAccounts();
-    const split = accts.length > 5;
+    const split = false;
     const chip = (a) => {
       const { amount: bal, currency } = this.accountBalanceNative(a.id);
       const sel = this.selectedAccount === a.id;
-      const label = split ? (a.shortName || a.name || '?') : (a.name || a.shortName || '?');
-      const compact = split ? ' chip-compact' : '';
-      const full = a.name || label;
-      const titleAttr = (split && full && full !== label ? full : '') + (a.description ? ((split && full && full !== label ? ' \u2014 ' : '') + a.description) : '');
+      const full = a.name || a.shortName || '?';
+      const short = a.shortName || String(full).trim().slice(0, 3) || '?';
+      const label = full;
+      const compact = '';
+      const titleAttr = full + (a.description ? ' \u2014 ' + a.description : '');
       const amt = '<span class="chip-balance ' + (bal < 0 ? 'amount-negative' : 'amount-positive') + '">' + this.fmtAmount(bal, currency) + '</span>';
-      return '<div class="account-chip' + (sel ? ' selected' : '') + compact + '" onclick="BlackBook.selectAccount(\x27' + a.id + '\x27)' + (titleAttr ? '" title="' + this.escapeHtml(titleAttr) : '') + '"><span class="chip-name">' + this.escapeHtml(label) + '</span>' + amt + '</div>';
+      return '<div class="account-chip' + (sel ? ' selected' : '') + compact + '" onclick="BlackBook.selectAccount(\x27' + a.id + '\x27)" title="' + this.escapeHtml(titleAttr) + '"><span class="chip-name"><span class="account-name-full">' + this.escapeHtml(label) + '</span><span class="account-name-short">' + this.escapeHtml(short) + '</span></span>' + amt + '</div>';
     };
     const overviewChip = '<div class="account-chip ov-chip' + (allSelected ? ' selected' : '') + '" onclick="BlackBook.selectAccount(null)" title="All accounts"><span class="ov-triangle"></span></div>';
     const squareChip = '<div class="account-chip account-mgr-square" onclick="BlackBook.toggleAccountsPanel(event)" title="Manage accounts"><span class="mgr-lines"><i></i><i></i><i></i></span></div>';

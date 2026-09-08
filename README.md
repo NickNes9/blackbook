@@ -18,7 +18,7 @@ A local-first personal finance console. Terminal aesthetic with light/dark theme
 - **Categories** — picker everywhere (transactions, debts, invoices, purchases), auto-created during import, palette of theme-aware colors
 - **Import / Export** — Settings → EXPORT CSV (transactions) and EXPORT JSON (full backup, restore via IMPORT JSON); IMPORT CSV/XLSX stages valid rows, applies reusable description-to-category rules, and warns about likely duplicates before anything is saved.
 - **Themes** — dark (default) and light, device-level toggle in Settings; customizable highlight, income and expense colors used across UI *and* charts; all native dropdowns themed to match
-- **Responsive layout** — the app shifts from full desktop to compact and narrow layouts: navigation becomes a slide-out menu, controls wrap safely, months abbreviate, and dense transaction data scrolls rather than overlapping.
+- **Responsive layout** — the app shifts from full desktop to compact and narrow layouts: navigation becomes a slide-out menu, account controls stay on one horizontal line using short names, months become numbers, settings controls wrap safely, and dense data scrolls rather than overlapping.
 - **Math in amount fields** — type `50+20*3`, `(2+3)*4` or `12,5` anywhere an amount is accepted
 - **Profiles** — isolated data sets (default + named profiles) stored as separate files, per-profile page visibility
 - **Command palette** — `/` or `Ctrl-K`: search transactions, pages, quick commands (`t 500 cash bank`, `pay electricity`, `bg groceries 20000`, `csv`, …)

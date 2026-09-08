@@ -9,9 +9,8 @@ Object.assign(window.BlackBook, {
       this.budgetSummaryHtml() +
       '<div class="list-sep"></div>' +
       '<div class="page-scroll-wrap">' + this.budgetCardsHtml() + '</div>' +
-      '<div class="list-sep"></div>' +
       (hideGraph
-        ? '<div class="graph-show-row"><button class="btn btn-sm btn-secondary" onclick="BlackBook.toggleBudgetGraph()">SHOW GRAPH</button></div>'
+        ? ''
         : this.budgetChipsHtml() +
           '<div class="overview-charts"><div class="chart-panel chart-panel-full"><canvas id="budget-chart"></canvas></div></div>');
     if (!hideGraph) setTimeout(() => this.renderBudgetChart(), 50);
@@ -38,8 +37,6 @@ Object.assign(window.BlackBook, {
       const name = b && b.name ? b.name : cat.name;
       html += '<div class="cat-filter-chip' + (on ? ' selected' : '') + '" style="--cc:' + color + ';' + (on ? 'background:' + color + ';color:var(--on-fill);' : '') + (on ? '' : 'opacity:0.55;') + '" onclick="BlackBook.toggleBudgetCat(\x27' + cat.id + '\x27)" title="' + this.escapeHtml(name) + (b ? ' \u00b7 ' + this.fmtBase(b.amount) : ' \u00b7 NO LIMIT') + ' \u00b7 click to show/hide in graph">' + this.escapeHtml(name) + '</div>';
     }
-    html += '<span style="flex:1;"></span>';
-    html += '<button class="btn btn-sm btn-secondary" style="margin-left:4px;" onclick="BlackBook.toggleBudgetGraph()" title="Hide budget graph">HIDE</button>';
     return html + '</div>';
   },
 

@@ -19,7 +19,7 @@
       const eventRows = result.events.length ? result.events.map(event =>
         '<div class="forecast-event"><span>' + this.escapeHtml(event.date) + '</span><span class="forecast-kind">' + this.escapeHtml(event.kind.toUpperCase()) + '</span><span>' + this.escapeHtml(event.name) + '</span><span class="' + (event.baseAmount < 0 ? 'amount-negative' : 'amount-positive') + '">' + this.fmtBase(event.baseAmount) + '</span></div>').join('') :
         '<div class="empty-state"><div class="empty-state-text">Nothing scheduled in this period.</div></div>';
-      el.innerHTML = '<div class="month-picker"><span class="mp-year-label">CASH FORECAST</span><span style="flex:1"></span>' +
+      el.innerHTML = '<div class="month-picker"><span style="flex:1"></span>' +
         [30, 60, 90].map(days => '<button class="btn btn-sm ' + ((this._forecastDays || 30) === days ? 'btn-primary' : 'btn-secondary') + '" onclick="BlackBook.setForecastDays(' + days + ')">' + days + ' DAYS</button>').join(' ') +
         '<button class="btn btn-sm btn-secondary" onclick="BlackBook.openRecurringTemplate()">+ RECURRING</button></div>' +
         '<div class="forecast-account-filters">' + accounts.map(account => '<label><input type="checkbox" ' + (!selected.size || selected.has(account.id) ? 'checked' : '') + ' onchange="BlackBook.toggleForecastAccount(\'' + account.id + '\', this.checked)"> ' + this.escapeHtml(account.name) + '</label>').join('') + '</div>' +
