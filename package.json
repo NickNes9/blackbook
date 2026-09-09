@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "start": "node server.js",
-    "check": "node --check server.js && node --check lib/storage.js && node --check lib/server-config.js && node --check public/js/amount-parser.js && node --check public/js/forecast-engine.js && node --check public/js/core.js && node --check public/js/page-overview.js && node --check public/js/page-forecast.js && node --check public/js/page-transactions.js && node --check public/js/page-budget.js && node --check public/js/page-bills.js && node --check public/js/page-cards.js && node --check public/js/page-savings.js && node --check public/js/page-debts.js && node --check public/js/page-invoices.js && node --check public/js/page-settings.js",
+    "check": "node --check server.js && node --check lib/storage.js && node --check lib/server-config.js && node --check public/js/amount-parser.js && node --check public/js/forecast-engine.js && node --check public/js/core.js && node --check public/js/responsive-ui.js && node --check public/js/page-overview.js && node --check public/js/page-forecast.js && node --check public/js/page-transactions.js && node --check public/js/page-budget.js && node --check public/js/page-bills.js && node --check public/js/page-cards.js && node --check public/js/page-savings.js && node --check public/js/page-debts.js && node --check public/js/page-invoices.js && node --check public/js/page-settings.js",
     "test": "node --test"
   },
   "dependencies": {

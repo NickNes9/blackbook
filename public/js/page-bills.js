@@ -25,6 +25,7 @@ Object.assign(window.BlackBook, {
   renderBills() {
     const el = document.getElementById('page-bills');
     if (!el) return;
+    if (this.billsChart) { this.billsChart.destroy(); this.billsChart = null; }
     this.repairBillPayments();
     const hideGraph = !!(this.data.settings && this.data.settings.hideBillsGraph);
     const offToday = this.vy() !== new Date().getFullYear();
@@ -42,7 +43,6 @@ Object.assign(window.BlackBook, {
         : '<div class="list-sep"></div>' + this.billsChipsHtml() +
           '<div class="overview-charts"><div class="chart-panel overview-line-panel"><div class="chart-head-row"><span class="chart-title-text">BILLS BY MONTH</span></div><canvas id="bills-chart"></canvas></div></div>');
     if (!hideGraph) setTimeout(() => this.renderBillsChart(), 50);
-    setTimeout(() => this.fitElems('.bill-cell'), 20);
     this.finishFocus('bill');
   },
 
@@ -73,10 +73,8 @@ Object.assign(window.BlackBook, {
   },
 
   billsGridHtml() {
-    const compactAmounts = window.innerWidth <= 760;
-    const formatGridAmount = (amount) => compactAmounts
-      ? new Intl.NumberFormat('en-US', { notation: 'compact', maximumFractionDigits: 1 }).format(amount).toLowerCase()
-      : amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    const compactAmounts = false;
+    const formatGridAmount = (amount) => this.fmtNumber(amount);
     const MONTHS_F = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
     let html = '<div class="bills-grid">';
     html += '<div class="bills-grid-head">BILL</div>';

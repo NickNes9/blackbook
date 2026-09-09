@@ -799,15 +799,25 @@ this.connectWebSocket();
     r(value);
   },
 
-  useCompactNumbers() {
-    return typeof window !== 'undefined' && window.matchMedia('(max-width: 760px)').matches;
+  lineChartOptions(xTicks = {}) {
+    return {
+      responsive: true, maintainAspectRatio: false,
+      layout: { padding: { left: 8, right: 8, top: 8, bottom: 0 } },
+      plugins: {
+        legend: { display: false }, title: { display: false },
+        tooltip: { usePointStyle: true, boxPadding: 3, callbacks: {
+          label: c => ' ' + c.dataset.label + ': ' + this.fmtBase(c.parsed.y)
+        } }
+      },
+      scales: {
+        x: { ticks: { color: '#888888', maxRotation: 0, autoSkip: false, font: { size: 11 }, ...xTicks }, grid: { color: '#2a2a2a', drawBorder: false }, border: { display: false } },
+        y: { ticks: { color: '#888888', font: { size: 11 }, maxTicksLimit: 5, callback: value => new Intl.NumberFormat('en-US', { notation: 'compact', maximumFractionDigits: 1 }).format(value).toLowerCase() }, grid: { color: '#2a2a2a', drawBorder: false }, border: { display: false } }
+      }
+    };
   },
 
   fmtNumber(amount) {
     const value = Number(amount) || 0;
-    if (this.useCompactNumbers()) {
-      return new Intl.NumberFormat('en-US', { notation: 'compact', maximumFractionDigits: 1 }).format(value).toLowerCase();
-    }
     return value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   },
 
