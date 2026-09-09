@@ -3,6 +3,7 @@ Object.assign(window.BlackBook, {
   renderBudget() {
     const el = document.getElementById('page-budget');
     if (!el) return;
+    if (this.budgetChart) { this.budgetChart.destroy(); this.budgetChart = null; }
     if (!this.data.budgets) this.data.budgets = [];
     const hideGraph = !!(this.data.settings && this.data.settings.hideBudgetGraph);
     el.innerHTML = this.monthPickerHtml() +
