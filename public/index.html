@@ -462,6 +462,21 @@
     </div>
   </div>
 
+  <!-- Forecast Warnings Modal -->
+  <div id="warnings-modal" class="modal hidden">
+    <div class="modal-backdrop" onclick="BlackBook.closeModal('warnings-modal')"></div>
+    <div class="modal-content" style="max-width:480px;">
+      <div class="modal-header">
+        <h2 id="warnings-title">Forecast Warnings</h2>
+        <button class="modal-close" onclick="BlackBook.closeModal('warnings-modal')">&times;</button>
+      </div>
+      <div id="warnings-list" class="warnings-list"></div>
+      <div class="form-actions">
+        <button type="button" class="btn btn-secondary" onclick="BlackBook.closeModal('warnings-modal')">Close</button>
+      </div>
+    </div>
+  </div>
+
   <!-- New Profile Modal -->
   <div id="new-profile-modal" class="modal hidden">
     <div class="modal-backdrop" onclick="BlackBook.closeModal('new-profile-modal')"></div>

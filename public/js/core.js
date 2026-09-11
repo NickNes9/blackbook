@@ -264,6 +264,7 @@ this.connectWebSocket();
         if (this.currentPage === 'overview') { this.toggleOverviewGraph(); return; }
         if (this.currentPage === 'bills') { this.toggleBillsGraph(); return; }
         if (this.currentPage === 'budget') { this.toggleBudgetGraph(); return; }
+        if (this.currentPage === 'forecast') { this.toggleForecastGraph(); return; }
       }
       if (e.key === 'Tab') { e.preventDefault(); if (this.currentPage === 'overview') this.cycleAccount(); return; }
       if (/^[1-9]$/.test(e.key)) {
@@ -449,23 +450,27 @@ this.connectWebSocket();
     }
   },
 
-  updateGraphFooter() {
+updateGraphFooter() {
     const button = document.getElementById('footer-graph-toggle');
     if (!button) return;
-    const graphPage = this.currentPage === 'overview' || this.currentPage === 'bills' || this.currentPage === 'budget';
+    const graphPage = this.currentPage === 'overview' || this.currentPage === 'bills' || this.currentPage === 'budget' || this.currentPage === 'forecast';
     button.classList.toggle('hidden', !graphPage);
     if (!graphPage) return;
     const hidden = this.currentPage === 'overview'
       ? !!this.data.settings.hideOverviewGraph
       : this.currentPage === 'bills'
         ? !!this.data.settings.hideBillsGraph
-        : !!this.data.settings.hideBudgetGraph;
+        : this.currentPage === 'budget'
+          ? !!this.data.settings.hideBudgetGraph
+          : !!this.data.settings.hideForecastGraph;
     button.textContent = hidden ? 'SHOW GRAPH' : 'HIDE GRAPH';
     button.onclick = () => this.currentPage === 'overview'
       ? this.toggleOverviewGraph()
       : this.currentPage === 'bills'
         ? this.toggleBillsGraph()
-        : this.toggleBudgetGraph();
+        : this.currentPage === 'budget'
+          ? this.toggleBudgetGraph()
+          : this.toggleForecastGraph();
   },
 
   reconciliationEnabled() { return this.data && this.data.settings && this.data.settings.reconciliationEnabled !== false; },
@@ -2047,11 +2052,13 @@ this.connectWebSocket();
     if (pid === 'page-overview') return 'toggleOverviewGraph';
     if (pid === 'page-bills') return 'toggleBillsGraph';
     if (pid === 'page-budget') return 'toggleBudgetGraph';
+    if (pid === 'page-forecast') return 'toggleForecastGraph';
     const canvas = panel.querySelector('canvas');
     const id = canvas ? canvas.id : '';
     if (id === 'overview-chart' || id === 'overview-line-chart' || id === 'pie') return 'toggleOverviewGraph';
     if (id === 'bills-chart') return 'toggleBillsGraph';
     if (id === 'budget-chart') return 'toggleBudgetGraph';
+    if (id === 'forecast-chart') return 'toggleForecastGraph';
     return null;
   },
 
