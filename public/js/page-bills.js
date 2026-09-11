@@ -72,8 +72,7 @@ Object.assign(window.BlackBook, {
       '</div>';
   },
 
-  billsGridHtml() {
-    const compactAmounts = false;
+billsGridHtml() {
     const formatGridAmount = (amount) => this.fmtNumber(amount);
     const MONTHS_F = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
     let html = '<div class="bills-grid">';
@@ -137,8 +136,13 @@ Object.assign(window.BlackBook, {
           }
           const natCur = (tx && tx.nativeCurrency) || paid.nativeCurrency || bill.currency || this.baseCurrency() || 'RSD';
           const rsd = formatGridAmount(rsdAmount);
-          amtLabel = nativeAbs != null && natCur !== this.baseCurrency()
-            ? rsd + (compactAmounts ? '' : '<br>(' + formatGridAmount(nativeAbs) + ' ' + natCur + ')')
+          let nativeVal = nativeAbs != null ? Math.abs(nativeAbs) : null;
+          if (nativeVal == null && natCur !== this.baseCurrency()) {
+            if (tx && tx.currency && tx.currency !== this.baseCurrency() && tx.nativeAmount == null) nativeVal = Math.abs(tx.amount);
+            else if (bill.amount != null && (bill.currency || '') !== this.baseCurrency()) nativeVal = Math.abs(bill.amount);
+          }
+          amtLabel = nativeVal != null && natCur !== this.baseCurrency()
+            ? '<div class="bill-amt-lines"><span class="bill-amt-rsd">' + rsd + '</span><span class="bill-amt-native">(' + formatGridAmount(nativeVal) + ' ' + natCur + ')</span></div>'
             : rsd;
         } else {
           amtLabel = '';

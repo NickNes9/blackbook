@@ -280,6 +280,11 @@ input[type="checkbox"]:checked {
 .forecast-event > :last-child { text-align:right; }
 .forecast-kind { color:var(--text-muted); font-size:10px; }
 .forecast-warning { color:var(--accent); font-size:12px; padding:8px 0; }
+.forecast-warning .btn { margin-left:6px; }
+.warnings-list { display:flex; flex-direction:column; gap:8px; max-height:50vh; overflow:auto; font-size:14px; color:var(--text-bright); line-height:1.5; margin:4px 0 12px; }
+.warning-item { display:flex; gap:8px; }
+.warning-num { color:var(--text-dim); flex:0 0 auto; }
+.warning-text { min-width:0; }
 .btn.reconciliation-switch { width:88px; min-width:88px; height:28px; min-height:28px; padding:2px 6px; line-height:1.1; font-weight:600; justify-content:center; }
 .reconciliation-all .reconcile-mark { display:none; }
 .tx-list:not(.reconciliation-all) .tx-actions:has(.reconcile-mark) { display:flex; }
@@ -2755,6 +2760,20 @@ h1, h2, h3 {
   user-select: none;
   min-height: 34px;
 }
+
+.bill-amt-lines {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1px;
+  line-height: 1.25;
+  min-width: 0;
+}
+
+.bill-amt-rsd { white-space: nowrap; }
+
+.bill-amt-native { font-size: 10px; font-weight: 400; opacity: 0.85; white-space: nowrap; }
 
 .bill-cell:hover { background: var(--surface-hover); }
 
