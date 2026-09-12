@@ -1,8 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { platform, tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { strToU8, zipSync } from 'fflate';
 import { Updater, UpdateError } from '../lib/updater.js';
@@ -44,7 +44,7 @@ function sha(buffer) {
   return createHash('sha256').update(buffer).digest('hex');
 }
 
-function makeUpdater(dir, { zip, release, checksumText, bufferImpl } = {}) {
+function makeUpdater(dir, { zip, release, checksumText, bufferImpl, platformName = 'win32' } = {}) {
   const resolvedZip = zip || makeZip({ 'public/js/core.js': 'NEW CORE' });
   const resolvedRelease = release || makeRelease(NEW_VERSION);
   const zipAsset = (resolvedRelease && resolvedRelease.assets || []).find((a) => /[-\w]+\.zip$/i.test(a.name));
@@ -53,7 +53,7 @@ function makeUpdater(dir, { zip, release, checksumText, bufferImpl } = {}) {
   return new Updater({
     rootDir: dir,
     repo: 'NickNes9/blackbook',
-    platformName: 'win32',
+    platformName,
     log: () => {},
     fetchJson: async () => resolvedRelease,
     fetchBuffer: bufferImpl || (async (url) => {
@@ -192,5 +192,17 @@ test('platform asset suffixes map to win, mac and linux', () => {
     assert.equal(win.assetSuffix(), 'win');
     assert.equal(mac.assetSuffix(), 'mac');
     assert.equal(linux.assetSuffix(), 'linux');
+  } finally { cleanup(dir); }
+});
+
+test('applyUpdate keeps launcher scripts executable (posix)', async () => {
+  if (platform() === 'win32') return;
+  const dir = makeFixture();
+  try {
+    const zip = makeZip({ 'public/js/core.js': 'NEW CORE', 'Black Book.sh': '#!/bin/sh\necho hi\n' });
+    const updater = makeUpdater(dir, { zip, platformName: 'linux' });
+    await updater.applyUpdate();
+    const mode = statSync(join(dir, 'Black Book.sh')).mode;
+    assert.ok((mode & 0o111) !== 0, 'launcher should be executable after install (mode ' + mode.toString(8) + ')');
   } finally { cleanup(dir); }
 });
