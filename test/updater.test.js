@@ -6,6 +6,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { strToU8, zipSync } from 'fflate';
 import { Updater, UpdateError } from '../lib/updater.js';
+import { currentVersion } from '../lib/version-util.js';
 
 const NEW_VERSION = '0.9.0';
 
@@ -65,11 +66,11 @@ function cleanup(dir) {
 test('checkForUpdate reports no update when release matches current version', async () => {
   const dir = makeFixture();
   try {
-    const updater = makeUpdater(dir, { release: makeRelease('0.8.2') });
+    const updater = makeUpdater(dir, { release: makeRelease(currentVersion()) });
     const status = await updater.checkForUpdate();
     assert.equal(status.updateAvailable, false);
     assert.equal(status.reason, 'up-to-date');
-    assert.equal(status.currentVersion, '0.8.2');
+    assert.equal(status.currentVersion, currentVersion());
   } finally { cleanup(dir); }
 });
 
@@ -173,7 +174,7 @@ test('applyUpdate refuses when the release has no checksums.sha256', async () =>
 test('applyUpdate throws when no update is available', async () => {
   const dir = makeFixture();
   try {
-    const updater = makeUpdater(dir, { release: makeRelease('0.8.2') });
+    const updater = makeUpdater(dir, { release: makeRelease(currentVersion()) });
     await assert.rejects(() => updater.applyUpdate(), /No update is currently available/);
   } finally { cleanup(dir); }
 });

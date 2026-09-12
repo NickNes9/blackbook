@@ -23,17 +23,17 @@ A local-first personal finance console. Terminal aesthetic with light/dark theme
 - **Profiles** — isolated data sets (default + named profiles) stored as separate files, per-profile page visibility
 - **Command palette** — `/` or `Ctrl-K`: search transactions, pages, quick commands (`t 500 cash bank`, `pay electricity`, `bg groceries 20000`, `csv`, …)
 
-## What's new in 0.8.2
+## What's new in 0.8.3
 
-- **Safer local storage** — profile saves are atomic and preserve the previous version as a `.bak` recovery copy; invalid or corrupted data is reported without being overwritten.
-- **Local-only server** — Black Book now listens only on this computer, and its stop script no longer terminates unrelated Node programs.
-- **Reliable amount entry** — normal values, decimal commas, and math expressions such as `50+20*3` work again under the app’s security safeguards.
-- **Searchable categories** — type in any category field to filter choices, then press Enter or click a result to select it.
-- **Automated verification** — built-in syntax and regression tests run without reading your personal profiles.
+- **Automatic updates** — Black Book checks GitHub Releases for a newer version and shows a banner when one is available; one click downloads the build (SHA-256 verified), installs it without touching your `profiles/`, and restarts on the same port while your open tab reloads automatically. Settings → ABOUT & UPDATES shows the current version and lets you check for or apply updates manually.
+- **Forecast** — a separate 30/60/90-day cash timeline and balance graph using current balances, unpaid scheduled bills, remaining card-installment slots, and optional recurring income/expenses; account filters, missing-rate warnings, and a red/green balance chart keep projections explicit.
+- **Reconciliation** — optional in Settings, visual marks and marked/unmarked filters on Overview, then record a statement date and balance; unmatched statements stay visibly in progress until their difference is zero.
+- **Responsive layout** — navigation becomes a slide-out menu, accounts abbreviate early, and months stay on one line; monetary labels use compact values such as 70k in tight spaces while stored amounts stay exact.
+- **Two-line bills amounts** — each bill shows both years' amounts, clicking the header toggles the chart view, and forecast warnings surface above the grid.
 
 ## In development on the next version
 
-- Forecasting, reconciliation, import review/rules, and the priority attention bar are being refined on a separate local feature branch. Existing `profiles/*.json` history remains the source of truth; the new fields are optional and additive.
+- Import review/rules, and the priority attention bar are being refined on a separate local feature branch. Existing `profiles/*.json` history remains the source of truth; the new fields are optional and additive.
 
 ## Keyboard
 
@@ -76,8 +76,21 @@ npm test
 
 The tests use temporary fixture profiles and do not access your `profiles/` directory.
 
+## Updates & releases
+
+The app self-updates from GitHub Releases. It looks for `black-book-vX.Y.Z-{win,linux,mac}.zip` assets plus a `checksums.sha256` asset, verifies the download before replacing code, and never touches `profiles/`, `import/`, `node_modules/`, or your data files.
+
+To publish a release from a checkout of this repo:
+
+```bash
+npm run release -- -Version 0.8.3   # bumps package.json + package-lock.json, builds dist\*.zip + checksums
+gh release create v0.8.3 --title "v0.8.3" --notes "<changelog>" dist\black-book-v0.8.3-win.zip dist\black-book-v0.8.3-linux.zip dist\black-book-v0.8.3-mac.zip dist\checksums.sha256
+```
+
+Windows users keep using `Black Book.exe`; Linux/macOS users run `node server.js`. Applied updates keep the previous code under `updates/backup-<version>/` for rollback.
+
 ---
 
-**BLACK BOOK v0.8.2**
+**BLACK BOOK v0.8.3**
 
 Created by Nikola Nešić
