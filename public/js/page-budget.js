@@ -3,15 +3,15 @@ Object.assign(window.BlackBook, {
   renderBudget() {
     const el = document.getElementById('page-budget');
     if (!el) return;
+    if (this.budgetChart) { this.budgetChart.destroy(); this.budgetChart = null; }
     if (!this.data.budgets) this.data.budgets = [];
     const hideGraph = !!(this.data.settings && this.data.settings.hideBudgetGraph);
     el.innerHTML = this.monthPickerHtml() +
       this.budgetSummaryHtml() +
       '<div class="list-sep"></div>' +
       '<div class="page-scroll-wrap">' + this.budgetCardsHtml() + '</div>' +
-      '<div class="list-sep"></div>' +
       (hideGraph
-        ? '<div class="graph-show-row"><button class="btn btn-sm btn-secondary" onclick="BlackBook.toggleBudgetGraph()">SHOW GRAPH</button></div>'
+        ? ''
         : this.budgetChipsHtml() +
           '<div class="overview-charts"><div class="chart-panel chart-panel-full"><canvas id="budget-chart"></canvas></div></div>');
     if (!hideGraph) setTimeout(() => this.renderBudgetChart(), 50);
@@ -38,8 +38,6 @@ Object.assign(window.BlackBook, {
       const name = b && b.name ? b.name : cat.name;
       html += '<div class="cat-filter-chip' + (on ? ' selected' : '') + '" style="--cc:' + color + ';' + (on ? 'background:' + color + ';color:var(--on-fill);' : '') + (on ? '' : 'opacity:0.55;') + '" onclick="BlackBook.toggleBudgetCat(\x27' + cat.id + '\x27)" title="' + this.escapeHtml(name) + (b ? ' \u00b7 ' + this.fmtBase(b.amount) : ' \u00b7 NO LIMIT') + ' \u00b7 click to show/hide in graph">' + this.escapeHtml(name) + '</div>';
     }
-    html += '<span style="flex:1;"></span>';
-    html += '<button class="btn btn-sm btn-secondary" style="margin-left:4px;" onclick="BlackBook.toggleBudgetGraph()" title="Hide budget graph">HIDE</button>';
     return html + '</div>';
   },
 
@@ -122,7 +120,7 @@ Object.assign(window.BlackBook, {
             usePointStyle: true,
             boxPadding: 3,
             callbacks: {
-              label: (c) => ' ' + c.dataset.label + ': ' + this.round2(c.parsed.y).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+              label: (c) => ' ' + c.dataset.label + ': ' + this.fmtNumber(c.parsed.y)
             }
           }
         },
@@ -192,7 +190,7 @@ Object.assign(window.BlackBook, {
         '</span>' +
         '<span class="bar-values-wrap"><div class="budget-bar' + (budget ? '' : ' budget-bar-none') + '" style="background:' + barBg + ';"><div class="budget-bar-fill' + (budget ? '' : ' budget-bar-fill-full') + ' ' + (over ? 'over' : '') + '" style="width:' + fillPct + '%;background:' + catColor + (over ? ';opacity:0.9' : '') + ';"></div><span class="budget-bar-values-unfilled' + (over ? ' amount-negative' : '') + '">' + barValues + '</span><span class="budget-bar-values-filled' + (over ? ' amount-negative' : '') + '" style="clip-path:inset(0 ' + (100 - fillPct) + '% 0 0);">' + barValues + '</span></div></span>' +
         '<span class="budget-pct' + (over ? ' over' : '') + '">' + (budget ? pct + '%' : '') + '</span>' +
-        '<button class="btn btn-sm ' + (budget ? 'btn-secondary' : 'btn-primary') + '" style="min-width:56px;flex-shrink:0;margin-left:auto;" onclick="BlackBook.openBudgetModal(\x27' + cat.id + '\x27)">' + (budget ? 'EDIT' : 'SET') + '</button>' +
+        '<button class="btn btn-sm budget-edit ' + (budget ? 'btn-secondary' : 'btn-primary') + '" onclick="BlackBook.openBudgetModal(\x27' + cat.id + '\x27)">' + (budget ? 'EDIT' : 'SET') + '</button>' +
         '</div></div>';
     }
     return html || '<div class="empty-state"><div class="empty-state-text">No categories. Add categories in Settings first.</div></div>';

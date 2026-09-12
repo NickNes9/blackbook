@@ -14,7 +14,6 @@ Object.assign(window.BlackBook, {
       html += '<div class="cat-filter-chip' + (on ? ' selected' : '') + '" style="--cc:' + color + ';' + (on ? 'background:' + color + ';color:var(--on-fill);' : '') + (on ? '' : 'opacity:0.55;') + '" onclick="BlackBook.toggleBillActive(\x27' + b.id + '\x27)" title="' + this.escapeHtml(b.name) + amt + ' \u00b7 click to show/hide in graph">' + this.escapeHtml(b.name) + '</div>';
     }
     html += '<span style="flex:1;"></span>';
-    html += '<button class="btn btn-sm btn-secondary" style="margin-left:4px;" onclick="BlackBook.toggleBillsGraph()" title="Hide bills graph (H)">HIDE</button>';
     return html + '</div>';
   },
 
@@ -26,6 +25,7 @@ Object.assign(window.BlackBook, {
   renderBills() {
     const el = document.getElementById('page-bills');
     if (!el) return;
+    if (this.billsChart) { this.billsChart.destroy(); this.billsChart = null; }
     this.repairBillPayments();
     const hideGraph = !!(this.data.settings && this.data.settings.hideBillsGraph);
     const offToday = this.vy() !== new Date().getFullYear();
@@ -38,13 +38,11 @@ Object.assign(window.BlackBook, {
       this.billsSummaryHtml() +
       '<div class="list-sep"></div>' +
       '<div class="page-scroll-wrap"><div class="bills-grid-wrap">' + this.billsGridHtml() + '</div></div>' +
-      '<div class="list-sep"></div>' +
       (hideGraph
-        ? '<div class="graph-show-row"><button class="btn btn-sm btn-secondary" onclick="BlackBook.toggleBillsGraph()">SHOW GRAPH</button></div>'
-        : this.billsChipsHtml() +
-          '<div class="overview-charts"><div class="chart-panel chart-panel-full"><canvas id="bills-chart"></canvas></div></div>');
+        ? ''
+        : '<div class="list-sep"></div>' + this.billsChipsHtml() +
+          '<div class="overview-charts"><div class="chart-panel overview-line-panel"><div class="chart-head-row"><span class="chart-title-text">BILLS BY MONTH</span></div><canvas id="bills-chart"></canvas></div></div>');
     if (!hideGraph) setTimeout(() => this.renderBillsChart(), 50);
-    setTimeout(() => this.fitElems('.bill-cell'), 20);
     this.finishFocus('bill');
   },
 
@@ -52,6 +50,7 @@ Object.assign(window.BlackBook, {
     this.data.settings.hideBillsGraph = !(this.data.settings && this.data.settings.hideBillsGraph);
     await this.save();
     this.renderPage('bills');
+    this.updateGraphFooter();
   },
 
   billsSummaryHtml() {
@@ -73,7 +72,8 @@ Object.assign(window.BlackBook, {
       '</div>';
   },
 
-  billsGridHtml() {
+billsGridHtml() {
+    const formatGridAmount = (amount) => this.fmtNumber(amount);
     const MONTHS_F = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
     let html = '<div class="bills-grid">';
     html += '<div class="bills-grid-head">BILL</div>';
@@ -135,9 +135,14 @@ Object.assign(window.BlackBook, {
             nativeAbs = paid.nativeAmount != null ? Math.abs(paid.nativeAmount) : null;
           }
           const natCur = (tx && tx.nativeCurrency) || paid.nativeCurrency || bill.currency || this.baseCurrency() || 'RSD';
-          const rsd = rsdAmount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-          amtLabel = nativeAbs != null && natCur !== this.baseCurrency()
-            ? rsd + '<br>(' + nativeAbs.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' ' + natCur + ')'
+          const rsd = formatGridAmount(rsdAmount);
+          let nativeVal = nativeAbs != null ? Math.abs(nativeAbs) : null;
+          if (nativeVal == null && natCur !== this.baseCurrency()) {
+            if (tx && tx.currency && tx.currency !== this.baseCurrency() && tx.nativeAmount == null) nativeVal = Math.abs(tx.amount);
+            else if (bill.amount != null && (bill.currency || '') !== this.baseCurrency()) nativeVal = Math.abs(bill.amount);
+          }
+          amtLabel = nativeVal != null && natCur !== this.baseCurrency()
+            ? '<div class="bill-amt-lines"><span class="bill-amt-rsd">' + rsd + '</span><span class="bill-amt-native">(' + formatGridAmount(nativeVal) + ' ' + natCur + ')</span></div>'
             : rsd;
         } else {
           amtLabel = '';
@@ -149,7 +154,7 @@ Object.assign(window.BlackBook, {
           (paid ? ' \u00b7 paid \u00b7 click to unpay' : ' \u00b7 click to mark paid') +
           ' &middot; right-click for custom amount">' + amtLabel + '</div>';
       }
-      html += '<div class="bill-cell-total' + alt + '"' + (yearHasPaid ? ' style="background:' + color + '22;color:' + color + ';font-weight:700;"' : '') + '>' + (yearHasPaid ? yearTotal.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '') + '</div>';
+      html += '<div class="bill-cell-total' + alt + '"' + (yearHasPaid ? ' style="background:' + color + '22;color:' + color + ';font-weight:700;"' : '') + '>' + (yearHasPaid ? formatGridAmount(yearTotal) : '') + '</div>';
       bi++;
     }
     html += '</div>';
@@ -522,7 +527,7 @@ Object.assign(window.BlackBook, {
             usePointStyle: true,
             boxPadding: 3,
             callbacks: {
-              label: (c) => ' ' + c.dataset.label + ': ' + this.round2(c.parsed.y).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+              label: (c) => ' ' + c.dataset.label + ': ' + this.fmtNumber(c.parsed.y)
             }
           }
         },
@@ -621,12 +626,12 @@ Object.assign(window.BlackBook, {
         const autoRes = nativeVal > 0 ? this.calcForeignFee(nativeVal, feePctModal, cur) : { feeNative: null, feeBase: 0 };
         const feeBase = manualFee > 0 ? manualFee : autoRes.feeBase;
         const total = this.round2(val + feeBase);
-        let feeTxt = 'FEE ' + feeBase.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' ' + this.baseCurrency();
+        let feeTxt = 'FEE ' + this.fmtNumber(feeBase) + ' ' + this.baseCurrency();
         if (manualFee > 0) feeTxt += ' (manual)';
-        else if (autoRes.feeNative != null) feeTxt += ' (' + autoRes.feeNative.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' ' + cur + ')';
-        parts.push(feeTxt + ' \u2192 ' + total.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' ' + this.baseCurrency());
+        else if (autoRes.feeNative != null) feeTxt += ' (' + this.fmtNumber(autoRes.feeNative) + ' ' + cur + ')';
+        parts.push(feeTxt + ' \u2192 ' + this.fmtNumber(total) + ' ' + this.baseCurrency());
       } else if (nativeVal > 0) {
-        parts.push('\u2248 ' + nativeVal.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' ' + cur);
+        parts.push('\u2248 ' + this.fmtNumber(nativeVal) + ' ' + cur);
       }
       previewEl.textContent = parts.join(' \u00b7 ');
     };
@@ -717,7 +722,7 @@ Object.assign(window.BlackBook, {
     }
     if (changed) this.save();
   },
-  fmtBillAmount(bill) { const rsd = this.toBase(bill.amount, bill.currency); return rsd.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' ' + this.baseCurrency() + (bill.currency && bill.currency !== this.baseCurrency() ? ' (' + bill.amount + ' ' + bill.currency + ')' : ''); },
+  fmtBillAmount(bill) { const rsd = this.toBase(bill.amount, bill.currency); return this.fmtNumber(rsd) + ' ' + this.baseCurrency() + (bill.currency && bill.currency !== this.baseCurrency() ? ' (' + this.fmtNumber(bill.amount) + ' ' + bill.currency + ')' : ''); },
 
   // ==================== SAVINGS ====================
 });

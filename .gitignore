@@ -13,6 +13,10 @@ node_modules/
 *.log
 Black Book.pid
 
+# Update artifacts
+dist/
+updates/
+
 # OS junk
 Thumbs.db
 .DS_Store
