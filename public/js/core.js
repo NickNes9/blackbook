@@ -72,6 +72,7 @@ window.BlackBook = {
 
 this.connectWebSocket();
     this.bindWsRecovery();
+    if (window.UpdateUi) { UpdateUi.init(); }
     const hp = document.getElementById('header-profile');
     if (hp) { hp.textContent = '\u00b7 ' + (this.profile ? this.profile.toUpperCase() : 'DEFAULT'); }
     if (window.Chart) {
@@ -179,7 +180,11 @@ this.connectWebSocket();
       const ws = new WebSocket(protocol + '//' + location.host);
       this._ws = ws;
       ws.onopen = () => { this._wsRetry = 0; };
-      ws.onclose = () => { this._ws = null; this.scheduleWsReconnect(); };
+      ws.onclose = () => {
+        this._ws = null;
+        if (this._updating && window.UpdateUi) { UpdateUi.onServerGone(); return; }
+        this.scheduleWsReconnect();
+      };
       ws.onerror = () => { try { ws.close(); } catch (e) {} };
     } catch (e) {
       this.scheduleWsReconnect();
@@ -440,6 +445,7 @@ this.connectWebSocket();
       else if (page === 'debts') this.renderDebts();
       else if (page === 'invoices') this.renderInvoices();
       else if (page === 'settings') this.renderSettings();
+      if (page === 'settings' && window.UpdateUi) { try { UpdateUi.renderSettings(); } catch (err) { console.error('Update UI render failed:', err); } }
       const pageEl = document.getElementById('page-' + page);
       if (pageEl) this.upgradeAllSelects(pageEl);
       this.refreshAttention();

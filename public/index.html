@@ -37,6 +37,7 @@
   </aside>
 
   <main class="app-workspace">
+    <div id="update-banner" class="update-banner hidden"></div>
     <div id="page-overview" class="page"></div>
     <div id="page-forecast" class="page page-fixed hidden"></div>
     <div id="page-budget" class="page page-fixed hidden"></div>
@@ -631,6 +632,13 @@
     <button id="footer-graph-toggle" class="btn btn-sm btn-secondary footer-graph-toggle hidden" type="button"></button>
   </footer>
 
+  <div id="update-overlay" class="update-overlay hidden">
+    <div class="update-overlay-box">
+      <div class="update-overlay-title">UPDATE INSTALLED</div>
+      <div class="update-overlay-text" id="update-overlay-text">Reconnecting to the new version…</div>
+    </div>
+  </div>
+
   <div id="import-rule-modal" class="modal hidden">
     <div class="modal-backdrop"></div>
     <div class="modal-content">
@@ -646,8 +654,9 @@
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <script src="/js/amount-parser.js"></script>
-  <script src="/js/forecast-engine.js"></script>
+<script src="/js/forecast-engine.js"></script>
   <script src="/js/core.js"></script>
+  <script src="/js/updates-ui.js"></script>
   <script src="/js/page-overview.js"></script>
   <script src="/js/page-forecast.js"></script>
   <script src="/js/responsive-ui.js"></script>

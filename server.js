@@ -1,10 +1,13 @@
 import express from 'express';
+import { spawn } from 'node:child_process';
 import { existsSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs';
 import http from 'node:http';
 import { join } from 'node:path';
 import { WebSocketServer } from 'ws';
 import { APP_DIR, HOST, LEGACY_DATA_FILE, PID_FILE, PROFILES_DIR, preferredPorts } from './lib/server-config.js';
 import { createProfileStore, isProfileDocument, StorageError } from './lib/storage.js';
+import { createUpdater, UpdateError } from './lib/updater.js';
+import { currentVersion } from './lib/version-util.js';
 
 // A launcher can outlive its console pipe. Ignore expected broken-pipe errors
 // so a harmless log write never terminates the finance server.
@@ -151,6 +154,60 @@ app.get('/api/exchange-rate', async (req, res) => {
   } catch (error) { return sendError(res, error); }
 });
 
+const updater = createUpdater({ log: (...args) => logger('[update]', ...args) });
+let updatesCache = null;
+let updatesCheckedAt = 0;
+const UPDATE_CHECK_TTL_MS = 60_000;
+
+async function refreshUpdateCache() {
+  try {
+    updatesCache = await updater.checkForUpdate();
+    updatesCheckedAt = Date.now();
+  } catch (error) {
+    logger('[update] Version check failed:', error?.message);
+  }
+}
+
+app.get('/api/version', (req, res) => {
+  return res.json({ appName: 'Black Book', version: currentVersion() });
+});
+
+app.get('/api/updates/status', async (req, res) => {
+  try {
+    if (req.query.refresh === '1' || !updatesCache || Date.now() - updatesCheckedAt >= UPDATE_CHECK_TTL_MS) await refreshUpdateCache();
+    return res.json(updatesCache || { currentVersion: currentVersion(), latest: null, updateAvailable: false, reason: 'none' });
+  } catch (error) { return sendError(res, error); }
+});
+
+app.post('/api/updates/apply', async (req, res) => {
+  try {
+    const result = await updater.applyUpdate();
+    res.json(result);
+    setTimeout(scheduleRestart, 250);
+  } catch (error) {
+    if (error instanceof UpdateError) return res.status(error.status).json({ error: error.message });
+    logger('[update] Apply failed:', error?.message);
+    return res.status(500).json({ error: 'Update failed: ' + (error?.message || 'unknown error') });
+  }
+});
+
+function scheduleRestart() {
+  try {
+    const port = server.address().port;
+    if (!port) return;
+    logger(`Update applied. Restarting on port ${port}...`);
+    const child = spawn(process.execPath, [join(APP_DIR, 'lib', 'restart-supervisor.js'), String(port)], {
+      stdio: 'ignore',
+      detached: process.platform !== 'win32',
+      windowsHide: true
+    });
+    child.unref();
+  } catch (error) {
+    logger('[update] Could not schedule restart:', error?.message);
+  }
+  setTimeout(() => { try { process.exit(0); } catch (_) { } }, 1000);
+}
+
 const server = http.createServer(app);
 const ports = preferredPorts(PORT);
 let listenCursor = -1;
@@ -190,6 +247,7 @@ const clientsConnected = () => wss.clients.size > 0;
 wss.on('error', (error) => { if (!['EADDRINUSE', 'EACCES'].includes(error.code)) logger('[black-book] WebSocket error:', error.message); });
 wss.on('connection', (ws) => {
   if (shutdownTimer && clientsConnected()) { clearTimeout(shutdownTimer); shutdownTimer = null; logger('Browser connected. Idle shutdown cancelled.'); }
+  if (!updatesCache) refreshUpdateCache();
   ws.on('close', () => { if (!clientsConnected()) scheduleShutdown(); });
 });
 function scheduleShutdown() {
