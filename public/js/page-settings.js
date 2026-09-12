@@ -952,9 +952,12 @@ Object.assign(window.BlackBook, {
       '<button class="btn btn-secondary" id="settings-export-csv">EXPORT CSV</button>' +
       '<button class="btn btn-secondary" id="settings-import-btn">IMPORT JSON</button>' +
       '<input type="file" id="settings-import-file" accept=".json" style="display:none;">' +
-      '<button class="btn btn-secondary" id="settings-import-csv-btn">IMPORT CSV/XLSX</button>' +
+'<button class="btn btn-secondary" id="settings-import-csv-btn">IMPORT CSV/XLSX</button>' +
       '<input type="file" id="settings-import-csv-file" accept=".csv,.txt,.xlsx,.xls,text/csv,text/plain,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel" style="display:none;">' +
       '</div></div>' +
+      '<div class="settings-section">' +
+      '<div class="settings-section-header"><span class="settings-section-title">ABOUT &amp; UPDATES</span></div>' +
+      '<div id="settings-updates"></div></div>' +
       '</div>' +
     '</div>' +
 
@@ -973,7 +976,7 @@ Object.assign(window.BlackBook, {
       '<div class="settings-list">' + ((this.data.importRules || []).map(rule => { const cat = this.data.categories.find(c => c.id === rule.categoryId); return '<div class="settings-row"><span class="settings-row-name">IF DESCRIPTION HAS “' + this.escapeHtml(rule.match) + '”</span><span class="settings-row-meta">→ ' + this.escapeHtml(cat ? cat.name : 'missing category') + '</span><button class="btn btn-sm btn-danger btn-icon" onclick="BlackBook.deleteImportRule(\'' + rule.id + '\')">' + this.xIcon() + '</button></div>'; }).join('') || '<div style="padding:8px;color:var(--text-muted);font-size:13px;">No rules yet. Rules apply while rows are staged for import.</div>') + '</div></div>' +
       '<div></div></div>' +
 
-      '<div class="settings-footer">BLACK BOOK v0.8.2 &middot; Created by Nikola Ne&scaron;i&#263;</div>';
+      '<div class="settings-footer">BLACK BOOK <span id="settings-footer-version">v0.0.0</span> &middot; Created by Nikola Ne&scaron;i&#263;</div>';
   },
 
   async refreshRate(code) {
