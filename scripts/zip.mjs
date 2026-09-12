@@ -13,9 +13,11 @@ if (!root || !version) {
 }
 
 const EXCLUDE_TOPS = new Set([
-  'profiles', 'import', 'node_modules', 'updates', '.git', '.superpowers',
+  'profiles', 'import', 'updates', '.git', '.superpowers',
   'data.json', 'data.json.bak', 'Black Book.xlsx', 'Black Book.pid',
-  'Thumbs.db', '.DS_Store', 'dist', 'Server.log'
+  'Thumbs.db', '.DS_Store', 'dist', 'Server.log',
+  'docs', 'scripts', 'test', 'package-lock.json', 'launcher.cs',
+  '.gitattributes', '.gitignore'
 ]);
 const WIN_LAUNCHERS = new Set(['Black Book.exe', 'Stop Black Book.bat', 'bb.ico', 'launcher.cs']);
 const LINUX_LAUNCHERS = new Set(['Black Book.sh', 'Stop Black Book.sh']);
