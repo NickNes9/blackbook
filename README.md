@@ -61,7 +61,10 @@ npm install
 node server.js
 ```
 
-Open http://localhost:3000 — or just run **Black Book.exe**, which starts the server hidden and opens your browser. `Stop Black Book.bat` shuts down that Black Book server only; it does not stop other Node programs.
+Open http://localhost:3000 — or just run the launcher that matches your OS:
+- **Windows** — `Black Book.exe` starts the server hidden and opens your browser; `Stop Black Book.bat` shuts down that Black Book server only.
+- **Linux** — double-click `Black Book.sh` (or run it from a terminal); `Stop Black Book.sh` stops it. The script needs `node` on the PATH.
+- **macOS** — double-click `Black Book.command` opens it in Terminal; `Stop Black Book.command` stops it. The script needs `node` on the PATH.
 
 ## Data & privacy
 
@@ -91,7 +94,7 @@ npm run release -- -Version 0.9.0   # bumps package.json + package-lock.json, bu
 gh release create v0.9.0 --title "v0.9.0" --notes "<changelog>" dist\black-book-v0.9.0-win.zip dist\black-book-v0.9.0-linux.zip dist\black-book-v0.9.0-mac.zip dist\checksums.sha256
 ```
 
-Windows users keep using `Black Book.exe`; Linux/macOS users run `node server.js`. Applied updates keep the previous code under `updates/backup-<version>/` for rollback.
+Windows users keep using `Black Book.exe`; Linux/macOS users keep using `Black Book.sh` / `Black Book.command`. Updates ship each platform's launcher and re-apply the executable bit automatically. Applied updates keep the previous code under `updates/backup-<version>/` for rollback.
 
 ---
 

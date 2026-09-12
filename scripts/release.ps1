@@ -31,49 +31,19 @@ if (Test-Path $LockPath) {
 Write-Host "Bumped $OldVersion -> $Version in package.json + package-lock.json"
 
 # --- Assemble the payload (everything in the repo except user data / junk) ---
-$Exclude = @(
-  'profiles', 'import', 'node_modules', 'updates', '.git', '.superpowers',
-  'data.json', 'data.json.bak', 'Black Book.xlsx', 'Black Book.pid',
-  'Thumbs.db', '.DS_Store', 'dist'
-)
-$ExcludeParts = $Exclude | ForEach-Object { [regex]::Escape($_) }
-$ExcludeRegex = '^(.*[\\/])?(' + ($ExcludeParts -join '|') + ')([\\/]|$)'
-
-$Items = @()
-foreach ($entry in Get-ChildItem -LiteralPath $Root -Force) {
-  if ($entry.Name -match '\.(log|bak)$') { continue }
-  if ($entry.Name -match $ExcludeRegex) { continue }
-  $Items += $entry.FullName
-}
-
-Add-Type -AssemblyName System.IO.Compression.FileSystem
+# Excludes, per-platform launcher selection and +x bits live in scripts/zip.mjs.
 $Dist = Join-Path $Root 'dist'
-if (Test-Path $Dist) { Remove-Item -LiteralPath $Dist -Recurse -Force }
-New-Item -ItemType Directory -Path $Dist | Out-Null
-
 $ZipBase = "black-book-v$Version"
-$Checksums = @()
-$PlatZips = @()
 
+Write-Host "Building zips (scripts/zip.mjs)..."
+node scripts/zip.mjs "$Root" "$Version"
+if ($LASTEXITCODE -ne 0) { throw "zip.mjs failed with exit code $LASTEXITCODE" }
+
+$PlatZips = @()
+$Checksums = @()
 foreach ($plat in @('win', 'linux', 'mac')) {
   $ZipName = "$ZipBase-$plat.zip"
-  $ZipPath = Join-Path $Dist $ZipName
-  $platItems = $Items
-  if ($plat -ne 'win') {
-    $platItems = $Items | Where-Object {
-      $name = Split-Path $_ -Leaf
-      $name -notin @('Black Book.exe', 'Stop Black Book.bat', 'bb.ico') -and $name -ne 'launcher.cs'
-    }
-  }
-  $Staging = Join-Path $Dist ("stage-$plat")
-  if (Test-Path $Staging) { Remove-Item -LiteralPath $Staging -Recurse -Force }
-  New-Item -ItemType Directory -Path $Staging | Out-Null
-  foreach ($item in $platItems) {
-    Copy-Item -LiteralPath $item -Destination (Join-Path $Staging (Split-Path $item -Leaf)) -Recurse -Force
-  }
-  [System.IO.Compression.ZipFile]::CreateFromDirectory($Staging, $ZipPath, [System.IO.Compression.CompressionLevel]::Optimal, $false)
-  Remove-Item -LiteralPath $Staging -Recurse -Force
-  $hash = (Get-FileHash -LiteralPath $ZipPath -Algorithm SHA256).Hash.ToLower()
+  $hash = (Get-FileHash -LiteralPath (Join-Path $Dist $ZipName) -Algorithm SHA256).Hash.ToLower()
   $Checksums += "$hash  $ZipName"
   $PlatZips += $ZipName
   Write-Host "Built $ZipName" -ForegroundColor Green
