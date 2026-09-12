@@ -106,12 +106,12 @@ Object.assign(window.BlackBook, {
       const autoRes = nativeVal > 0 ? this.calcForeignFee(nativeVal, fee, cur) : { feeNative: null, feeBase: 0 };
       const feeBase = manualFee > 0 ? manualFee : autoRes.feeBase;
       const total = this.round2(amtVal + feeBase);
-      let feeTxt = 'FEE ' + feeBase.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' ' + this.baseCurrency();
+      let feeTxt = 'FEE ' + this.fmtNumber(feeBase) + ' ' + this.baseCurrency();
       if (manualFee > 0) feeTxt += ' (manual)';
-      else if (autoRes.feeNative != null) feeTxt += ' (' + autoRes.feeNative.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' ' + cur + ')';
-      parts.push(feeTxt + ' \u2192 ' + total.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' ' + this.baseCurrency());
+      else if (autoRes.feeNative != null) feeTxt += ' (' + this.fmtNumber(autoRes.feeNative) + ' ' + cur + ')';
+      parts.push(feeTxt + ' \u2192 ' + this.fmtNumber(total) + ' ' + this.baseCurrency());
     } else if (nativeVal > 0) {
-      parts.push('\u2248 ' + nativeVal.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' ' + cur);
+      parts.push('\u2248 ' + this.fmtNumber(nativeVal) + ' ' + cur);
     }
     previewEl.textContent = parts.join(' \u00b7 ');
   },

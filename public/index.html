@@ -16,8 +16,7 @@
       <span class="header-logo">BLACK BOOK</span>
       <span id="header-profile" class="header-profile"></span>
     </div>
-<div class="header-center">
-      </div>
+    <div class="header-center"><div id="attention-bar" class="attention-bar"></div></div>
     <div class="header-right">
       <span class="header-status save-status" id="save-indicator" title="Save status"><span class="save-label">SAVED</span></span>
     </div>
@@ -32,12 +31,15 @@
       <button data-page="savings" class="sidebar-nav-item">SAVINGS</button>
       <button data-page="debts" class="sidebar-nav-item">DEBTS</button>
       <button data-page="invoices" class="sidebar-nav-item">INVOICES</button>
+      <button data-page="forecast" class="sidebar-nav-item">FORECAST</button>
       <button data-page="settings" class="sidebar-nav-item">SETTINGS</button>
     </nav>
   </aside>
 
   <main class="app-workspace">
+    <div id="update-banner" class="update-banner hidden"></div>
     <div id="page-overview" class="page"></div>
+    <div id="page-forecast" class="page page-fixed hidden"></div>
     <div id="page-budget" class="page page-fixed hidden"></div>
     <div id="page-bills" class="page page-fixed hidden"></div>
     <div id="page-cards" class="page page-fixed hidden"></div>
@@ -461,6 +463,21 @@
     </div>
   </div>
 
+  <!-- Forecast Warnings Modal -->
+  <div id="warnings-modal" class="modal hidden">
+    <div class="modal-backdrop" onclick="BlackBook.closeModal('warnings-modal')"></div>
+    <div class="modal-content" style="max-width:480px;">
+      <div class="modal-header">
+        <h2 id="warnings-title">Forecast Warnings</h2>
+        <button class="modal-close" onclick="BlackBook.closeModal('warnings-modal')">&times;</button>
+      </div>
+      <div id="warnings-list" class="warnings-list"></div>
+      <div class="form-actions">
+        <button type="button" class="btn btn-secondary" onclick="BlackBook.closeModal('warnings-modal')">Close</button>
+      </div>
+    </div>
+  </div>
+
   <!-- New Profile Modal -->
   <div id="new-profile-modal" class="modal hidden">
     <div class="modal-backdrop" onclick="BlackBook.closeModal('new-profile-modal')"></div>
@@ -612,13 +629,37 @@
     <span class="hotkey"><kbd>TAB</kbd> ACCOUNT</span>
     <span class="hotkey"><kbd>1–8</kbd> PAGES</span>
     <span class="hotkey"><kbd>Space</kbd> COMMAND</span>
+    <button id="footer-graph-toggle" class="btn btn-sm btn-secondary footer-graph-toggle hidden" type="button"></button>
   </footer>
+
+  <div id="update-overlay" class="update-overlay hidden">
+    <div class="update-overlay-box">
+      <div class="update-overlay-title">UPDATE INSTALLED</div>
+      <div class="update-overlay-text" id="update-overlay-text">Reconnecting to the new version…</div>
+    </div>
+  </div>
+
+  <div id="import-rule-modal" class="modal hidden">
+    <div class="modal-backdrop"></div>
+    <div class="modal-content">
+      <div class="modal-header"><h2>Import Rule</h2><button class="modal-close" onclick="BlackBook.closeModal('import-rule-modal')">&times;</button></div>
+      <form id="import-rule-form">
+        <div class="form-group"><label>When description contains</label><input id="import-rule-match" class="input" maxlength="80" required autocomplete="off"></div>
+        <div class="form-group"><label>Category</label><select id="import-rule-category" class="input" required></select></div>
+        <div class="form-actions"><button type="button" class="btn btn-secondary" onclick="BlackBook.closeModal('import-rule-modal')">Cancel</button><button class="btn btn-primary" type="submit">Save Rule</button></div>
+      </form>
+    </div>
+  </div>
 
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <script src="/js/amount-parser.js"></script>
+<script src="/js/forecast-engine.js"></script>
   <script src="/js/core.js"></script>
+  <script src="/js/updates-ui.js"></script>
   <script src="/js/page-overview.js"></script>
+  <script src="/js/page-forecast.js"></script>
+  <script src="/js/responsive-ui.js"></script>
   <script src="/js/page-transactions.js"></script>
   <script src="/js/page-budget.js"></script>
   <script src="/js/page-bills.js"></script>

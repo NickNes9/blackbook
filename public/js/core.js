@@ -13,6 +13,7 @@ window.BlackBook = {
   billsChart: null,
   overviewPieChart: null,
   overviewLineChart: null,
+  forecastChart: null,
   savingsChart: null,
   _cmdPaletteIndex: -1,
   _cmdPaletteItems: [],
@@ -35,6 +36,10 @@ window.BlackBook = {
     if (!this.data.installments) this.data.installments = [];
     if (!this.data.debts) this.data.debts = [];
     if (!this.data.invoices) this.data.invoices = [];
+    if (!this.data.recurringTemplates) this.data.recurringTemplates = [];
+    if (!this.data.reconciliations) this.data.reconciliations = [];
+    if (!this.data.importRules) this.data.importRules = [];
+    if (!this.data.settings) this.data.settings = {};
     if (this.migrateCreditCards()) await this.save();
     if (this.migrateTransfers()) await this.save();
     if (this.normalizeLegacyCurrencySettings()) await this.save();
@@ -67,6 +72,7 @@ window.BlackBook = {
 
 this.connectWebSocket();
     this.bindWsRecovery();
+    if (window.UpdateUi) { UpdateUi.init(); }
     const hp = document.getElementById('header-profile');
     if (hp) { hp.textContent = '\u00b7 ' + (this.profile ? this.profile.toUpperCase() : 'DEFAULT'); }
     if (window.Chart) {
@@ -75,6 +81,7 @@ this.connectWebSocket();
       Chart.defaults.color = '#777777';
     }
     this.bindNav();
+    this.refreshAttention();
     this.bindSidebarToggle();
     this.bindKeyboard();
     this.bindGlobalSelectWheel();
@@ -173,7 +180,11 @@ this.connectWebSocket();
       const ws = new WebSocket(protocol + '//' + location.host);
       this._ws = ws;
       ws.onopen = () => { this._wsRetry = 0; };
-      ws.onclose = () => { this._ws = null; this.scheduleWsReconnect(); };
+      ws.onclose = () => {
+        this._ws = null;
+        if (this._updating && window.UpdateUi) { UpdateUi.onServerGone(); return; }
+        this.scheduleWsReconnect();
+      };
       ws.onerror = () => { try { ws.close(); } catch (e) {} };
     } catch (e) {
       this.scheduleWsReconnect();
@@ -258,6 +269,7 @@ this.connectWebSocket();
         if (this.currentPage === 'overview') { this.toggleOverviewGraph(); return; }
         if (this.currentPage === 'bills') { this.toggleBillsGraph(); return; }
         if (this.currentPage === 'budget') { this.toggleBudgetGraph(); return; }
+        if (this.currentPage === 'forecast') { this.toggleForecastGraph(); return; }
       }
       if (e.key === 'Tab') { e.preventDefault(); if (this.currentPage === 'overview') this.cycleAccount(); return; }
       if (/^[1-9]$/.test(e.key)) {
@@ -321,7 +333,7 @@ this.connectWebSocket();
     return '#' + [r, g, b].map(x => Math.round(x * 255).toString(16).padStart(2, '0')).join('');
   },
 
-  pageList() { return ['overview', 'bills', 'budget', 'cards', 'savings', 'debts', 'invoices', 'settings']; },
+  pageList() { return ['overview', 'bills', 'budget', 'cards', 'savings', 'debts', 'invoices', 'forecast', 'settings']; },
 
   isPageEnabled(page) {
     if (page === 'settings' || page === 'overview') return true;
@@ -366,7 +378,9 @@ this.connectWebSocket();
     if (this.overviewLineChart) { this.overviewLineChart.destroy(); this.overviewLineChart = null; }
     if (this.billsChart) { this.billsChart.destroy(); this.billsChart = null; }
     if (this.savingsChart) { this.savingsChart.destroy(); this.savingsChart = null; }
+    if (this.forecastChart) { this.forecastChart.destroy(); this.forecastChart = null; }
     this.currentPage = page;
+    document.body.classList.remove('mobile-nav-open');
     document.querySelectorAll('.page').forEach(p => {
       const active = p.id === 'page-' + page;
       p.classList.toggle('hidden', !active);
@@ -396,6 +410,10 @@ this.connectWebSocket();
   },
 
   toggleSidebar() {
+    if (window.matchMedia && window.matchMedia('(max-width: 980px)').matches) {
+      document.body.classList.toggle('mobile-nav-open');
+      return;
+    }
     const collapsed = document.body.classList.toggle('sb-collapsed');
     try {
       localStorage.setItem('bb-sidebar-collapsed', collapsed ? '1' : '0');
@@ -419,6 +437,7 @@ this.connectWebSocket();
   renderPage(page) {
     try {
       if (page === 'overview') this.renderOverview();
+      else if (page === 'forecast') this.renderForecast();
       else if (page === 'budget') this.renderBudget();
       else if (page === 'bills') this.renderBills();
       else if (page === 'cards') this.renderCards();
@@ -426,12 +445,94 @@ this.connectWebSocket();
       else if (page === 'debts') this.renderDebts();
       else if (page === 'invoices') this.renderInvoices();
       else if (page === 'settings') this.renderSettings();
+      if (page === 'settings' && window.UpdateUi) { try { UpdateUi.renderSettings(); } catch (err) { console.error('Update UI render failed:', err); } }
       const pageEl = document.getElementById('page-' + page);
       if (pageEl) this.upgradeAllSelects(pageEl);
+      this.refreshAttention();
+      this.updateGraphFooter();
     } catch (err) {
       console.error('renderPage failed:', err);
       if (!this._renderErrShown) { this._renderErrShown = true; alert('Render error: ' + err.message); }
     }
+  },
+
+updateGraphFooter() {
+    const button = document.getElementById('footer-graph-toggle');
+    if (!button) return;
+    const graphPage = this.currentPage === 'overview' || this.currentPage === 'bills' || this.currentPage === 'budget' || this.currentPage === 'forecast';
+    button.classList.toggle('hidden', !graphPage);
+    if (!graphPage) return;
+    const hidden = this.currentPage === 'overview'
+      ? !!this.data.settings.hideOverviewGraph
+      : this.currentPage === 'bills'
+        ? !!this.data.settings.hideBillsGraph
+        : this.currentPage === 'budget'
+          ? !!this.data.settings.hideBudgetGraph
+          : !!this.data.settings.hideForecastGraph;
+    button.textContent = hidden ? 'SHOW GRAPH' : 'HIDE GRAPH';
+    button.onclick = () => this.currentPage === 'overview'
+      ? this.toggleOverviewGraph()
+      : this.currentPage === 'bills'
+        ? this.toggleBillsGraph()
+        : this.currentPage === 'budget'
+          ? this.toggleBudgetGraph()
+          : this.toggleForecastGraph();
+  },
+
+  reconciliationEnabled() { return this.data && this.data.settings && this.data.settings.reconciliationEnabled !== false; },
+  async toggleReconciliationEnabled() {
+    this.data.settings.reconciliationEnabled = !this.reconciliationEnabled();
+    await this.save();
+    this.renderPage(this.currentPage);
+  },
+
+  attentionItems() {
+    const today = this.today();
+    const inDays = (date) => Math.round((new Date(date + 'T00:00:00') - new Date(today + 'T00:00:00')) / 86400000);
+    const items = [];
+    for (const bill of this.data.bills || []) {
+      if (bill.active === false || !bill.amount) continue;
+      const due = new Date(today + 'T00:00:00'); due.setDate(Math.min(Number(bill.dueDay) || 1, new Date(due.getFullYear(), due.getMonth() + 1, 0).getDate()));
+      let date = due.getFullYear() + '-' + String(due.getMonth() + 1).padStart(2, '0') + '-' + String(due.getDate()).padStart(2, '0');
+      const paid = (this.data.billPayments || []).some(p => p.billId === bill.id && p.month === date.slice(0, 7));
+      if (paid) continue;
+      let distance = inDays(date);
+      if (distance < 0) { due.setMonth(due.getMonth() + 1); date = due.getFullYear() + '-' + String(due.getMonth() + 1).padStart(2, '0') + '-' + String(due.getDate()).padStart(2, '0'); distance = inDays(date); }
+      if (distance <= 3) items.push({ severity: distance < 0 ? 1 : 3, date, label: bill.name + (distance < 0 ? ' is overdue' : distance === 0 ? ' is due today' : ' is due in ' + distance + ' days'), page: 'bills' });
+    }
+    if (window.ForecastEngine) {
+      const forecast = window.ForecastEngine.buildForecast(this.data, { startDate: today, days: 30, baseCurrency: this.baseCurrency(), rates: this.getRates() });
+      for (const shortfall of forecast.shortfalls.slice(0, 1)) {
+        const account = this.data.accounts.find(a => a.id === shortfall.accountId);
+        items.push({ severity: 2, date: shortfall.date, label: (account ? account.name : 'An account') + ' is forecast below zero', page: 'forecast' });
+      }
+    }
+    for (const recon of this.data.reconciliations || []) if (recon.status === 'in-progress') items.push({ severity: 4, date: recon.statementDate || today, label: 'Reconciliation needs review', page: 'overview' });
+    return items.sort((a, b) => a.severity - b.severity || a.date.localeCompare(b.date));
+  },
+
+  refreshAttention() {
+    const bar = document.getElementById('attention-bar');
+    if (!bar || !this.data) return;
+    const hidden = this.data.settings && this.data.settings.attentionBarHidden;
+    const items = this.attentionItems();
+    if (hidden || !items.length) { bar.innerHTML = ''; return; }
+    const visible = items.slice(0, 3);
+    bar.innerHTML = visible.map(item => '<button class="attention-item severity-' + item.severity + '" onclick="BlackBook.navigateTo(\'' + item.page + '\')">' + this.escapeHtml(item.label) + '</button>').join('') +
+      (items.length > 3 ? '<button class="attention-more" onclick="BlackBook.showAttention()">+' + (items.length - 3) + ' MORE</button>' : '') +
+      '<button class="btn btn-sm btn-danger btn-icon attention-hide" onclick="BlackBook.hideAttentionBar()" title="Hide attention bar">' + (this.xIcon ? this.xIcon() : '×') + '</button>';
+  },
+
+  async hideAttentionBar() { this.data.settings.attentionBarHidden = true; await this.save(); this.refreshAttention(); },
+  async showAttentionBar() { this.data.settings.attentionBarHidden = false; await this.save(); this.refreshAttention(); },
+  showAttention() {
+    const groups = ['URGENT', 'FORECAST', 'DUE SOON', 'REVIEW'];
+    const items = this.attentionItems();
+    const text = groups.map((name, index) => {
+      const group = items.filter(item => item.severity === index + 1);
+      return group.length ? name + '\n' + group.map(item => '• ' + item.label + ' (' + item.date + ')').join('\n') : '';
+    }).filter(Boolean).join('\n\n');
+    alert(text || 'Nothing needs attention.');
   },
 
   setSaveState(state) {
@@ -709,8 +810,30 @@ this.connectWebSocket();
     r(value);
   },
 
+  lineChartOptions(xTicks = {}) {
+    return {
+      responsive: true, maintainAspectRatio: false,
+      layout: { padding: { left: 8, right: 8, top: 8, bottom: 0 } },
+      plugins: {
+        legend: { display: false }, title: { display: false },
+        tooltip: { usePointStyle: true, boxPadding: 3, callbacks: {
+          label: c => ' ' + c.dataset.label + ': ' + this.fmtBase(c.parsed.y)
+        } }
+      },
+      scales: {
+        x: { ticks: { color: '#888888', maxRotation: 0, autoSkip: false, font: { size: 11 }, ...xTicks }, grid: { color: '#2a2a2a', drawBorder: false }, border: { display: false } },
+        y: { ticks: { color: '#888888', font: { size: 11 }, maxTicksLimit: 5, callback: value => new Intl.NumberFormat('en-US', { notation: 'compact', maximumFractionDigits: 1 }).format(value).toLowerCase() }, grid: { color: '#2a2a2a', drawBorder: false }, border: { display: false } }
+      }
+    };
+  },
+
+  fmtNumber(amount) {
+    const value = Number(amount) || 0;
+    return value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  },
+
   fmtBase(amount) {
-    return amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' ' + this.baseCurrency();
+    return this.fmtNumber(amount) + ' ' + this.baseCurrency();
   },
 
   round2(amount) {
@@ -723,7 +846,7 @@ this.connectWebSocket();
   },
 
   fmtAmount(amount, currency) {
-    return amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' ' + currency;
+    return this.fmtNumber(amount) + ' ' + currency;
   },
 
   fmtDualCurrency(amount, currency, accountCurrency, nativeAmount, nativeCurrency) {
@@ -733,12 +856,12 @@ this.connectWebSocket();
     if (nativeCurrency && nativeCurrency !== accCur) {
       const natAbs = Math.abs(nativeAmount);
       const baseAbs = Math.abs(amount);
-      return sign + natAbs.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' ' + nativeCurrency + ' (' + baseAbs.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' ' + accCur + ')';
+      return sign + this.fmtNumber(natAbs) + ' ' + nativeCurrency + ' (' + this.fmtNumber(baseAbs) + ' ' + accCur + ')';
     }
     const abs = Math.abs(amount);
-    if (cur === accCur) return sign + abs.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' ' + cur;
+    if (cur === accCur) return sign + this.fmtNumber(abs) + ' ' + cur;
     const base = Math.abs(this.toBase(abs, cur));
-    return sign + base.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' ' + accCur + ' (' + abs.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' ' + cur + ')';
+    return sign + this.fmtNumber(base) + ' ' + accCur + ' (' + this.fmtNumber(abs) + ' ' + cur + ')';
   },
 
   accountBalance(accountId) {
@@ -932,7 +1055,7 @@ this.connectWebSocket();
       for (const tx of txResults) {
         const cat = this.data.categories.find(c => c.id === tx.categoryId);
         const sign = tx.type === 'income' ? '+' : '-';
-        const label = tx.date + '  ' + sign + this.toBase(tx.amount, tx.currency).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + '  ' + (cat ? cat.name : '?') + (tx.note ? '  ' + tx.note : '');
+        const label = tx.date + '  ' + sign + this.fmtNumber(this.toBase(tx.amount, tx.currency)) + '  ' + (cat ? cat.name : '?') + (tx.note ? '  ' + tx.note : '');
         searchHtml += this._paletteItemHtml(label, '');
         this._cmdPaletteItems.push({ execute: (_txId => () => { this.closeCommandPalette(); this.openEditTransaction(_txId); })(tx.id) });
       }
@@ -1610,12 +1733,13 @@ this.connectWebSocket();
 
   monthPickerHtml() {
     const months = ['JANUARY', 'FEBRUARY', 'MARCH', 'APRIL', 'MAY', 'JUNE', 'JULY', 'AUGUST', 'SEPTEMBER', 'OCTOBER', 'NOVEMBER', 'DECEMBER'];
+    const shortMonths = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
     const now = new Date();
     let btns = '';
     for (let i = 0; i < 12; i++) {
       const sel = i === this.vm();
       const isCur = now.getFullYear() === this.vy() && now.getMonth() === i;
-      btns += '<button class="mp-month' + (sel ? ' selected' : '') + (isCur && !sel ? ' current' : '') + '" onclick="BlackBook.pickMonth(' + i + ')">' + months[i] + '</button>';
+      btns += '<button class="mp-month' + (sel ? ' selected' : '') + (isCur && !sel ? ' current' : '') + '" onclick="BlackBook.pickMonth(' + i + ')"><span class="month-name-full">' + months[i] + '</span><span class="month-name-short">' + shortMonths[i] + '</span><span class="month-name-number">' + (i + 1) + '</span></button>';
     }
     const offToday = !(now.getFullYear() === this.vy() && now.getMonth() === this.vm());
     return '<div class="month-picker">' +
@@ -1934,11 +2058,13 @@ this.connectWebSocket();
     if (pid === 'page-overview') return 'toggleOverviewGraph';
     if (pid === 'page-bills') return 'toggleBillsGraph';
     if (pid === 'page-budget') return 'toggleBudgetGraph';
+    if (pid === 'page-forecast') return 'toggleForecastGraph';
     const canvas = panel.querySelector('canvas');
     const id = canvas ? canvas.id : '';
     if (id === 'overview-chart' || id === 'overview-line-chart' || id === 'pie') return 'toggleOverviewGraph';
     if (id === 'bills-chart') return 'toggleBillsGraph';
     if (id === 'budget-chart') return 'toggleBudgetGraph';
+    if (id === 'forecast-chart') return 'toggleForecastGraph';
     return null;
   },
 

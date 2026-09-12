@@ -28,7 +28,7 @@ async function startServer(dataDir) {
   child.stdout.on('data', (chunk) => { output += chunk; });
   child.stderr.on('data', (chunk) => { output += chunk; });
   const started = await new Promise((resolve, reject) => {
-    const timeout = setTimeout(() => reject(new Error(`Server did not start: ${output}`)), 5_000);
+    const timeout = setTimeout(() => { clearInterval(poll); reject(new Error(`Server did not start: ${output}`)); }, 5_000);
     const poll = setInterval(() => {
       if (output.includes('Black Book running')) { clearTimeout(timeout); clearInterval(poll); resolve(); }
     }, 20);
