@@ -8,7 +8,11 @@ import { strToU8, zipSync } from 'fflate';
 import { Updater, UpdateError } from '../lib/updater.js';
 import { currentVersion } from '../lib/version-util.js';
 
-const NEW_VERSION = '0.9.0';
+function bumpPatch(version) {
+  const parts = version.split('.').map(Number);
+  return parts[0] + '.' + parts[1] + '.' + (parts[2] + 1);
+}
+const NEW_VERSION = bumpPatch(currentVersion());
 
 function makeRelease(version, { count = 1 } = {}) {
   const name = 'black-book-v' + version + '-win.zip';
