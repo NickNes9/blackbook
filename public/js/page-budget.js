@@ -12,8 +12,9 @@ Object.assign(window.BlackBook, {
       '<div class="page-scroll-wrap">' + this.budgetCardsHtml() + '</div>' +
       (hideGraph
         ? ''
-        : this.budgetChipsHtml() +
-          '<div class="overview-charts"><div class="chart-panel chart-panel-full"><canvas id="budget-chart"></canvas></div></div>');
+        : '<div class="list-sep"></div>' +
+          this.budgetChipsHtml() +
+          '<div class="overview-charts"><div class="chart-panel overview-line-panel"><div class="chart-head-row"><span class="chart-title-text">SPEND BY CATEGORY</span></div><canvas id="budget-chart"></canvas></div></div>');
     if (!hideGraph) setTimeout(() => this.renderBudgetChart(), 50);
   },
 

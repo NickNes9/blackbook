@@ -21,14 +21,21 @@ window.BlackBook = {
   _ovSortDir: 'desc',
 
   async init() {
+    this.enhancePasswordFields();
+    let response;
     try {
-      this.data = await (await fetch('/api/load' + (this.profile ? '?profile=' + encodeURIComponent(this.profile) : ''))).json();
+      response = await fetch('/api/load' + (this.profile ? '?profile=' + encodeURIComponent(this.profile) : ''));
     } catch (e) {
       document.getElementById('page-overview').innerHTML =
         '<div class="empty-state"><div class="empty-state-title">LOADING FAILED</div><div class="empty-state-text">Could not load data from the Black Book server. Reopen the app (Black Book.exe) or retry below.</div>' +
         '<div style="margin-top:14px;"><button class="btn btn-primary" onclick="location.reload()">RETRY</button></div></div>';
       return;
     }
+    if (response.status === 401) {
+      this.showUnlockOverlay(this.profile);
+      return;
+    }
+    this.data = await response.json();
     if (!this.data.bills) this.data.bills = [];
     if (!this.data.billPayments) this.data.billPayments = [];
     if (!this.data.savingsGoals) this.data.savingsGoals = [];
@@ -569,6 +576,123 @@ updateGraphFooter() {
     }
   },
 
+  enhancePasswordFields() {
+    document.querySelectorAll('input[type="password"]').forEach((input) => {
+      if (input.dataset.eyeEnhanced) return;
+      input.dataset.eyeEnhanced = '1';
+      const wrap = document.createElement('span');
+      wrap.className = 'password-field';
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'password-eye';
+      btn.setAttribute('aria-label', 'Show password');
+      btn.innerHTML = this._eyeSvg(false);
+      btn.addEventListener('click', () => {
+        const show = input.type === 'password';
+        input.type = show ? 'text' : 'password';
+        btn.innerHTML = this._eyeSvg(show);
+        btn.setAttribute('aria-label', show ? 'Hide password' : 'Show password');
+        input.focus();
+      });
+      input.parentNode.insertBefore(wrap, input);
+      wrap.appendChild(input);
+      wrap.appendChild(btn);
+    });
+  },
+
+  _eyeSvg(off) {
+    const eye = '<svg class="password-eye-icon" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" fill-rule="evenodd" d="M12 4.5C6.5 4.5 1.8 9.5 0.3 12 1.8 14.5 6.5 19.5 12 19.5s10.2-5 11.7-7.5C22.2 9.5 17.5 4.5 12 4.5z M12 14.6a2.6 2.6 0 1 1 0-5.2 2.6 2.6 0 0 1 0 5.2z"/></svg>';
+    if (!off) return eye;
+    return '<svg class="password-eye-icon" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" fill-rule="evenodd" d="M12 4.5C6.5 4.5 1.8 9.5 0.3 12 1.8 14.5 6.5 19.5 12 19.5s10.2-5 11.7-7.5C22.2 9.5 17.5 4.5 12 4.5z"/><line x1="4" y1="20" x2="20" y2="4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>';
+  },
+
+  showUnlockOverlay(name) {
+    const overlay = document.getElementById('unlock-overlay');
+    const nameEl = document.getElementById('unlock-profile-name');
+    const form = document.getElementById('unlock-form');
+    const errEl = document.getElementById('unlock-error');
+    const pwInput = document.getElementById('unlock-password');
+    const sel = document.getElementById('unlock-profile');
+    this._pendingProfile = name || '';
+    nameEl.textContent = name ? name.toUpperCase() : 'DEFAULT';
+    if (sel) this.populateUnlockSelect(sel, name || '', () => { pwInput.focus(); });
+    overlay.classList.remove('hidden');
+    errEl.classList.add('hidden');
+    pwInput.value = '';
+    pwInput.focus();
+    form.onsubmit = (e) => this.submitUnlock(e);
+  },
+
+  async populateUnlockSelect(sel, selected, done) {
+    let profiles = [];
+    let defaultHasPassword = false;
+    try {
+      const res = await fetch('/api/profiles');
+      const out = await res.json();
+      profiles = out.profiles || [];
+      defaultHasPassword = !!out.defaultHasPassword;
+    } catch (e) { }
+    this._defaultHasPassword = defaultHasPassword;
+    this._profilesWithPasswords = profiles.filter(p => p.hasPassword).map(p => p.name);
+    let html = '<option value="">DEFAULT' + (defaultHasPassword ? ' &bull;' : '') + '</option>';
+    for (const p of profiles) {
+      html += '<option value="' + this.escapeHtml(p.name) + '"' + (p.name === selected ? ' selected' : '') + '>' + this.escapeHtml(p.name).toUpperCase() + (p.hasPassword ? ' &bull;' : '') + '</option>';
+    }
+    sel.innerHTML = html;
+    sel.value = selected || '';
+    if (done) done();
+  },
+
+  unlockProfileSelected(sel) {
+    const name = sel.value || '';
+    const locked = name ? (this._profilesWithPasswords || []).includes(name) : !!this._defaultHasPassword;
+    if (!locked) {
+      localStorage.setItem('mb_profile', name || '');
+      location.reload();
+      return;
+    }
+    this._pendingProfile = name || '';
+    this._unlockForSwitch = true;
+    const nameEl = document.getElementById('unlock-profile-name');
+    if (nameEl) nameEl.textContent = name ? name.toUpperCase() : 'DEFAULT';
+    const errEl = document.getElementById('unlock-error');
+    if (errEl) errEl.classList.add('hidden');
+    const pwInput = document.getElementById('unlock-password');
+    if (pwInput) { pwInput.value = ''; pwInput.focus(); }
+  },
+
+  async submitUnlock(e) {
+    if (e) e.preventDefault();
+    const sel = document.getElementById('unlock-profile');
+    const pendingFromSelect = sel && sel.value !== undefined && sel.value !== null ? sel.value : '';
+    const pw = document.getElementById('unlock-password').value;
+    const name = this._pendingProfile !== undefined && this._pendingProfile !== null ? this._pendingProfile
+      : (pendingFromSelect !== '' && this.profile !== pendingFromSelect ? pendingFromSelect : this.profile);
+    const errEl = document.getElementById('unlock-error');
+    errEl.classList.add('hidden');
+    try {
+      const res = await fetch('/api/unlock', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, password: pw })
+      });
+      if (!res.ok) {
+        errEl.textContent = (await res.json().catch(() => ({}))).error || 'Wrong password';
+        errEl.classList.remove('hidden');
+        return;
+      }
+      if (name !== this.profile) {
+        localStorage.setItem('mb_profile', name || '');
+        this._unlockForSwitch = false;
+        this._pendingProfile = null;
+      }
+      location.reload();
+    } catch (err) {
+      errEl.textContent = 'Server unreachable';
+      errEl.classList.remove('hidden');
+    }
+  },
+
   stripTransient(obj) {
     if (!obj || typeof obj !== 'object' || Array.isArray(obj)) return obj;
     const out = {};
@@ -795,6 +919,33 @@ updateGraphFooter() {
       const input = document.getElementById('prompt-input');
       input.value = (opts.defaultValue == null ? '' : String(opts.defaultValue));
       input.placeholder = (opts.placeholder == null ? '' : String(opts.placeholder));
+      const promptWrap = document.querySelector('.prompt-input-wrap');
+      if (opts.password) {
+        input.type = 'password';
+        if (!input.dataset.eyeEnhanced && promptWrap) {
+          input.dataset.eyeEnhanced = '1';
+          const btn = document.createElement('button');
+          btn.type = 'button';
+          btn.className = 'password-eye';
+          btn.setAttribute('aria-label', 'Show password');
+          btn.innerHTML = this._eyeSvg(false);
+          btn.addEventListener('click', () => {
+            const show = input.type === 'password';
+            input.type = show ? 'text' : 'password';
+            btn.innerHTML = this._eyeSvg(show);
+            btn.setAttribute('aria-label', show ? 'Hide password' : 'Show password');
+            input.focus();
+          });
+          promptWrap.appendChild(btn);
+        } else if (promptWrap) {
+          const oldBtn = promptWrap.querySelector('.password-eye');
+          if (oldBtn) oldBtn.classList.remove('hidden');
+        }
+      } else {
+        input.type = 'text';
+        const oldBtn = promptWrap ? promptWrap.querySelector('.password-eye') : null;
+        if (oldBtn) oldBtn.classList.add('hidden');
+      }
       document.getElementById('prompt-ok').textContent = opts.confirmText || 'OK';
       this._promptResolve = resolve;
       this.openModal('prompt-modal');

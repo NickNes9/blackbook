@@ -44,3 +44,37 @@ test('corrupted profiles are not overwritten or silently accepted', () => withSt
 test('saves require an object document', () => withStore((store) => {
   assert.throws(() => store.write('Test', []), (error) => error instanceof StorageError && error.status === 400);
 }));
+
+test('auth helpers default to empty and exclude no profile from listing', () => withStore((store) => {
+  assert.equal(store.hasPassword('Nick'), false);
+  assert.deepEqual(store.list(), []);
+}));
+
+test('setAuth/getAuth/removeAuth round-trip', () => withStore((store) => {
+  store.write('Nick', { marker: true });
+  store.setAuth('Nick', { salt: 'abc', N: 32768, r: 8, p: 1 });
+  assert.equal(store.hasPassword('Nick'), true);
+  assert.deepEqual(store.getAuth('Nick'), { salt: 'abc', N: 32768, r: 8, p: 1 });
+  assert.deepEqual(store.list(), [{ name: 'Nick' }]);
+  store.removeAuth('Nick');
+  assert.equal(store.hasPassword('Nick'), false);
+}));
+
+test('auth entries support the default profile and survive renames', () => withStore((store) => {
+  store.write('', { marker: true });
+  store.setAuth('', { salt: 's', N: 32768, r: 8, p: 1 });
+  assert.equal(store.hasPassword(''), true);
+  store.rename('', 'Home');
+  assert.equal(store.hasPassword(''), false);
+  assert.equal(store.hasPassword('Home'), true);
+}));
+
+test('deleting a profile removes its auth entry but keeps others', () => withStore((store) => {
+  store.write('A', {});
+  store.write('B', {});
+  store.setAuth('A', { salt: 'a', N: 32768, r: 8, p: 1 });
+  store.setAuth('B', { salt: 'b', N: 32768, r: 8, p: 1 });
+  store.delete('A');
+  assert.equal(store.hasPassword('A'), false);
+  assert.equal(store.hasPassword('B'), true);
+}));

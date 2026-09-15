@@ -7,8 +7,8 @@ using System.Threading.Tasks;
 
 static class Launcher
 {
-    // Must stay in sync with server.js PREFERRED_PORTS.
-    static readonly int[] Ports = { 3000, 4300, 8400, 8800, 9000, 9900 };
+    // Must stay in sync with lib/server-config.js preferredPorts().
+    static readonly int[] Ports = { 9999, 9877, 9653, 9441, 9227, 8819 };
 
     static string Url(int port)
     {
@@ -103,6 +103,6 @@ static class Launcher
             if (bound != 0) break;
             Thread.Sleep(300);
         }
-        OpenBrowser(Url(bound == 0 ? 4300 : bound));
+        OpenBrowser(Url(bound == 0 ? 9999 : bound));
     }
 }

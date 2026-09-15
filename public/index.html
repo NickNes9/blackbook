@@ -455,7 +455,7 @@
         <button class="modal-close" onclick="BlackBook._resolvePrompt(null)">&times;</button>
       </div>
       <div id="prompt-message" class="confirm-message"></div>
-      <input type="text" id="prompt-input" class="input" autocomplete="off" spellcheck="false" autofocus onkeydown="if (event.key === 'Enter') BlackBook._resolvePrompt(this.value); else if (event.key === 'Escape') BlackBook._resolvePrompt(null);">
+      <span class="password-field prompt-input-wrap"><input type="text" id="prompt-input" class="input" autocomplete="off" spellcheck="false" autofocus onkeydown="if (event.key === 'Enter') BlackBook._resolvePrompt(this.value); else if (event.key === 'Escape') BlackBook._resolvePrompt(null);"></span>
       <div class="form-actions">
         <button type="button" class="btn btn-secondary" onclick="BlackBook._resolvePrompt(null)">Cancel</button>
         <button type="button" class="btn btn-primary" id="prompt-ok" onclick="BlackBook._resolvePrompt(document.getElementById('prompt-input').value)">OK</button>
@@ -490,9 +490,35 @@
         <div class="form-group"><label>Profile name</label><input type="text" id="new-profile-name" class="input" maxlength="40" required autofocus autocomplete="off"></div>
         <div class="form-group"><label>First account name</label><input type="text" id="new-profile-account" class="input" maxlength="12" required autocomplete="off"></div>
         <div class="form-group"><label>Default currency</label><select id="new-profile-currency" class="input"><option value="">LOADING...</option></select></div>
+        <div class="form-group"><label>Password <span style="color:var(--text-muted);font-weight:normal;">(optional, encrypts this profile)</span></label><input type="password" id="new-profile-password" class="input" autocomplete="new-password"></div>
+        <div class="form-group"><label>Confirm password</label><input type="password" id="new-profile-password-confirm" class="input" autocomplete="new-password"></div>
         <div class="form-actions">
           <button type="button" class="btn btn-secondary" onclick="BlackBook.closeModal('new-profile-modal')">Cancel</button>
           <button type="submit" class="btn btn-primary">Create</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Profile Password Modal -->
+  <div id="password-modal" class="modal hidden">
+    <div class="modal-backdrop"></div>
+    <div class="modal-content" style="max-width:420px;">
+      <div class="modal-header">
+        <h2 id="password-modal-title">Profile Password</h2>
+        <button class="modal-close" onclick="BlackBook.closeModal('password-modal')">&times;</button>
+      </div>
+      <div id="password-message" class="confirm-message"></div>
+      <form id="password-form">
+        <div class="form-group hidden" id="password-current-group"><label>Current password</label><input type="password" id="password-current" class="input" autocomplete="off"></div>
+        <div class="form-group hidden" id="password-new-group"><label>New password</label><input type="password" id="password-new" class="input" autocomplete="new-password"></div>
+        <div class="form-group hidden" id="password-confirm-group"><label>Confirm new password</label><input type="password" id="password-confirm" class="input" autocomplete="new-password"></div>
+        <div class="form-actions" style="justify-content:space-between;">
+          <button type="button" class="btn btn-danger hidden" id="password-remove" onclick="BlackBook.removePassword(BlackBook._passwordProfile || '')">REMOVE PASSWORD</button>
+          <div style="display:inline-flex;gap:6px;">
+            <button type="button" class="btn btn-secondary" onclick="BlackBook.closeModal('password-modal')">Cancel</button>
+            <button type="submit" class="btn btn-primary" id="password-submit">Save Password</button>
+          </div>
         </div>
       </form>
     </div>
@@ -639,6 +665,21 @@
     </div>
   </div>
 
+  <div id="unlock-overlay" class="unlock-overlay hidden">
+    <div class="unlock-box">
+      <svg width="36" height="36" viewBox="0 0 24 24" aria-hidden="true" style="margin-bottom:12px;"><circle cx="12" cy="12" r="11" fill="#161616" stroke="#3f3f46" stroke-width="1"/><path d="M6.5 8.2 L17.5 8.2 L12 16.8 Z" fill="#e8e6e2"/></svg>
+      <div class="unlock-profile-name" id="unlock-profile-name"></div>
+      <div class="unlock-text">This profile is password-protected.</div>
+      <select id="unlock-profile" class="input unlock-select" onchange="BlackBook.unlockProfileSelected(this)"></select>
+      <form id="unlock-form" class="unlock-form">
+        <input type="password" id="unlock-password" class="input" placeholder="Password" autocomplete="off" autofocus>
+        <div id="unlock-error" class="unlock-error hidden"></div>
+        <button type="submit" class="btn btn-primary unlock-btn">UNLOCK</button>
+      </form>
+    </div>
+  </div>
+
+  <!-- Import Rule Modal -->
   <div id="import-rule-modal" class="modal hidden">
     <div class="modal-backdrop"></div>
     <div class="modal-content">
