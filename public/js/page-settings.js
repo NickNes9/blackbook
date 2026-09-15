@@ -20,8 +20,11 @@ Object.assign(window.BlackBook, {
     let profiles = [];
     try {
       const res = await fetch('/api/profiles');
-      profiles = (await res.json()).profiles || [];
+      const out = await res.json();
+      profiles = out.profiles || [];
+      this._defaultHasPassword = !!out.defaultHasPassword;
     } catch (e) {}
+    this._profilesWithPasswords = profiles.filter(p => p.hasPassword).map(p => p.name);
     let html = '<div class="settings-row' + (!this.profile ? ' settings-row-active' : '') + '"><span class="settings-row-name">DEFAULT</span><span class="settings-row-meta">' + (this.profile ? 'switch to default data set' : 'active') + '</span>' +
       (!this.profile ? '<button class="btn btn-sm btn-secondary" onclick="BlackBook.renameProfile(\'\')">RENAME</button>' : '<button class="btn btn-sm btn-secondary" onclick="BlackBook.switchProfile(\'\')">OPEN</button>') + '</div>';
     if (!profiles.length) html += '<div style="padding:8px;color:var(--text-muted);font-size:13px;">No extra profiles yet.</div>';
@@ -29,22 +32,93 @@ Object.assign(window.BlackBook, {
       const active = p.name === this.profile;
       html += '<div class="settings-row' + (active ? ' settings-row-active' : '') + '">' +
         '<span class="settings-row-name">' + this.escapeHtml(p.name).toUpperCase() + '</span>' +
-        '<span class="settings-row-meta">' + (active ? 'active profile' : '') + '</span>' +
+        '<span class="settings-row-meta">' + (p.hasPassword ? '\ud83d\udd12 ' : '') + (active ? 'active profile' : '') + '</span>' +
         (!active ? '<button class="btn btn-sm btn-secondary" onclick="BlackBook.switchProfile(\x27' + this.escapeHtml(p.name) + '\x27)">OPEN</button>' : '') +
         '<button class="btn btn-sm btn-secondary" onclick="BlackBook.renameProfile(\x27' + this.escapeHtml(p.name) + '\x27)">RENAME</button>' +
+        '<button class="btn btn-sm btn-secondary" onclick="BlackBook.passwordModal(\x27' + this.escapeHtml(p.name) + '\x27)">PASSWORD</button>' +
         '<button class="btn btn-sm btn-danger btn-icon" title="Delete profile" onclick="BlackBook.deleteProfile(\x27' + this.escapeHtml(p.name) + '\x27)">' + this.xIcon() + '</button></div>';
     }
     el.innerHTML = html;
   },
 
   switchProfile(name) {
+    this._pendingProfile = name || '';
+    const locked = name ? (this._profilesWithPasswords && this._profilesWithPasswords.includes(name)) : (this._defaultHasPassword !== undefined ? this._defaultHasPassword : false);
+    if (locked) {
+      this._unlockForSwitch = true;
+      this.showUnlockOverlay(name || '');
+      return;
+    }
     localStorage.setItem('mb_profile', name || '');
     location.reload();
   },
   createProfile() {
     this.populateNewProfileModal();
+    this.resetNewProfilePassword();
     this.openModal('new-profile-modal');
     setTimeout(() => { const f = document.getElementById('new-profile-name'); if (f) f.focus(); }, 30);
+  },
+
+  resetNewProfilePassword() {
+    const pw = document.getElementById('new-profile-password');
+    const confirm = document.getElementById('new-profile-password-confirm');
+    if (pw) pw.value = '';
+    if (confirm) confirm.value = '';
+  },
+
+  passwordModal(name) {
+    const hasExisting = name ? (this._profilesWithPasswords || []).includes(name) : !!this._defaultHasPassword;
+    const titleEl = document.getElementById('password-modal-title');
+    const messageEl = document.getElementById('password-message');
+    const currentGroup = document.getElementById('password-current-group');
+    const newGroup = document.getElementById('password-new-group');
+    const confirmGroup = document.getElementById('password-confirm-group');
+    const submitBtn = document.getElementById('password-submit');
+    this._passwordProfile = name || '';
+    titleEl.textContent = hasExisting ? 'Change/Remove Password' : 'Set Password';
+    messageEl.textContent = (name ? name.toUpperCase() : 'DEFAULT') + (hasExisting ? ' \u2014 enter your current password to change or remove it.' : ' \u2014 optional password encrypts this profile.');
+    currentGroup.classList.toggle('hidden', !hasExisting);
+    newGroup.classList.toggle('hidden', false);
+    confirmGroup.classList.toggle('hidden', false);
+    const removeBtn = document.getElementById('password-remove');
+    if (removeBtn) removeBtn.classList.toggle('hidden', !hasExisting);
+    submitBtn.textContent = 'Save Password';
+    document.getElementById('password-current').value = '';
+    document.getElementById('password-new').value = '';
+    document.getElementById('password-confirm').value = '';
+    this.openModal('password-modal');
+    setTimeout(() => {
+      const target = hasExisting ? document.getElementById('password-current') : document.getElementById('password-new');
+      if (target) target.focus();
+    }, 30);
+  },
+
+  async submitPasswordForm(e) {
+    if (e) e.preventDefault();
+    const name = this._passwordProfile || '';
+    const current = document.getElementById('password-current').value;
+    const next = document.getElementById('password-new').value;
+    const confirm = document.getElementById('password-confirm').value;
+    if (!next) { alert('Enter a new password.'); document.getElementById('password-new').focus(); return; }
+    if (next !== confirm) { alert('The new passwords do not match.'); document.getElementById('password-confirm').focus(); return; }
+    const payload = { action: 'setPassword', name, newPassword: next };
+    if (current) payload.currentPassword = current;
+    const res = await fetch('/api/profiles', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+    const out = await res.json();
+    if (!res.ok) { alert(out.error || 'Failed'); return; }
+    this.closeModal('password-modal');
+    this.refreshProfilesList();
+  },
+
+  async removePassword(name) {
+    this.closeModal('password-modal');
+    if (!(await this.confirmModal({ title: 'Remove Password', message: (name || 'DEFAULT') + ' \u2014 your data will be stored without encryption. Continue?', confirmText: 'Remove' }))) return;
+    const current = await this.promptModal({ title: 'Enter Current Password', message: 'Enter the current password to remove protection from this profile:', confirmText: 'Remove', password: true });
+    if (current === null) return;
+    const res = await fetch('/api/profiles', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'removePassword', name, currentPassword: current }) });
+    const out = await res.json();
+    if (!res.ok) { alert(out.error || 'Failed'); return; }
+    this.refreshProfilesList();
   },
 
   allCurrencyCodes() {
@@ -65,14 +139,19 @@ Object.assign(window.BlackBook, {
     const nameEl = document.getElementById('new-profile-name');
     const accEl = document.getElementById('new-profile-account');
     const curEl = document.getElementById('new-profile-currency');
+    const pwEl = document.getElementById('new-profile-password');
+    const pwConfirmEl = document.getElementById('new-profile-password-confirm');
     const name = nameEl.value.trim();
     const account = accEl.value.trim();
     const currency = curEl.value;
+    const password = pwEl ? pwEl.value : '';
+    const passwordConfirm = pwConfirmEl ? pwConfirmEl.value : '';
     if (!name) { alert('Enter a name for the new profile.'); nameEl.focus(); return; }
     if (!account) { alert('Enter a name for the first account.'); accEl.focus(); return; }
     if (!currency) { alert('Choose a default currency.'); curEl.focus(); return; }
+    if (password && password !== passwordConfirm) { alert('The passwords do not match.'); pwEl.focus(); return; }
     try {
-      await this._createProfile(name, account, currency);
+      await this._createProfile(name, account, currency, password);
     } catch (err) {
       alert('Could not create the profile \u2014 the Black Book server appears to be down.');
       return;
@@ -80,8 +159,10 @@ Object.assign(window.BlackBook, {
     this.closeModal('new-profile-modal');
   },
 
-  async _createProfile(name, account, currency) {
-    const res = await fetch('/api/profiles', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'create', name: name }) });
+  async _createProfile(name, account, currency, password) {
+    const payload = { action: 'create', name: name };
+    if (password) payload.password = password;
+    const res = await fetch('/api/profiles', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
     const out = await res.json();
     if (!res.ok) { alert(out.error || 'Failed'); return; }
     const fresh = await (await fetch('/api/load?profile=' + encodeURIComponent(name))).json();
@@ -617,6 +698,11 @@ Object.assign(window.BlackBook, {
       npForm._bound = true;
       npForm.addEventListener('submit', (e) => this.submitNewProfile(e));
     }
+    const pwForm = document.getElementById('password-form');
+    if (pwForm && !pwForm._bound) {
+      pwForm._bound = true;
+      pwForm.addEventListener('submit', (e) => this.submitPasswordForm(e));
+    }
     const accForm = document.getElementById('settings-account-form');
     if (accForm && !accForm._bound) {
       accForm._bound = true;
@@ -976,7 +1062,7 @@ Object.assign(window.BlackBook, {
       '<div class="settings-list">' + ((this.data.importRules || []).map(rule => { const cat = this.data.categories.find(c => c.id === rule.categoryId); return '<div class="settings-row"><span class="settings-row-name">IF DESCRIPTION HAS “' + this.escapeHtml(rule.match) + '”</span><span class="settings-row-meta">→ ' + this.escapeHtml(cat ? cat.name : 'missing category') + '</span><button class="btn btn-sm btn-danger btn-icon" onclick="BlackBook.deleteImportRule(\'' + rule.id + '\')">' + this.xIcon() + '</button></div>'; }).join('') || '<div style="padding:8px;color:var(--text-muted);font-size:13px;">No rules yet. Rules apply while rows are staged for import.</div>') + '</div></div>' +
       '<div></div></div>' +
 
-      '<div class="settings-footer">BLACK BOOK <span id="settings-footer-version">v0.0.0</span> &middot; Created by Nikola Ne&scaron;i&#263;</div>';
+      '<div class="settings-footer">BLACK BOOK <span id="settings-footer-version">v0.0.0</span> &middot; Created by <a href="https://nine9.rs" target="_blank" rel="noopener">Nikola Ne&scaron;i&#263;</a></div>';
   },
 
   async refreshRate(code) {

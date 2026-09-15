@@ -23,6 +23,14 @@ A local-first personal finance console. Terminal aesthetic with light/dark theme
 - **Profiles** — isolated data sets (default + named profiles) stored as separate files, per-profile page visibility
 - **Command palette** — `/` or `Ctrl-K`: search transactions, pages, quick commands (`t 500 cash bank`, `pay electricity`, `bg groceries 20000`, `csv`, …)
 
+## What's new in 0.9.1
+
+- **Profile passwords** — optionally encrypt any profile at rest with AES-256-GCM (no new dependencies, uses `node:crypto`). Lock the default profile or any named profile from Settings; the browser prompts for the password on every launch. Forgetting a password makes the data unrecoverable, but deleting the password restores plaintext access. Show/hide eye-toggle on all password fields.
+- **Overview filter toggles** — the INCOME / EXPENSES chips on Overview have been replaced by a single TYPE toggle (TYPE → EXPENSES → INCOME cycle). The reconciliation filter now cycles STATUS → MARKED → UNMARKED. Both labels reset to neutral text when inactive.
+- **Budget graph chrome** — the budget page now matches Overview / Bills with an orange accent line, "SPEND BY CATEGORY" title bar, and the `overview-line-panel` class so all four chart pages look consistent. Filter chips sit between the orange line and the graph title. Over-100% category percentages turn red.
+- **Default port 9999** — the server, launchers (`Black Book.exe`, `.sh`, `.command`), and preferred-port fallback list now default to `9999` instead of `3000`, to reduce collisions with other local tools.
+- **Functions doc** — a comprehensive user-facing capabilities document (`functions.txt`) now lives in the repo root, covering every page, modal, keyboard shortcut, and command-palette command.
+
 ## What's new in 0.9.0
 
 - **Automatic updates** — Black Book checks GitHub Releases for a newer version and shows a banner when one is available; one click downloads the build (SHA-256 verified), installs it without touching your `profiles/`, and restarts on the same port while your open tab reloads automatically. Settings → ABOUT & UPDATES shows the current version and lets you check for or apply updates manually.
@@ -34,10 +42,6 @@ A local-first personal finance console. Terminal aesthetic with light/dark theme
 - **Local-only server** — Black Book listens only on this computer, and its stop script no longer terminates unrelated Node programs.
 - **Reliable amount entry** — normal values, decimal commas, and math expressions such as `50+20*3` work again under the app's security safeguards.
 - **Searchable categories** — type in any category field to filter choices, then press Enter or click a result to select it.
-
-## In development on the next version
-
-- Import review/rules, and the priority attention bar are being refined on a separate local feature branch. Existing `profiles/*.json` history remains the source of truth; the new fields are optional and additive.
 
 ## Keyboard
 
@@ -61,7 +65,7 @@ npm install
 node server.js
 ```
 
-Open http://localhost:3000 — or just run the launcher that matches your OS:
+Open http://localhost:9999 — or just run the launcher that matches your OS:
 - **Windows** — `Black Book.exe` starts the server hidden and opens your browser; `Stop Black Book.bat` shuts down that Black Book server only.
 - **Linux** — double-click `Black Book.sh` (or run it from a terminal); `Stop Black Book.sh` stops it. The script needs `node` on the PATH.
 - **macOS** — double-click `Black Book.command` opens it in Terminal; `Stop Black Book.command` stops it. The script needs `node` on the PATH.
@@ -90,14 +94,18 @@ The app self-updates from GitHub Releases. It looks for `black-book-vX.Y.Z-{win,
 To publish a release from a checkout of this repo:
 
 ```bash
-npm run release -- -Version 0.9.0   # bumps package.json + package-lock.json, builds dist\*.zip + checksums
-gh release create v0.9.0 --title "v0.9.0" --notes "<changelog>" dist\black-book-v0.9.0-win.zip dist\black-book-v0.9.0-linux.zip dist\black-book-v0.9.0-mac.zip dist\checksums.sha256
+npm run release -- -Version 0.9.1   # bumps package.json + package-lock.json, builds dist\*.zip + checksums
+gh release create v0.9.1 --title "v0.9.1" --notes "<changelog>" dist\black-book-v0.9.1-win.zip dist\black-book-v0.9.1-linux.zip dist\black-book-v0.9.1-mac.zip dist\checksums.sha256
 ```
 
 Windows users keep using `Black Book.exe`; Linux/macOS users keep using `Black Book.sh` / `Black Book.command`. Updates ship each platform's launcher and re-apply the executable bit automatically. Applied updates keep the previous code under `updates/backup-<version>/` for rollback.
 
+## Capabilities
+
+Every user-facing feature — pages, modals, buttons, keyboard shortcuts, command-palette commands, and Settings — is documented in [`functions.txt`](functions.txt) in the repo root. It is maintained alongside the code whenever behavior changes.
+
 ---
 
-**BLACK BOOK v0.9.0**
+**BLACK BOOK v0.9.1**
 
 Created by Nikola Nešić

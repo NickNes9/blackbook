@@ -1,0 +1,280 @@
+BLACK BOOK - USER CAPABILITIES
+==============================
+
+Personal finance tracking app. Everything below is what the user can do
+in the front-end.
+
+----------------------------------------------------------------------
+GLOBAL / ALL PAGES
+----------------------------------------------------------------------
+
+- Navigate between pages: Overview, Bills, Budget, Credit Cards,
+  Savings, Debts, Invoices, Forecast, Settings (sidebar, or press 1-9).
+- Switch pages with the mouse wheel over the sidebar.
+- Jump straight to today with a keypress (D).
+- Move between months with the left/right arrow keys; scroll the wheel
+  over the month picker to change the displayed month/year.
+- Hide/enable any page from Settings ("Show page" toggles); pages are
+  removed from the sidebar and warnings disappear when disabled.
+- Run a command palette (Ctrl+K or Space) to do things by typing:
+    * "50 coffee"           - log a 50 unit expense on a category
+    * "-120 rent"           - log income (negative = income entry)
+    * "pay <bill name>"     - pay a bill
+    * "bg <category> <amt>" - set a budget amount (e.g. bg shop 20000)
+    * "bg <category> clear" - remove a budget
+    * "tr <amt> <from> <to>"- transfer money between accounts
+    * "dep <amt> <goal>"    - deposit into a savings goal
+    * "wd <amt> <goal>"     - withdraw from a savings goal
+    * "csv"                 - export data as CSV
+    * "json"                - export data as JSON
+    * "profiles"            - manage profiles
+- Keyboard shortcuts (when not typing in a field):
+    * A / T  - open transaction / transfer modals
+    * D      - go to today
+    * E      - bulk edit selected transactions
+    * M      - merge selected transactions
+    * B      - toggle bulk "selected only" filter
+    * H      - show/hide the graph on the current page
+    * Tab    - cycle through the displayed accounts
+    * Space  - open command palette
+    * Delete - delete the selected transactions
+    * Y/N    - confirm/dismiss dialogs
+- Live save indicator in the header (SAVED / SAVING / UNSAVED).
+- Auto-update checks with an on-screen banner when a new release exists.
+- Attention bar in the header flags urgent items (overdue bills, forecast
+  shortfalls, pending reconciliation). Click an alert to jump to it;
+  more than 3 alerts is summarized and expandable.
+- Data is stored per-profile on the server; all changes auto-save.
+
+----------------------------------------------------------------------
+OVERVIEW
+----------------------------------------------------------------------
+
+- See all accounts at a glance (colored chip cards with balance, shown
+  in base currency).
+- Click an account chip to open a panel showing that account's balance
+  and per-category detail; dismiss the panel with an X.
+- Hide accounts from the overview via the panel (hidden accounts keep
+  their transactions but stop showing).
+- Pick a displayed month/year with the month picker.
+- Monthly summary: income, expenses, and net for the displayed month.
+- Category breakdown bars showing where this month's money went.
+- Filter the transaction list and graph by:
+    * Category filter chips (All / each category); Alt-click a category
+      to isolate it, Alt-click All to reset.
+    * A type toggle cycling TYPE -> EXPENSES -> INCOME.
+    * A status toggle (STATUS -> MARKED -> UNMARKED) that filters by
+      reconciliation state (only when reconciliation is enabled).
+    * "Selected (n)" chip to show only bulk-selected rows.
+- Transaction list rows with account stripe, date, category, note,
+  action buttons (EDIT / DELETE) and the amount.
+- Sort the list by date or by value, ascending/descending.
+- Reconcile: mark transactions as MARKED/unmarked with the checkmark
+  button per row; "Reconcile account" compares statement balance vs
+  cleared balance and records a reconciliation entry.
+- Transfers appear as special rows with both amounts (out -> in).
+- Click a row to bulk-select; shift-click selects a range; click outside
+  the list to clear; bulk-edit, merge, or delete the selection.
+- Edit transactions, delete them, or open a transaction's linked bill /
+  debt / invoice / savings / card plan from its row.
+- Graph "INCOME VS EXPENSES" (12-month lines), draggable to resize;
+  H key or the footer button shows/hides it.
+- Reconcile footer button cycles show/hide for the graph on this page.
+
+----------------------------------------------------------------------
+TRANSACTIONS
+----------------------------------------------------------------------
+
+- Add a new transaction (expense or income) with amount, category,
+  account, currency, date, and note. Amount parsing understands math
+  expressions (e.g. "2*50").
+- Two-way currency conversion in the transaction modal: enter native +
+  live vs base amounts; foreign fee percentage auto-applies for
+  non-base currency accounts.
+- Transfer money between any two accounts (with optional currency
+  conversion and note). Note updates as accounts change.
+- Edit any transaction or transfer later.
+- Delete transactions; linked bill/debt/invoice/savings records are kept
+  consistent (bill stays unpaid, amount removed, etc.).
+- Bulk select transactions to: edit many at once (type, category, date,
+  currency, note...), merge into a single transaction, merge as a
+  transfer, or bulk-delete.
+- Speed-dial style date input understands the configured date separator;
+  smart dates (numeric offsets) are accepted.
+
+----------------------------------------------------------------------
+BILLS
+----------------------------------------------------------------------
+
+- Add / edit / delete recurring bills: name, amount (optional), currency,
+  due day, color, category, pay-from account, and whether they appear in
+  the graph.
+- Enable AUTO-PAY so the bill pays itself on its due day.
+- Pay a bill for a month from the bills graph/grid - a transaction is
+  created automatically and linked to that bill+month.
+- Default vs custom amounts (pay a different sum for a specific month).
+- Pick which account a payment is drawn from (and it converts currency
+  if needed).
+- Undo/toggle a payment - removes the linked transaction.
+- Toggle bills on/off in the graph (chips), and toggle the TOTAL line.
+- 12-month graph "BILLS BY MONTH" per bill, plus a monthly bill total.
+- Repair / re-link bill payments to their transactions automatically.
+- Sort the bills grid; monthly totals are summarized per month.
+- Graph resize + show/hide like other pages.
+
+----------------------------------------------------------------------
+BUDGET
+----------------------------------------------------------------------
+
+- Set a monthly budget limit per category (SET/EDIT button on each card).
+- See spent/limit, percentage used, and a progress bar per category.
+- Over-budget categories turn red (number + bar) when spend > 100%.
+- Total budgeted vs total spent is summarized for the month.
+- Cards without a budget are still listed so you can add one on the spot.
+- Choose which categories appear in the graph (chips below the graph),
+  and toggle the TOTAL line on/off.
+- 12-month "SPEND BY CATEGORY" line graph, draggable to resize.
+
+----------------------------------------------------------------------
+CREDIT CARDS
+----------------------------------------------------------------------
+
+- Add / edit / delete credit cards (with limit, color, currency).
+- Log a card purchase directly (category, note, date) - you get asked
+  whether to spread it into installments.
+- Create an installment plan: months, interest %, and funding account.
+  Installment purchases are paid automatically each month into a linked
+  transaction.
+- Pay off installments early (custom amount) - remaining installments
+  shrink accordingly.
+- Mark "Advance paid" - funding the card with a lump sum makes installments
+  convert into a single up-front payment per month.
+- Track installments month by month (seq / total), fully-paid plans are
+  shown closed with a checkmark.
+- Open a plan to see its monthly payment transactions; visually track
+  progress (paid % bar).
+- Chart shows installment plan amounts over months.
+
+----------------------------------------------------------------------
+SAVINGS
+----------------------------------------------------------------------
+
+- Create savings goals with a target amount and currency.
+- Add deposits and withdrawals per goal (with date and note); each entry
+  creates an automatic transaction in the ledger.
+- Expand a goal to see its entry history, edit/delete entries (linked
+  transactions update too).
+- Total savings progress bar across all goals.
+- Pick the display year on this page (its own year picker).
+- Edit/delete goals entirely.
+
+----------------------------------------------------------------------
+DEBTS
+----------------------------------------------------------------------
+
+- Track debts: person, type (owed-to-me vs I-owe), amount, currency,
+  date, due date, note, category.
+- Mark a debt as settled when paid off.
+- Record payments (default amount or custom) - each creates a linked
+  transaction.
+- Open a debt to see all payments; remove the last payment to undo.
+- Filter debts by direction (chips + cycle button).
+- Summary of totals for each direction and what's overdue.
+- Colors/bars show remaining proportion.
+
+----------------------------------------------------------------------
+INVOICES
+----------------------------------------------------------------------
+
+- Create invoices with a party, number (NNN / YEAR auto-increments),
+  currency, date, due date, direction (incoming/outgoing), note and
+  category.
+- Add/remove line items (description, qty, price); total is computed
+  automatically and validation blocks empty invoices.
+- Attach a file (image/PDF) to an invoice - it is stored in the browser
+  and can be reopened from a row with the file button.
+- Edit invoices; changing totals/currency/direction re-validates existing
+  payments first.
+- Record payments (default or custom amount) that create linked
+  transactions; track PAID / PARTIAL / UNPAID / OVERDUE state.
+- Mark an invoice paid/unpaid (adds/removes the corresponding
+  transaction).
+- Expand a card to see line-item detail; delete invoices (removes linked
+  payment transactions).
+- Filter by direction; next sequence number is suggested for new
+  invoices.
+
+----------------------------------------------------------------------
+FORECAST
+----------------------------------------------------------------------
+
+- See the forecasted cash balance over the coming months (lines per
+  account, plus total).
+- Toggle individual accounts on/off in the forecast.
+- Forecast accounts for recurring templates (Salary, Rent, etc.),
+  recurring bills, savings goals, debts, invoices, and card plans.
+- Open a recurring template from the forecast to edit it.
+- Forecast warnings for projected shortfalls; show them in a dialog.
+- Auto-balanced bill payments are folded into the projection.
+
+----------------------------------------------------------------------
+SETTINGS
+----------------------------------------------------------------------
+
+Profiles:
+- Create a new profile (name + optional password), switch between
+  profiles, rename, delete, and set/remove a password.
+- Passwords lock a profile; locked profiles need the password at load.
+  Two seconds of disconnection don't lock you out; a dropdown picker
+  selects the profile to unlock.
+- Default profile (none required) shows no lock button.
+
+Accounts:
+- Add / edit / delete accounts: name, description, short name, color,
+  currency, foreign fee %, type (cash / bank / credit card).
+- Credit cards get installment interest % + due day fields.
+- Reorder accounts; delete is disabled for protected accounts.
+
+Categories:
+- Add / edit / delete transaction categories (name + color, or AUTO).
+- Protected categories can't be deleted.
+
+Currencies & rates:
+- Base currency per profile (settings preset or manual).
+- Enable extra currencies; set or refresh their exchange rates
+  (live fetch or manual "set rate" for a chosen date).
+- Rates table with per-day historical rate entries; manual rates take
+  precedence over fetched ones.
+
+CSV:
+- Import transactions from CSV with column mapping (auto-guessed):
+  date, type, amount (+ sign detection), currency, account, card,
+  category, note. Date formats are normalized; you can also hide the
+  import summary preview if wanted.
+- Import rules: auto-assign a category when the description matches
+  ("IF DESCRIPTION HAS 'x' -> category").
+- Export the current profile to CSV or JSON (also from the command
+  palette).
+
+Appearance / behavior:
+- Dark/light theme with accent + income/expense color pickers.
+- Date separator preference (e.g. DD/MM/YYYY vs YYYY.MM.DD).
+- Space-bar/Enter-driven dialogs and pre-filled forms.
+- Attention bar can be shown/hidden.
+- Reconciliation feature can be toggled on/off.
+
+Updates:
+- Check for / install app updates (banner, manual check button, and a
+  restart flow). During an update the UI shows install status.
+
+----------------------------------------------------------------------
+DATA MODEL HIGHLIGHTS (for reference)
+----------------------------------------------------------------------
+
+- profiles/<name>.json holds everything for a profile.
+- Data keys: accounts, categories, creditCards, transactions,
+  billPayments, budgets, savingsGoals, debts, invoices, installments,
+  recurringTemplates, importRules, reconciliations, settings.
+- Transactions can be plain, transfers (from/to accounts), bill payments,
+  invoice payments, debt payments, savings entries, or installment
+  payments - all cross-linked so deletions stay consistent.

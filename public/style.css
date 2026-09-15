@@ -592,6 +592,44 @@ body.sb-collapsed .header-logo-mark { transform: rotate(-90deg); }
   border-color: var(--accent);
 }
 
+.password-field {
+  position: relative;
+  display: block;
+}
+
+.password-field .input {
+  padding-right: 32px;
+}
+
+.password-eye {
+  position: absolute;
+  top: 50%;
+  right: 7px;
+  transform: translateY(-50%);
+  border: none;
+  background: none;
+  padding: 2px;
+  cursor: pointer;
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.password-eye:hover {
+  color: var(--text);
+}
+
+.password-eye-icon {
+  width: 16px;
+  height: 16px;
+  display: block;
+}
+
+.password-eye:focus-visible {
+  outline: 1px solid var(--accent);
+}
+
 .input::placeholder { color: var(--text-muted); }
 
 input[type="number"]::-webkit-outer-spin-button,
@@ -1000,7 +1038,8 @@ select:disabled {
 }
 
 /* Sort cycle button - 28px tall, match cat-filter-chip height */
-.ov-sort-cycle {
+.ov-sort-cycle,
+.ov-type-cycle {
   min-width: 70px;
   text-align: center;
   padding: 2px 6px !important;
@@ -1012,6 +1051,11 @@ select:disabled {
   height: 28px;
   display: flex;
   align-items: center;
+}
+
+/* Type cycle (All/Expenses/Income) toggle - wider for three states */
+.ov-type-cycle {
+  min-width: 96px;
 }
 
 /* Square sort direction button - 28px tall */
@@ -1111,6 +1155,16 @@ select:disabled {
   font-size:12px;
   letter-spacing: 0.5px;
   margin-top: 18px;
+}
+
+.settings-footer a {
+  color: var(--text-dim, #888);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.settings-footer a:hover {
+  color: var(--text-primary, #e8e6e2);
 }
 
 /* Debt badges */
@@ -2098,6 +2152,8 @@ select:disabled {
   text-align: center;
 }
 
+.budget-pct.over { color: var(--expense); font-weight: 700; }
+
 .budget-edit { min-width:56px; }
 
 /* ===== SETTINGS ===== */
@@ -3072,3 +3128,54 @@ h1, h2, h3 {
   animation: updater-blink 1s steps(2) infinite;
 }
 @keyframes updater-blink { 0% { opacity: 1; } 50% { opacity: 0; } }
+.unlock-overlay {
+  position: fixed;
+  inset: 0;
+  background: #000000;
+  z-index: 99999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.unlock-overlay.hidden { display: none; }
+
+.unlock-box {
+  text-align: center;
+  max-width: 360px;
+  width: 90%;
+}
+
+.unlock-profile-name {
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  margin-bottom: 6px;
+  color: var(--text-primary, #e8e6e2);
+}
+
+.unlock-text {
+  font-size: 13px;
+  color: var(--text-dim, #888);
+  margin-bottom: 16px;
+}
+
+.unlock-form {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.unlock-btn {
+  width: 100%;
+}
+
+.unlock-select {
+  margin-bottom: 10px;
+}
+
+.unlock-error {
+  color: #ef4444;
+  font-size: 12px;
+  text-align: center;
+}

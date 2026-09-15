@@ -43,23 +43,22 @@ Object.assign(window.BlackBook, {
     });
   },
 
-  toggleOvType(t) {
+  cycleOvType() {
     const wrap = document.querySelector('.tx-list-wrap');
     const scrollTop = wrap ? wrap.scrollTop : 0;
-    const active = this.ovActiveTypes();
-    if (active === t) {
-      this._ovInc = false;
-      this._ovExp = false;
-    } else if (t === 'income') {
-      this._ovInc = true;
-      this._ovExp = false;
-    } else {
-      this._ovInc = false;
-      this._ovExp = true;
-    }
+    const modes = [null, 'expense', 'income'];
+    const idx = modes.indexOf(this.ovActiveTypes());
+    const next = modes[(idx + 1) % modes.length];
+    this._ovInc = next === 'income';
+    this._ovExp = next === 'expense';
     this.renderPage('overview');
     const nw = document.querySelector('.tx-list-wrap');
     if (nw) nw.scrollTop = scrollTop;
+  },
+
+  ovTypeLabel() {
+    const t = this.ovActiveTypes();
+    return t === 'income' ? 'INCOME' : t === 'expense' ? 'EXPENSES' : 'TYPE';
   },
 
   ovActiveTypes() {
@@ -138,8 +137,8 @@ Object.assign(window.BlackBook, {
   reconciliationSwitchHtml() {
     if (!this.reconciliationEnabled()) return '';
     const filter = this._reconciliationFilter || 'all';
-    const label = filter === 'cleared' ? 'MARKED' : filter === 'uncleared' ? 'UNMARKED' : 'ALL';
-    return '<button class="btn btn-sm btn-secondary reconciliation-switch" onclick="BlackBook.cycleReconciliationFilter()" title="Cycle: All → Marked → Unmarked">' + label + '</button>';
+    const label = filter === 'cleared' ? 'MARKED' : filter === 'uncleared' ? 'UNMARKED' : 'STATUS';
+    return '<button class="btn btn-sm btn-secondary reconciliation-switch" onclick="BlackBook.cycleReconciliationFilter()" title="Cycle: Status → Marked → Unmarked">' + label + '</button>';
   },
 
   setReconciliationFilter(filter) { this._reconciliationFilter = filter; this.renderOverview(); },
@@ -204,8 +203,7 @@ Object.assign(window.BlackBook, {
       '<span style="flex:1;"></span>' +
       '<span style="display:flex;gap:6px;align-items:center;">' +
       (this._bulkSel && this._bulkSel.size ? '<div class="cat-filter-chip bulk-filter-chip' + (this._bulkOnly ? ' selected' : '') + '" onclick="BlackBook.toggleBulkOnly()">SELECTED (' + this._bulkSel.size + ')</div>' : '') +
-      '<div class="cat-filter-chip' + (this._ovInc ? ' selected' : '') + '" onclick="BlackBook.toggleOvType(\x27income\x27)" title="Filter the graph and the list to income only">INCOME</div>' +
-      '<div class="cat-filter-chip' + (this._ovExp ? ' selected' : '') + '" onclick="BlackBook.toggleOvType(\x27expense\x27)" title="Filter the graph and the list to expenses only">EXPENSES</div>' +
+      '<button class="btn btn-sm btn-secondary ov-type-cycle" onclick="BlackBook.cycleOvType()" title="Cycle filter: Type → Expenses → Income">' + this.ovTypeLabel() + '</button>' +
       this.reconciliationSwitchHtml() +
       '<button class="btn btn-sm btn-secondary ov-sort-cycle" onclick="BlackBook.cycleOvSort()" title="Cycle sort: Date → Value">' + sortLabel + '</button>' +
       '<button class="btn btn-sm btn-secondary ov-sort-dir" onclick="BlackBook.toggleOvSortDir()" title="' + (this._ovSortDir === 'asc' ? 'Descending' : 'Ascending') + '">' + (this._ovSortDir === 'asc' ? '&#9650;' : '&#9660;') + '</button>' +
