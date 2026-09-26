@@ -285,13 +285,6 @@ input[type="checkbox"]:checked {
 .warning-item { display:flex; gap:8px; }
 .warning-num { color:var(--text-dim); flex:0 0 auto; }
 .warning-text { min-width:0; }
-.btn.reconciliation-switch { width:88px; min-width:88px; height:28px; min-height:28px; padding:2px 6px; line-height:1.1; font-weight:600; justify-content:center; }
-.reconciliation-all .reconcile-mark { display:none; }
-.tx-list:not(.reconciliation-all) .tx-actions:has(.reconcile-mark) { display:flex; }
-.tx-list:not(.reconciliation-all) .tx-row:not(:hover):not(:focus-within) .tx-actions:has(.reconcile-mark) > :not(.reconcile-mark) { display:none; }
-.reconcile-mark { min-width:24px; width:24px; padding:2px 0; color:transparent; border-color:var(--divider); }
-.reconcile-mark.marked { color:var(--income); border-color:var(--income); }
-.reconcile-mark:hover { color:var(--text-dim); }
 
 .header-right {
   display: flex;
@@ -1214,6 +1207,7 @@ select:disabled {
 }
 
 .tx-actions .btn { padding: 2px 6px; font-size:10px; }
+.tx-actions .btn.btn-icon svg { transform:translate(1px,1px); }
 
 .tx-actions .bill-link-chip {
   padding: 2px 6px;
@@ -2475,7 +2469,6 @@ select:disabled {
   .month-summary { gap:8px 14px; margin-bottom:8px; font-size:14px; }
   .month-summary-label { font-size:11px; }
   .month-summary-value { font-size:14px; }
-  .reconciliation-switch { min-width:76px; padding-left:5px; padding-right:5px; }
   .tx-list-wrap { padding-right:0; overflow:auto; }
   .tx-list { min-width:650px; }
   .forecast-event { min-width:560px; }
@@ -3025,9 +3018,16 @@ h1, h2, h3 {
 .budget-bar-values-filled, .budget-bar-values-unfilled { font-size:16px; letter-spacing:normal; }
 .budget-pct { justify-self:stretch; text-align:center; }
 .budget-edit { width:56px; justify-self:stretch; margin:0; }
+.budget-allocation-rows { max-height:38vh; overflow:auto; display:grid; gap:7px; margin:12px 0; }
+.budget-allocation-row { display:grid; grid-template-columns:22px minmax(0,1fr) 82px; gap:9px; align-items:center; }
+.budget-allocation-row label { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.budget-allocation-row .input { width:100%; }
+.budget-allocation-row input[type=checkbox] { margin:0; }
+.form-hint { color:var(--text-dim); font-size:12px; line-height:1.4; }
+.budget-allocation-banner { padding:0 0 8px; color:var(--accent); }
+#budget-allocation-form .form-actions { flex-wrap:wrap; }
 .overview-charts { flex-shrink:0; }
 .chart-head-row { flex-shrink:0; }
-.reconciliation-all .reconcile-mark { display:none; }
 
 @container page-space (max-width: 1200px) {
   .account-name-full { display:none; }

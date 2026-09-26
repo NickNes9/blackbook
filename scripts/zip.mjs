@@ -11,13 +11,18 @@ if (!root || !version) {
   console.error('usage: node scripts/zip.mjs <repo-root> <version>');
   process.exit(1);
 }
+if (!/^\d+\.\d+\.\d+$/.test(version)) {
+  console.error('version must be X.Y.Z');
+  process.exit(1);
+}
 
-const EXCLUDE_TOPS = new Set([
-  'profiles', 'import', 'updates', '.git', '.superpowers',
-  'data.json', 'data.json.bak', 'Black Book.xlsx', 'Black Book.pid',
-  'Thumbs.db', '.DS_Store', 'dist', 'Server.log',
-  'docs', 'scripts', 'test', 'package-lock.json', 'launcher.cs',
-  '.gitattributes', '.gitignore'
+// Explicit allowlist: never package profile data, logs, local notes, or
+// unexpected files placed at the repository root.
+const INCLUDE_TOPS = new Set([
+  'lib', 'public', 'node_modules', 'server.js', 'package.json',
+  'README.md', 'functions.txt', 'bb.ico', 'Black Book.exe',
+  'Black Book.sh', 'Black Book.command', 'Stop Black Book.bat',
+  'Stop Black Book.sh', 'Stop Black Book.command'
 ]);
 const WIN_LAUNCHERS = new Set(['Black Book.exe', 'Stop Black Book.bat', 'bb.ico', 'launcher.cs']);
 const LINUX_LAUNCHERS = new Set(['Black Book.sh', 'Stop Black Book.sh']);
@@ -36,10 +41,10 @@ function walkDir(dir, arc, top) {
     const full = join(dir, name);
     const st = statSync(full);
     if (st.isDirectory()) {
-      if (!arc && (EXCLUDE_TOPS.has(name) || /\.(log|bak)$/i.test(name))) continue;
+      if (!arc && !INCLUDE_TOPS.has(name)) continue;
       walkDir(full, arc ? arc + '/' + name : name, top || name);
     } else {
-      if (!arc && (EXCLUDE_TOPS.has(name) || /\.(log|bak)$/i.test(name))) continue;
+      if (!arc && !INCLUDE_TOPS.has(name)) continue;
       entryMap.set(arc ? arc + '/' + name : name, { full, top: top || name });
     }
   }
@@ -47,7 +52,7 @@ function walkDir(dir, arc, top) {
 
 walkDir(root, '', '');
 
-const dist = join(root, 'dist');
+const dist = join(root, 'dist', version);
 rmSync(dist, { recursive: true, force: true });
 mkdirSync(dist, { recursive: true });
 

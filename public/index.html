@@ -6,7 +6,7 @@
   <title>BLACK BOOK</title>
   <link rel="icon" type="image/svg+xml" href="/favicon.svg">
   <script>try { var t = localStorage.getItem('bb-theme'); if (t === 'light') document.documentElement.setAttribute('data-theme', 'light'); } catch (e) {}</script>
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/hack-font@3/build/web/hack.css">
+  <link rel="stylesheet" href="/vendor/hack/hack.css">
   <link rel="stylesheet" href="/style.css">
 </head>
 <body>
@@ -346,9 +346,8 @@
         <div class="form-group"><label>Note</label><input type="text" id="invoice-note" class="input" placeholder="Optional note"></div>
         <div class="form-group"><label>Invoice File</label>
           <div style="display:flex;gap:6px;align-items:center;">
-            <button type="button" id="invoice-file-btn" class="btn btn-sm btn-secondary">+ ATTACH FILE</button>
+            <button type="button" id="invoice-file-btn" class="btn btn-sm btn-secondary">+ LINK FILE</button>
             <span id="invoice-file-name" style="flex:1;min-width:0;font-size:12px;color:var(--text-dim);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"></span>
-            <input type="file" id="invoice-file-input" style="display:none;">
           </div>
         </div>
         <div class="form-actions">
@@ -604,6 +603,28 @@
   </div>
 
   <!-- Transfer Modal -->
+  <div id="budget-allocation-modal" class="modal hidden">
+    <div class="modal-backdrop"></div>
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2>Allocate Monthly Budget</h2>
+        <button class="modal-close" onclick="BlackBook.closeModal('budget-allocation-modal')">&times;</button>
+      </div>
+      <form id="budget-allocation-form">
+        <p class="form-hint">Starts in the selected month and continues until you change it. Individual limits remain available for categories outside this plan.</p>
+        <div class="form-group"><label>Total to allocate (<span class="base-cur-label">RSD</span>)</label><input type="text" inputmode="decimal" id="budget-allocation-total" class="input" required autocomplete="off"></div>
+        <div id="budget-allocation-rows" class="budget-allocation-rows"></div>
+        <div id="budget-allocation-status" class="form-hint" aria-live="polite"></div>
+        <div class="form-actions">
+          <button type="button" class="btn btn-secondary" onclick="BlackBook.resetBudgetAllocation()">Use Individual Limits</button>
+          <button type="button" class="btn btn-secondary" onclick="BlackBook.closeModal('budget-allocation-modal')">Cancel</button>
+          <button type="submit" class="btn btn-primary">Save Plan</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Transfer Modal -->
   <div id="transfer-modal" class="modal hidden">
     <div class="modal-backdrop"></div>
     <div class="modal-content">
@@ -692,9 +713,10 @@
     </div>
   </div>
 
-  <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
-  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <script src="/vendor/chart.umd.min.js"></script>
+  <script src="/vendor/xlsx.full.min.js"></script>
   <script src="/js/amount-parser.js"></script>
+  <script src="/js/budget-allocator.js"></script>
 <script src="/js/forecast-engine.js"></script>
   <script src="/js/core.js"></script>
   <script src="/js/updates-ui.js"></script>

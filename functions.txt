@@ -41,8 +41,8 @@ GLOBAL / ALL PAGES
     * Y/N    - confirm/dismiss dialogs
 - Live save indicator in the header (SAVED / SAVING / UNSAVED).
 - Auto-update checks with an on-screen banner when a new release exists.
-- Attention bar in the header flags urgent items (overdue bills, forecast
-  shortfalls, pending reconciliation). Click an alert to jump to it;
+- Attention bar in the header flags urgent items (overdue bills and forecast
+  shortfalls). Click an alert to jump to it;
   more than 3 alerts is summarized and expandable.
 - Data is stored per-profile on the server; all changes auto-save.
 
@@ -63,15 +63,10 @@ OVERVIEW
     * Category filter chips (All / each category); Alt-click a category
       to isolate it, Alt-click All to reset.
     * A type toggle cycling TYPE -> EXPENSES -> INCOME.
-    * A status toggle (STATUS -> MARKED -> UNMARKED) that filters by
-      reconciliation state (only when reconciliation is enabled).
     * "Selected (n)" chip to show only bulk-selected rows.
 - Transaction list rows with account stripe, date, category, note,
   action buttons (EDIT / DELETE) and the amount.
 - Sort the list by date or by value, ascending/descending.
-- Reconcile: mark transactions as MARKED/unmarked with the checkmark
-  button per row; "Reconcile account" compares statement balance vs
-  cleared balance and records a reconciliation entry.
 - Transfers appear as special rows with both amounts (out -> in).
 - Click a row to bulk-select; shift-click selects a range; click outside
   the list to clear; bulk-edit, merge, or delete the selection.
@@ -79,7 +74,6 @@ OVERVIEW
   debt / invoice / savings / card plan from its row.
 - Graph "INCOME VS EXPENSES" (12-month lines), draggable to resize;
   H key or the footer button shows/hides it.
-- Reconcile footer button cycles show/hide for the graph on this page.
 
 ----------------------------------------------------------------------
 TRANSACTIONS
@@ -127,8 +121,18 @@ BUDGET
 ----------------------------------------------------------------------
 
 - Set a monthly budget limit per category (SET/EDIT button on each card).
-- See spent/limit, percentage used, and a progress bar per category.
-- Over-budget categories turn red (number + bar) when spend > 100%.
+  Editing a budget takes effect immediately on that card.
+- Use ALLOCATE to set a total and category percentage shares from the selected
+  month onward. SHARE edits the plan for allocated categories; unallocated
+  categories retain their individual limits. Use Individual Limits stops the
+  plan from the selected month without erasing older plans.
+- See spent (or earned, for income categories), limit, percentage used, and
+  a progress bar per category.
+- Expense categories over budget turn red (number + bar) when spend > 100%.
+- Income categories show the percentage in green once they have earned at
+  least their budget; a net-positive income category still below budget is
+  red, and an income category whose net total is not positive shows the
+  percentage in the default text color.
 - Total budgeted vs total spent is summarized for the month.
 - Cards without a budget are still listed so you can add one on the spot.
 - Choose which categories appear in the graph (chips below the graph),
@@ -191,8 +195,12 @@ INVOICES
   category.
 - Add/remove line items (description, qty, price); total is computed
   automatically and validation blocks empty invoices.
-- Attach a file (image/PDF) to an invoice - it is stored in the browser
-  and can be reopened from a row with the file button.
+- Link an existing local file to an invoice with + LINK FILE and reopen it
+  from the INVOICE button on its card. The browser remembers a file handle,
+  not a copy of the bytes; moving the file or losing browser permission
+  requires linking it again. Chromium File System Access is required for new
+  links. PDFs and common raster images preview in the browser; other file
+  types download for safe opening. Legacy stored attachments remain readable.
 - Edit invoices; changing totals/currency/direction re-validates existing
   payments first.
 - Record payments (default or custom amount) that create linked
@@ -255,13 +263,15 @@ CSV:
   ("IF DESCRIPTION HAS 'x' -> category").
 - Export the current profile to CSV or JSON (also from the command
   palette).
+- Import a JSON profile after reviewing its account/category/transaction
+  counts and confirming replacement; the current profile is preserved in
+  its BACKUPS folder before the import is written.
 
 Appearance / behavior:
 - Dark/light theme with accent + income/expense color pickers.
 - Date separator preference (e.g. DD/MM/YYYY vs YYYY.MM.DD).
 - Space-bar/Enter-driven dialogs and pre-filled forms.
 - Attention bar can be shown/hidden.
-- Reconciliation feature can be toggled on/off.
 
 Updates:
 - Check for / install app updates (banner, manual check button, and a
@@ -273,8 +283,8 @@ DATA MODEL HIGHLIGHTS (for reference)
 
 - profiles/<name>.json holds everything for a profile.
 - Data keys: accounts, categories, creditCards, transactions,
-  billPayments, budgets, savingsGoals, debts, invoices, installments,
-  recurringTemplates, importRules, reconciliations, settings.
+  billPayments, budgets, budgetAllocations, savingsGoals, debts, invoices, installments,
+  recurringTemplates, importRules, reconciliations (legacy data preserved), settings.
 - Transactions can be plain, transfers (from/to accounts), bill payments,
   invoice payments, debt payments, savings entries, or installment
   payments - all cross-linked so deletions stay consistent.

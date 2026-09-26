@@ -32,7 +32,7 @@ Write-Host "Bumped $OldVersion -> $Version in package.json + package-lock.json"
 
 # --- Assemble the payload (everything in the repo except user data / junk) ---
 # Excludes, per-platform launcher selection and +x bits live in scripts/zip.mjs.
-$Dist = Join-Path $Root 'dist'
+$Dist = Join-Path $Root "dist\$Version"
 $ZipBase = "black-book-v$Version"
 
 Write-Host "Building zips (scripts/zip.mjs)..."
@@ -43,17 +43,20 @@ $PlatZips = @()
 $Checksums = @()
 foreach ($plat in @('win', 'linux', 'mac')) {
   $ZipName = "$ZipBase-$plat.zip"
-  $hash = (Get-FileHash -LiteralPath (Join-Path $Dist $ZipName) -Algorithm SHA256).Hash.ToLower()
+  $stream = [System.IO.File]::OpenRead((Join-Path $Dist $ZipName))
+  $sha256 = [System.Security.Cryptography.SHA256]::Create()
+  try { $hash = [System.BitConverter]::ToString($sha256.ComputeHash($stream)).Replace('-', '').ToLower() }
+  finally { $stream.Dispose(); $sha256.Dispose() }
   $Checksums += "$hash  $ZipName"
   $PlatZips += $ZipName
   Write-Host "Built $ZipName" -ForegroundColor Green
 }
 
 Set-Content -LiteralPath (Join-Path $Dist 'checksums.sha256') -Value $Checksums -Encoding ascii
-Write-Host "Wrote dist\checksums.sha256" -ForegroundColor Green
+Write-Host "Wrote dist\$Version\checksums.sha256" -ForegroundColor Green
 
 Write-Host ""
 Write-Host "Create the GitHub release (public repo) with:" -ForegroundColor Cyan
-Write-Host "  gh release create v$Version --title \"v$Version\" --notes \"<changelog>\" $(( $PlatZips | ForEach-Object { "dist\$_" } ) -join ' ') dist\checksums.sha256" -ForegroundColor Gray
+Write-Host "  gh release create v$Version --title `"v$Version`" --notes `"<changelog>`" $(( $PlatZips | ForEach-Object { "dist\$Version\$_" } ) -join ' ') dist\$Version\checksums.sha256" -ForegroundColor Gray
 Write-Host ""
 Write-Host "Updater expects one asset per platform (black-book-v$Version-{win,linux,mac}.zip) plus checksums.sha256." -ForegroundColor Yellow

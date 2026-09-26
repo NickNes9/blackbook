@@ -612,7 +612,7 @@ Object.assign(window.BlackBook, {
         const file = e.target.files[0];
         if (!file) return;
         if (/\.(xlsx|xls)$/i.test(file.name || '')) {
-          if (typeof XLSX === 'undefined') { alert('Excel import needs the xlsx library (must be loaded from the CDN once). Convert the file to CSV instead.'); e.target.value = ''; return; }
+          if (typeof XLSX === 'undefined') { alert('Spreadsheet import could not load. Restart Black Book or convert the file to CSV.'); e.target.value = ''; return; }
           const reader = new FileReader();
           reader.onload = (ev) => {
             try {
@@ -638,30 +638,45 @@ Object.assign(window.BlackBook, {
     const importFile = el.querySelector('#settings-import-file');
     if (importBtn && importFile) {
       importBtn.addEventListener('click', () => importFile.click());
-      importFile.addEventListener('change', (e) => {
-        const file = e.target.files[0];
+      importFile.addEventListener('change', async (event) => {
+        const file = event.target.files[0];
+        event.target.value = '';
         if (!file) return;
-        const reader = new FileReader();
-        reader.onload = async (ev) => {
-          try {
-            const imported = JSON.parse(ev.target.result);
-            this.data = imported;
-            if (!this.data.bills) this.data.bills = [];
-            if (!this.data.billPayments) this.data.billPayments = [];
-            if (!this.data.savingsGoals) this.data.savingsGoals = [];
-    if (!this.data.budgets) this.data.budgets = [];
-    if (!this.data.installments) this.data.installments = [];
-    if (!this.data.debts) this.data.debts = [];
-    this.migrateCreditCards();
-    if (this.applyAutopay()) await this.save();
-    this.applyThemeColors();
-            if (!this.data.settings) this.data.settings = {};
-            await this.save();
-            this.renderSettings();
-            alert('Data imported successfully.');
-          } catch (e) { alert('Invalid JSON file.'); }
-        };
-        reader.readAsText(file);
+        let imported;
+        try {
+          imported = JSON.parse(await file.text());
+        } catch (_) {
+          alert('This is not a valid JSON file.');
+          return;
+        }
+        if (!imported || !Array.isArray(imported.accounts) || !Array.isArray(imported.categories) ||
+            !Array.isArray(imported.transactions) || !imported.settings || typeof imported.settings !== 'object' ||
+            Array.isArray(imported.settings)) {
+          alert('This does not look like a Black Book profile export. Nothing was changed.');
+          return;
+        }
+        const currentCount = (this.data.transactions || []).length;
+        const accepted = await this.confirmModal({
+          title: 'Replace Current Profile?',
+          message: file.name + '\\n\\nCurrent profile: ' + currentCount + ' transactions\\nImport: ' +
+            imported.accounts.length + ' accounts, ' + imported.categories.length + ' categories, ' +
+            imported.transactions.length + ' transactions\\n\\nThe current profile will be copied to its BACKUPS folder before replacement.',
+          confirmText: 'Replace Profile'
+        });
+        if (!accepted) return;
+        try {
+          const response = await fetch('/api/import', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ profile: this.profile || '', data: imported })
+          });
+          const result = await response.json();
+          if (!response.ok) throw new Error(result.error || 'Import failed');
+          this.data = imported;
+          location.reload();
+        } catch (error) {
+          alert('Import failed: ' + error.message + '. Your current profile was not replaced.');
+        }
       });
     }
     const defaultAcc = el.querySelector('#settings-default-account');
@@ -985,7 +1000,6 @@ Object.assign(window.BlackBook, {
         '<span class="settings-row-name">' + PAGE_LABELS[p] + '</span>' +
         '<button class="btn btn-sm ' + (on ? 'btn-paid' : 'btn-muted') + '" style="width:56px;margin-left:auto;" onclick="BlackBook.togglePageEnabled(\'' + p + '\')" title="Show/hide this page for the current profile">' + (on ? 'ON' : 'OFF') + '</button></div>';
     }
-    pagesList += '<div class="settings-row"><span class="row-swatch" style="visibility:hidden;"></span><span class="settings-row-name">Reconciliation</span><button class="btn btn-sm ' + (this.reconciliationEnabled() ? 'btn-paid' : 'btn-muted') + '" style="width:56px;margin-left:auto;" onclick="BlackBook.toggleReconciliationEnabled()">' + (this.reconciliationEnabled() ? 'ON' : 'OFF') + '</button></div>';
 
     return '<div class="settings-cols">' +
       '<div>' +
@@ -1199,6 +1213,13 @@ Object.assign(window.BlackBook, {
     if (this.selectedCategory === id) this.selectedCategory = null;
     if (this.data.settings.defaultCategoryId === id) this.data.settings.defaultCategoryId = null;
     this.data.budgets = (this.data.budgets || []).filter(b => b.categoryId !== id);
+    if (this.data.budgetAllocations) {
+      for (const alloc of this.data.budgetAllocations) {
+        if (!alloc || !alloc.percents) continue;
+        delete alloc.percents[id];
+      }
+      this.data.budgetAllocations = this.data.budgetAllocations.filter(a => a && Object.keys(a.percents || {}).length > 0);
+    }
     await this.save();
     this.renderPage(this.currentPage);
   },
