@@ -5,7 +5,8 @@
     '.month-summary-value', '.chip-balance', '.tx-amt', '.metric-value',
     '.budget-bar-values-filled', '.budget-bar-values-unfilled', '.bill-cell', '.bill-cell-total',
     '.savings-progress-text', '.savings-entry-amount', '.inst-amt', '.bill-meta-line',
-    '.inv-line-math', '.inv-line-sum', '.forecast-event > :last-child', '.savings-total-text', '.cat-seg-inner'
+    '.inv-line-math', '.inv-line-sum', '.forecast-event > :last-child', '.savings-total-text', '.cat-seg-inner',
+    '.budget-pct'
   ].join(',');
 
   function decorateAmounts(root) {

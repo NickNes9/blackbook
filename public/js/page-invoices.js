@@ -1,27 +1,31 @@
 (function () {
-let pendingInvFile = null;
+let pendingInvHandle = null;
 Object.assign(window.BlackBook, {
 
   _resetInvoiceFileUI(name) {
-    pendingInvFile = null;
-    const input = document.getElementById('invoice-file-input');
-    if (input) input.value = '';
+    pendingInvHandle = null;
     const el = document.getElementById('invoice-file-name');
     if (el) el.textContent = name || 'No file attached';
   },
 
   _bindInvoiceFilePicker() {
     const btn = document.getElementById('invoice-file-btn');
-    const input = document.getElementById('invoice-file-input');
-    if (!btn || !input) return;
+    if (!btn) return;
     if (btn._bound) return;
     btn._bound = true;
-    btn.addEventListener('click', () => input.click());
-    input.addEventListener('change', () => {
-      const f = input.files[0];
-      if (!f) return;
-      pendingInvFile = f;
-      document.getElementById('invoice-file-name').textContent = f.name + ' (' + (f.size / 1024).toFixed(1) + ' KB)';
+    btn.addEventListener('click', async () => {
+      if (!window.showOpenFilePicker) {
+        alert('Linking a local file requires a Chromium-based browser with File System Access support.');
+        return;
+      }
+      try {
+        const [handle] = await window.showOpenFilePicker({ multiple: false });
+        if (!handle) return;
+        pendingInvHandle = handle;
+        document.getElementById('invoice-file-name').textContent = handle.name + ' (linked local file)';
+      } catch (e) {
+        if (e.name !== 'AbortError') alert('Could not select the invoice file: ' + e.message);
+      }
     });
   },
 
@@ -322,12 +326,8 @@ Object.assign(window.BlackBook, {
         invId = 'inv-' + Date.now();
         data.id = invId;
       }
-      if (pendingInvFile) {
-        data.fileName = pendingInvFile.name;
-        if (!(await this._invFilePut(invId, pendingInvFile))) {
-          data.fileData = await this._fileToDataURL(pendingInvFile);
-        }
-        pendingInvFile = null;
+      if (pendingInvHandle) {
+        data.fileName = pendingInvHandle.name;
       }
       if (!this.data.invoices) this.data.invoices = [];
       if (id) {
@@ -344,13 +344,23 @@ Object.assign(window.BlackBook, {
               if (!ok) return;
             }
           }
+          if (pendingInvHandle && !(await this._invFilePut(invId, pendingInvHandle))) {
+            alert('Could not save the local file link in this browser. The invoice was not saved.');
+            return;
+          }
           Object.assign(v, data);
+          if (data.fileName) delete v.fileData;
         }
       } else {
+        if (pendingInvHandle && !(await this._invFilePut(invId, pendingInvHandle))) {
+          alert('Could not save the local file link in this browser. The invoice was not saved.');
+          return;
+        }
         data.amountPaid = 0;
         data.payments = [];
         this.data.invoices.push(data);
       }
+      pendingInvHandle = null;
       await this.save();
       this.closeModal('invoice-modal');
       this.renderPage(this.currentPage === 'invoices' ? 'invoices' : this.currentPage);

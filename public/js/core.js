@@ -40,6 +40,7 @@ window.BlackBook = {
     if (!this.data.billPayments) this.data.billPayments = [];
     if (!this.data.savingsGoals) this.data.savingsGoals = [];
     if (!this.data.budgets) this.data.budgets = [];
+    if (!this.data.budgetAllocations) this.data.budgetAllocations = [];
     if (!this.data.installments) this.data.installments = [];
     if (!this.data.debts) this.data.debts = [];
     if (!this.data.invoices) this.data.invoices = [];
@@ -486,13 +487,6 @@ updateGraphFooter() {
           : this.toggleForecastGraph();
   },
 
-  reconciliationEnabled() { return this.data && this.data.settings && this.data.settings.reconciliationEnabled !== false; },
-  async toggleReconciliationEnabled() {
-    this.data.settings.reconciliationEnabled = !this.reconciliationEnabled();
-    await this.save();
-    this.renderPage(this.currentPage);
-  },
-
   attentionItems() {
     const today = this.today();
     const inDays = (date) => Math.round((new Date(date + 'T00:00:00') - new Date(today + 'T00:00:00')) / 86400000);
@@ -514,7 +508,6 @@ updateGraphFooter() {
         items.push({ severity: 2, date: shortfall.date, label: (account ? account.name : 'An account') + ' is forecast below zero', page: 'forecast' });
       }
     }
-    for (const recon of this.data.reconciliations || []) if (recon.status === 'in-progress') items.push({ severity: 4, date: recon.statementDate || today, label: 'Reconciliation needs review', page: 'overview' });
     return items.sort((a, b) => a.severity - b.severity || a.date.localeCompare(b.date));
   },
 
@@ -1753,12 +1746,41 @@ updateGraphFooter() {
   async openInvoiceFile(id) {
     const v = this.data.invoices.find(x => x.id === id);
     if (!v) return;
-    let blob = await this._invFileGet(id);
-    if (!blob && v.fileData) blob = this._dataURLToBlob(v.fileData);
-    if (!blob) { alert('No file attached to this invoice.'); return; }
-    const url = URL.createObjectURL(blob);
-    window.open(url, '_blank');
-    setTimeout(() => URL.revokeObjectURL(url), 60000);
+    const tab = window.open('', '_blank');
+    let stored = await this._invFileGet(id);
+    if (!stored && v.fileData) stored = this._dataURLToBlob(v.fileData);
+    if (!stored) {
+      if (tab) tab.close();
+      alert('The local invoice link is unavailable in this browser. Edit the invoice and attach the file again.');
+      return;
+    }
+    try {
+      if (typeof stored.getFile === 'function') {
+        const permission = await stored.queryPermission({ mode: 'read' });
+        if (permission !== 'granted' && await stored.requestPermission({ mode: 'read' }) !== 'granted') {
+          throw new Error('File access was not granted.');
+        }
+        stored = await stored.getFile();
+      }
+      const url = URL.createObjectURL(stored);
+      const inlineSafe = /^(application\/pdf|image\/(?:png|jpeg|gif|webp))$/.test(stored.type || '');
+      if (inlineSafe) {
+        if (tab) tab.location.href = url;
+        else window.open(url, '_blank');
+      } else {
+        if (tab) tab.close();
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = v.fileName || 'invoice-file';
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+      }
+      setTimeout(() => URL.revokeObjectURL(url), 60000);
+    } catch (e) {
+      if (tab) tab.close();
+      alert('Could not open the linked file. It may have moved or access may have expired. Edit the invoice to link it again.');
+    }
   },
 
   isTransfer(tx) {

@@ -61,6 +61,24 @@ test('server is loopback-only and preserves the API profile document contract', 
     });
     assert.equal(invalid.status, 400);
     assert.deepEqual(JSON.parse(readFileSync(join(dataDir, 'profiles', 'data.json'), 'utf8')).futureField, { kept: true });
+
+    const badImport = await fetch(server.origin + '/api/import', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ data: { unrelated: true } })
+    });
+    assert.equal(badImport.status, 400);
+    assert.equal((await fetch(server.origin + '/api/load').then((r) => r.json())).transactions[0].id, 'history-1');
+
+    const replacement = { accounts: [], categories: [], transactions: [{ id: 'restored', amount: 12 }], settings: {}, futureField: { survives: true } };
+    const imported = await fetch(server.origin + '/api/import', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ profile: '', data: replacement })
+    });
+    assert.equal(imported.status, 200);
+    const { backup } = await imported.json();
+    assert.match(backup, /BACKUPS/);
+    assert.equal(JSON.parse(readFileSync(backup, 'utf8')).transactions[0].id, 'history-1');
+    assert.deepEqual(await fetch(server.origin + '/api/load').then((r) => r.json()), replacement);
   } finally {
     if (child && !child.killed) child.kill();
     if (child) await once(child, 'exit').catch(() => {});
@@ -119,6 +137,21 @@ test('password-protected profiles are encrypted at rest and locked after restart
 
     const reloaded = await fetch(server.origin + '/api/load?profile=Vault').then((r) => r.json());
     assert.deepEqual(reloaded.accounts.map((a) => a.name), ['HIDDEN']);
+
+    const importedDoc = { ...reloaded, accounts: [{ id: 'a2', name: 'RESTORED', amount: 10 }] };
+    const imported = await fetch(server.origin + '/api/import', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ profile: 'Vault', data: importedDoc })
+    });
+    assert.equal(imported.status, 200);
+    const { backup } = await imported.json();
+    const protectedBackup = JSON.parse(readFileSync(backup, 'utf8'));
+    assert.equal(protectedBackup.enc, 'aes-256-gcm');
+    assert.ok(!String(protectedBackup.data).includes('HIDDEN'));
+    const importedOnDisk = JSON.parse(readFileSync(join(dataDir, 'profiles', 'Vault.json'), 'utf8'));
+    assert.equal(importedOnDisk.enc, 'aes-256-gcm');
+    assert.ok(!String(importedOnDisk.data).includes('RESTORED'));
+    assert.deepEqual((await fetch(server.origin + '/api/load?profile=Vault').then((r) => r.json())).accounts, importedDoc.accounts);
 
     const passwordless = await fetch(server.origin + '/api/load').then((r) => r.json());
     assert.deepEqual(passwordless.accounts, []);

@@ -5,7 +5,7 @@ import http from 'node:http';
 import { join } from 'node:path';
 import { WebSocketServer } from 'ws';
 import { APP_DIR, HOST, LEGACY_DATA_FILE, PID_FILE, PROFILES_DIR, preferredPorts } from './lib/server-config.js';
-import { createProfileStore, isProfileDocument, StorageError } from './lib/storage.js';
+import { createProfileStore, isImportableProfile, isProfileDocument, StorageError } from './lib/storage.js';
 import { decryptEnvelope, deriveKey, encryptWithKey, encryptProfileDoc } from './lib/crypto.js';
 import { createUpdater, UpdateError } from './lib/updater.js';
 import { currentVersion } from './lib/version-util.js';
@@ -52,7 +52,7 @@ app.use((error, req, res, next) => {
 });
 app.use((req, res, next) => { lastRequest = Date.now(); next(); });
 app.use((req, res, next) => {
-  res.setHeader('Content-Security-Policy', "default-src 'self'; base-uri 'self'; connect-src 'self'; font-src 'self' data: https://cdn.jsdelivr.net; img-src 'self' data: blob:; object-src 'none'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net");
+  res.setHeader('Content-Security-Policy', "default-src 'self'; base-uri 'self'; connect-src 'self'; font-src 'self' data:; img-src 'self' data: blob:; object-src 'none'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'");
   next();
 });
 app.use(express.static(join(APP_DIR, 'public'), { setHeaders(res) { res.setHeader('Cache-Control', 'no-store'); } }));
@@ -99,6 +99,19 @@ app.post('/api/save', (req, res) => {
       store.write(profile, data);
     }
     return res.json({ ok: true });
+  } catch (error) { return sendError(res, error); }
+});
+
+app.post('/api/import', (req, res) => {
+  try {
+    const { profile = '', data } = req.body || {};
+    if (!isImportableProfile(data)) throw new StorageError('Import needs accounts, categories, transactions and settings from a Black Book JSON export.', 400);
+    const session = store.hasPassword(profile) ? unlocked.get(profile) : null;
+    if (store.hasPassword(profile) && !session) throw new StorageError('Profile is locked', 401);
+    const backup = store.backup(profile);
+    store.write(profile, session ? encryptWithKey(data, session.key) : data);
+    if (session) session.doc = data;
+    return res.json({ ok: true, backup });
   } catch (error) { return sendError(res, error); }
 });
 
