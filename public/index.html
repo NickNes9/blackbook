@@ -711,17 +711,7 @@
 
   <!-- Bottom Hotkey Bar -->
   <footer class="app-footer">
-    <span class="hotkey"><kbd>A</kbd> New Transaction</span>
-    <span class="hotkey"><kbd>T</kbd> TRANSFER</span>
-    <span class="hotkey"><kbd>D</kbd> TODAY</span>
-    <span class="hotkey"><kbd>E</kbd> EDIT</span>
-    <span class="hotkey"><kbd>M</kbd> MERGE</span>
-    <span class="hotkey"><kbd>B</kbd> FILTER SELECTED</span>
-    <span class="hotkey"><kbd>DEL</kbd> DELETE</span>
-    <span class="hotkey"><kbd>H</kbd> GRAPH</span>
-    <span class="hotkey"><kbd>TAB</kbd> ACCOUNT</span>
-    <span class="hotkey"><kbd>1–8</kbd> PAGES</span>
-    <span class="hotkey"><kbd>Space</kbd> COMMAND</span>
+    <div id="footer-hotkeys" class="footer-hotkeys" aria-label="Available keyboard shortcuts"></div>
     <button id="footer-graph-toggle" class="btn btn-sm btn-secondary footer-graph-toggle hidden" type="button"></button>
   </footer>
 
@@ -762,6 +752,7 @@
   <script src="/vendor/chart.umd.min.js"></script>
   <script src="/vendor/xlsx.full.min.js"></script>
   <script src="/js/amount-parser.js"></script>
+  <script src="/js/undo-history.js"></script>
   <script src="/js/category-availability.js"></script>
   <script src="/js/budget-allocator.js"></script>
 <script src="/js/forecast-engine.js"></script>

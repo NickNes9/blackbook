@@ -9,7 +9,7 @@ A local-first personal finance console. Terminal aesthetic with light/dark theme
 - **Budgets** — per-category monthly limits or a whole-budget allocation from a chosen month onward; a compact donut sits beside the spending graph, while a modal edits category shares and the allocation total, with a Reset Plan action for 100% unassigned funds
 - **Bills** — yearly payment grid (sticky header, zebra rows, per-bill TOTAL) with pay-from-any-account/card, custom amounts per month (right-click a cell), AUTO mode marks the current month paid automatically and creates linked transactions, year selector + TODAY navigation, `H` toggles the graph; narrow cells use compact amounts and currency symbols
 - **Savings goals** — target tracking, deposit/withdraw history, progress bars, command-palette deposits (`dep goal 500`)
-- **Credit cards** — installment plans with interest baked into the debt (100 @ 5% = 105; first installment carries the interest), PAY/PAID slots, greedy custom payments, edit plans, advance credit
+- **Credit cards** — installment plans with interest baked into the debt (100 @ 5% = 105; first installment carries the interest), partial payments that accumulate toward each slot, amount-weighted progress markers, edit plans, advance credit
 - **Debts / Invoices** — OWED · I OWE and INCOMES · EXPENSES · ALL filters inline with the period controls; debts carry a category; invoices support line items and links to existing local files (openable from the card)
 - **Overview** — metric panels, category breakdown bar, end-of-month balance, and category cards that support Shift-click multi-selection; month filters drive both the income-vs-expenses graph and transaction list. `H` hides the graph, and the income/expense donut has a clickable center percentage.
 - **Forecast** — a separate 30/60/90-day cash timeline and balance graph using current balances, unpaid scheduled bills, remaining card-installment slots, and optional recurring income/expenses; colored account chips and missing-rate warnings keep projections explicit. Unpaid invoices and open personal debts remain on their own pages rather than entering the projection.
@@ -23,6 +23,14 @@ A local-first personal finance console. Terminal aesthetic with light/dark theme
 - **Math in amount fields** — type chained expressions such as `100-5*2-10`, `(2+3)*4`, or `10,5-2,5` anywhere an amount is accepted
 - **Profiles** — isolated data sets (default + named profiles) stored as separate files; edit the active profile's name and base currency together, or open another profile to edit it; per-profile page visibility
 - **Command palette** — `/` or `Ctrl-K`: search transactions, pages, quick commands (`t 500 cash bank`, `pay electricity`, `bg groceries 20000`, `csv`, …)
+
+## What's new in 0.9.5
+
+- **Session undo and redo** — Ctrl+Z and Ctrl+Shift+Z reverse or restore recent transaction, transfer, bill, card, debt, savings, and invoice changes. History is temporary, limited to 100 recent changes, and clears when the session ends; the bottom shortcut bar reflects the current page and selection.
+- **Credit card installments** — partial payments accumulate against the selected installment and display the paid amount out of its due amount. A slot is marked paid when its full amount is covered, and the progress markers follow each installment's actual share of the total.
+- **Linked payment history** — bill, installment, savings, debt, and invoice payment records link to their exact transactions. Deleting a linked transaction updates its payment record and remaining balance.
+- **Dates and graphs** — choose a day-first date format in Settings, including abbreviated month names; transaction dates remain on one line. Expenses plot below zero on the Overview graph, and selected-only charts reflect the selected transactions.
+- **Responsive account filters** — the selected account tile uses less padding and width on narrow layouts while retaining its full label.
 
 ## What's new in 0.9.3
 
@@ -68,7 +76,9 @@ A local-first personal finance console. Terminal aesthetic with light/dark theme
 | `D` | Jump to today |
 | `E` | Edit selected transactions, or the hovered transaction when none are selected |
 | `Delete` | Delete selected transactions, or the hovered transaction when none are selected |
-| `H` | Show/hide graph (Overview, Bills) |
+| `Ctrl+Z` | Undo the latest supported financial change (session only) |
+| `Ctrl+Shift+Z` | Redo the latest undone change (session only) |
+| `H` | Show/hide graph (Overview, Bills, Budget, Forecast) |
 | `←` / `→` | Previous / next month (year on Bills & Savings) |
 | `1–8` | Switch pages |
 | `Tab` | Cycle account filter (overview) |
@@ -111,8 +121,8 @@ The app self-updates from GitHub Releases. It looks for `black-book-vX.Y.Z-{win,
 To publish a release from a checkout of this repo:
 
 ```bash
-npm run release -- -Version 0.9.3   # builds dist\0.9.3\*.zip + checksums
-gh release create v0.9.3 --title "v0.9.3" --notes "<changelog>" dist\0.9.3\black-book-v0.9.3-win.zip dist\0.9.3\black-book-v0.9.3-linux.zip dist\0.9.3\black-book-v0.9.3-mac.zip dist\0.9.3\checksums.sha256
+npm run release -- -Version 0.9.5   # builds dist\0.9.5\*.zip + checksums
+gh release create v0.9.5 --title "v0.9.5" --notes "<changelog>" dist\0.9.5\black-book-v0.9.5-win.zip dist\0.9.5\black-book-v0.9.5-linux.zip dist\0.9.5\black-book-v0.9.5-mac.zip dist\0.9.5\checksums.sha256
 ```
 
 Windows users keep using `Black Book.exe`; Linux/macOS users keep using `Black Book.sh` / `Black Book.command`. Updates ship each platform's launcher and re-apply the executable bit automatically. Applied updates keep the previous code under `updates/backup-<version>/` for rollback.
@@ -123,6 +133,6 @@ Every user-facing feature — pages, modals, buttons, keyboard shortcuts, comman
 
 ---
 
-**BLACK BOOK v0.9.3**
+**BLACK BOOK v0.9.5**
 
 Created by Nikola Nešić

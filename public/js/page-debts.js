@@ -4,6 +4,7 @@ Object.assign(window.BlackBook, {
     const el = document.getElementById('page-debts');
     if (!el) return;
     if (!this.data.debts) this.data.debts = [];
+    if (!this._expandedDebts) this._expandedDebts = {};
     let html = '<div class="month-picker" style="justify-content:flex-end;">' +
       '<button class="btn btn-primary" onclick="BlackBook.openNewDebt()">+ NEW DEBT</button></div>';
     html += this.debtsSummaryHtml();
@@ -104,10 +105,40 @@ Object.assign(window.BlackBook, {
   async openDebtPayments(id) {
     const d = this.data.debts.find(x => x.id === id);
     if (!d) return;
-    const pays = this.debtPayments(d);
-    const first = pays[0];
-    if (first && first.date) this.syncViewToDate(first.date);
-    this.navigateTo('overview');
+    const latest = this.debtPayments(d).slice().reverse().find(payment => payment.txId);
+    if (latest) this.openLinkedTransaction(latest.txId);
+  },
+
+  toggleDebtPayments(id) {
+    if (!this._expandedDebts) this._expandedDebts = {};
+    this._expandedDebts[id] = !this._expandedDebts[id];
+    this.renderPage('debts');
+  },
+
+  debtPaymentHistoryHtml(d, payments = this.debtPayments(d)) {
+    if (!payments.length) return '';
+    const rows = payments.slice().sort((a, b) => String(b.date || '').localeCompare(String(a.date || ''))).map(payment => {
+      const tx = payment.txId ? (this.data.transactions || []).find(item => item.id === payment.txId) : null;
+      const date = tx ? tx.date : payment.date;
+      const amount = tx ? Math.abs(tx.amount) : payment.amount;
+      const currency = (tx && tx.currency) || d.currency || this.baseCurrency() || 'RSD';
+      return '<div class="linked-payment-row"><span class="linked-payment-date">' + this.escapeHtml(this.fmtDateInput(date) || '—') + '</span><span class="linked-payment-amount">' + this.fmtAmount(amount, currency) + '</span>' +
+        (tx ? '<span class="linked-payment-actions">' + this.linkedTransactionButton(tx.id) + '<button type="button" class="btn btn-sm btn-danger btn-icon" title="Delete this payment transaction" aria-label="Delete this payment transaction" onclick="BlackBook.deleteTransaction(\'' + this.escapeHtml(tx.id) + '\')">' + this.xIcon() + '</button></span>' : '<span class="linked-payment-unlinked" title="No transaction is linked to this older payment">UNLINKED</span>') + '</div>';
+    }).join('');
+    return '<div class="linked-payment-history">' + rows + '</div>';
+  },
+
+  debtProgressMarkers(d, payments = this.debtPayments(d)) {
+    const total = Math.abs(Number(d.amount) || 0);
+    if (!(total > 0)) return '';
+    let cumulative = 0;
+    const positions = [0];
+    for (const payment of payments) {
+      cumulative += Math.abs(Number(payment.amount) || 0);
+      positions.push(Math.min(100, Math.round(cumulative / total * 10000) / 100));
+    }
+    positions.push(100);
+    return [...new Set(positions)].map(percent => '<i class="debt-progress-marker' + (percent === 0 ? ' is-start' : percent === 100 ? ' is-end' : '') + '" style="left:' + percent + '%" aria-hidden="true"></i>').join('');
   },
 
   debtsSummaryHtml() {
@@ -152,23 +183,25 @@ Object.assign(window.BlackBook, {
     const typeColor = d.type === 'in' ? 'var(--income)' : 'var(--expense)';
     const cat = d.categoryId ? this.data.categories.find(c => c.id === d.categoryId) : null;
     const dotColor = cat ? this.categoryColor(cat) : typeColor;
+    const payments = this.debtPayments(d);
     let html = '<div class="savings-card debt-card' + this.focusRecordHtml('debt', d.id) + '"' + (settled ? ' style="opacity:0.55;"' : '') + '>';
     html += '<div class="savings-header">' +
       '<span class="savings-name"><span class="cat-dot" style="background:' + dotColor + ';"></span> ' + this.escapeHtml(d.person) + '</span>' +
       '<span class="savings-actions">' +
-      (d.payments && d.payments.length ? '<button class="btn btn-sm btn-secondary" onclick="BlackBook.openDebtPayments(\x27' + d.id + '\x27)" title="View payments in transactions">LINK</button>' : '') +
       '<span class="debt-badge" style="background:' + typeColor + ';color:var(--on-fill);">' + (d.type === 'in' ? 'OWED' : 'OWE') + '</span>' +
       (settled ? '<button class="btn btn-sm btn-danger" onclick="BlackBook.toggleDebtPayment(\x27' + d.id + '\x27)" title="Unpay last payment">UNPAY</button>' : '<button class="btn btn-sm btn-primary" onclick="BlackBook.openDebtPayModal(\x27' + d.id + '\x27)">+ PAY</button>') +
       '<button class="btn btn-sm btn-secondary" onclick="BlackBook.openEditDebt(\x27' + d.id + '\x27)">EDIT</button>' +
       '<button class="btn btn-sm btn-danger btn-icon" title="Delete debt" onclick="BlackBook.deleteDebt(\x27' + d.id + '\x27)">' + this.xIcon() + '</button></span></div>';
     html += '<div class="savings-progress-text"><span>' + this.fmtAmount(paid, cur) + ' of ' + this.fmtAmount(total, cur) + '</span><span>' + pct + '%</span></div>' +
-      '<div class="savings-progress-bar"><div class="savings-progress-fill" style="width:' + pct + '%;background:' + fill + ';"></div></div>';
+      '<div class="savings-progress-bar debt-progress-bar"><div class="savings-progress-fill" style="width:' + pct + '%;background:' + fill + ';"></div>' + this.debtProgressMarkers(d, payments) + '</div>';
     html += '<div class="bill-meta-line" style="display:block;margin-top:6px;">' +
-      'DATE ' + (d.date || '?') +
-      ' &middot; <span class="' + (overdue ? 'amount-negative" title="Overdue"' : '"') + '>DUE ' + (d.dueDate ? this.ordinalDay(new Date(d.dueDate).getDate()) + ' ' + new Date(d.dueDate).toLocaleString('en', { month: 'short' }).toUpperCase() + ' ' + new Date(d.dueDate).getFullYear() : '-') + '</span>' +
+      'DATE ' + (this.fmtDateInput(d.date) || '?') +
+      ' &middot; <span class="' + (overdue ? 'amount-negative" title="Overdue"' : '"') + '>DUE ' + (this.fmtDateInput(d.dueDate) || '-') + '</span>' +
       (overdue ? ' &middot; <span class="amount-negative">OVERDUE</span>' : '') +
       (cat ? ' &middot; <span style="color:' + this.categoryColor(cat) + ';">' + this.escapeHtml(cat.name.toUpperCase()) + '</span>' : '') +
       (d.note ? ' &middot; ' + this.escapeHtml(d.note) : '') + '</div>';
+    html += '<details class="item-details debt-payment-details"><summary>PAYMENT HISTORY · ' + payments.length + '</summary>' +
+      (payments.length ? this.debtPaymentHistoryHtml(d, payments) : '<div class="linked-payment-history">No payments yet.</div>') + '</details>';
     html += '</div>';
     return html;
   },
@@ -240,7 +273,7 @@ Object.assign(window.BlackBook, {
       if (amountPaid > amount) amountPaid = amount;
       const debtDate = this.parseDateInput(document.getElementById('debt-date').value) || this.today();
       const debtDue = this.parseDateInput(document.getElementById('debt-due').value);
-      if (document.getElementById('debt-due').value.trim() && !debtDue) { alert('Enter a valid due date (DD/MM/YYYY).'); return; }
+      if (document.getElementById('debt-due').value.trim() && !debtDue) { alert('Enter a valid due date (' + this.dateFormatPattern() + ').'); return; }
       const data = { person: person, type: document.getElementById('debt-type').value, amount: amount, currency: document.getElementById('debt-currency').value, date: debtDate, dueDate: debtDue || '', amountPaid: amountPaid, note: document.getElementById('debt-note').value.trim(), categoryId: document.getElementById('debt-category').value || null,  };
       const original = id ? this.data.debts.find(item => item.id === id) : null;
       if (!this.categorySelectionAllowed(data.categoryId, debtDate, original && original.categoryId)) { alert('That category was archived for this date. Choose another category.'); return; }
@@ -263,7 +296,7 @@ Object.assign(window.BlackBook, {
         data.id = 'debt-' + Date.now();
         this.data.debts.push(data);
       }
-      await this.save();
+      await this.save({ undoable: true, label: id ? 'Edit debt' : 'Add debt' });
       this.closeModal('debt-modal');
       this.renderPage(this.currentPage === 'debts' ? 'debts' : this.currentPage);
     });
@@ -325,7 +358,7 @@ Object.assign(window.BlackBook, {
     if (existingIdx < 0) {
       d.payments.push({ txId: txId, amount: amt, date: tx.date, type: type });
     }
-    await this.save();
+    await this.save({ undoable: true, label: 'Record debt payment' });
   },
 
   removeDebtPayment(txId) {
@@ -364,7 +397,7 @@ Object.assign(window.BlackBook, {
     } else {
       d.amountPaid = Math.max(0, (d.amountPaid || 0) - last.amount);
     }
-    await this.save();
+    await this.save({ undoable: true, label: 'Remove debt payment' });
     this.renderPage(this.currentPage === 'debts' ? 'debts' : this.currentPage);
   },
 
@@ -373,7 +406,7 @@ Object.assign(window.BlackBook, {
     if (!d) return;
     if (!(await this.confirmModal({ title: 'Delete Debt', message: 'Delete debt entry for "' + d.person + '"?' , confirmText: 'Delete' }))) return;
     this.data.debts = this.data.debts.filter(x => x.id !== id);
-    await this.save();
+    await this.save({ undoable: true, label: 'Delete debt' });
     this.renderPage(this.currentPage === 'debts' ? 'debts' : this.currentPage);
   },
 

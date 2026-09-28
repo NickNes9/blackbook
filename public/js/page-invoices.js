@@ -157,7 +157,7 @@ Object.assign(window.BlackBook, {
       '<span class="savings-name"><span class="cat-dot" style="background:' + dirColor + ';"></span> ' + this.escapeHtml(v.party || '?') +
       ' <span class="inv-number">#' + this.escapeHtml(v.number || '-') + '</span></span>' +
       '<span class="savings-actions">' +
-      ((v.payments && v.payments.length) ? '<button class="btn btn-sm btn-secondary" onclick="BlackBook.openInvoicePayments(\x27' + v.id + '\x27)" title="View payments in transactions">LINK</button>' : '') +
+      ((v.payments || []).some(payment => payment.txId && (this.data.transactions || []).some(tx => tx.id === payment.txId)) ? '<button class="btn btn-sm btn-secondary" onclick="BlackBook.openInvoicePayments(\x27' + v.id + '\x27)" title="Open the latest linked payment">LINK</button>' : '') +
       '<button class="btn btn-sm ' + (isPaid ? 'btn-secondary' : 'btn-primary') + ' invoice-paid-btn" onclick="BlackBook.toggleInvoicePaid(\x27' + v.id + '\x27)" title="' + (isPaid ? 'Mark as unpaid' : 'Mark as paid') + '">' + (isPaid ? 'UNPAID' : 'PAID') + '</button>' +
       (v.fileName ? '<button class="btn btn-sm btn-secondary" onclick="BlackBook.openInvoiceFile(\x27' + v.id + '\x27)" title="Open attached file: ' + this.escapeHtml(v.fileName) + '">INVOICE</button>' : '') +
       '<button class="btn btn-sm btn-secondary" onclick="BlackBook.openEditInvoice(\x27' + v.id + '\x27)">EDIT</button>' +
@@ -170,6 +170,7 @@ Object.assign(window.BlackBook, {
         linesHtml += '<div class="inv-line-view"><span class="inv-line-desc">' + this.escapeHtml(l.desc || '&mdash;') + '</span><span class="inv-line-math">' + l.qty + ' &times; ' + this.fmtAmount(l.price, cur) + '</span><span class="inv-line-sum">' + this.fmtAmount((parseFloat(l.qty) || 0) * (parseFloat(l.price) || 0), cur) + '</span></div>';
       }
       html += '<div class="inv-lines-box">' + linesHtml + '</div>';
+      html += this.invoicePaymentHistoryHtml(v);
       html += '<div class="bill-meta-line" style="display:block;margin-top:6px;">' +
         'ISSUED ' + (this.fmtDateInput(v.date || '') || '?') +
         ' &middot; PAID ' + (isPaid ? (this.fmtDateInput(this.invoicePaidDate(v)) || '-') : '-') +
@@ -177,6 +178,19 @@ Object.assign(window.BlackBook, {
     }
     html += '</div>';
     return html;
+  },
+
+  invoicePaymentHistoryHtml(v) {
+    if (!(v.payments || []).length) return '';
+    const currency = v.currency || this.baseCurrency() || 'RSD';
+    const rows = v.payments.slice().sort((a, b) => String(b.date || '').localeCompare(String(a.date || ''))).map(payment => {
+      const tx = payment.txId ? (this.data.transactions || []).find(item => item.id === payment.txId) : null;
+      const date = tx ? tx.date : payment.date;
+      const amount = tx ? Math.abs(tx.amount) : Math.abs(payment.amount || 0);
+      return '<div class="linked-payment-row"><span class="linked-payment-date">' + this.escapeHtml(this.fmtDateInput(date || '') || '—') + '</span><span class="linked-payment-amount">' + this.fmtAmount(amount, currency) + '</span>' +
+        (tx ? this.linkedTransactionButton(tx.id) : '<span class="linked-payment-unlinked" title="No transaction is linked to this payment">UNLINKED</span>') + '</div>';
+    }).join('');
+    return '<div class="linked-payment-history"><div class="linked-payment-heading">PAYMENTS</div>' + rows + '</div>';
   },
 
   toggleInvoiceExpanded(id) {
@@ -432,7 +446,7 @@ Object.assign(window.BlackBook, {
       const invDate = this.parseDateInput(document.getElementById('invoice-date').value) || this.today();
       const paidDateText = document.getElementById('invoice-paid-date').value.trim();
       const paidDate = this.parseDateInput(paidDateText);
-      if (paidDateText && !paidDate) { alert('Enter a valid paid date (DD/MM/YYYY).'); return; }
+      if (paidDateText && !paidDate) { alert('Enter a valid paid date (' + this.dateFormatPattern() + ').'); return; }
       const data = { dir: document.getElementById('invoice-dir').value, party: party, number: document.getElementById('invoice-number').value.trim(), date: invDate, paidDate: paidDate || '', currency: document.getElementById('invoice-currency').value, note: document.getElementById('invoice-note').value.trim(), lines: lines, categoryId: document.getElementById('invoice-category').value || null };
       const original = id ? this.data.invoices.find(item => item.id === id) : null;
       if (!this.categorySelectionAllowed(data.categoryId, invDate, original && original.categoryId)) { alert('That category was archived for this date. Choose another category.'); return; }
@@ -485,7 +499,7 @@ Object.assign(window.BlackBook, {
         this.data.invoices.push(data);
       }
       pendingInvHandle = null;
-      await this.save();
+      await this.save({ undoable: true, label: id ? 'Edit invoice' : 'Add invoice' });
       this.closeModal('invoice-modal');
       this.renderPage(this.currentPage === 'invoices' ? 'invoices' : this.currentPage);
     });
@@ -499,7 +513,7 @@ Object.assign(window.BlackBook, {
     this.data.transactions = this.data.transactions.filter(t => !String(t.pairId || '').startsWith(prefix));
     this.data.invoices = this.data.invoices.filter(x => x.id !== id);
     await this._invFileDel(id);
-    await this.save();
+    await this.save({ undoable: true, label: 'Delete invoice' });
     this.renderPage(this.currentPage === 'invoices' ? 'invoices' : this.currentPage);
   },
 
@@ -519,16 +533,16 @@ Object.assign(window.BlackBook, {
       this.openInvPayModal(id);
       return;
     }
-    await this.save();
+    await this.save({ undoable: true, label: 'Change invoice payment' });
     this.renderPage(this.currentPage === 'invoices' ? 'invoices' : this.currentPage);
   },
 
   async openInvoicePayments(id) {
     const v = this.data.invoices.find(x => x.id === id);
     if (!v) return;
-    const first = (v.payments || [])[0];
-    if (first && first.date) this.syncViewToDate(first.date);
-    this.navigateTo('overview');
+    const latest = (v.payments || []).slice().sort((a, b) => String(b.date || '').localeCompare(String(a.date || '')))
+      .find(payment => (this.data.transactions || []).some(tx => tx.id === payment.txId));
+    if (latest) this.openLinkedTransaction(latest.txId);
   },
 
   openInvPayModal(id) {
@@ -564,7 +578,7 @@ Object.assign(window.BlackBook, {
       const remaining = this.invRemaining(v);
       if (amt > remaining) amt = remaining;
       const payDate = this.parseDateInput(document.getElementById('ipay-date').value);
-      if (!payDate) { alert('Enter a valid paid date (DD/MM/YYYY).'); return; }
+      if (!payDate) { alert('Enter a valid paid date (' + this.dateFormatPattern() + ').'); return; }
       await this.applyInvoicePayment(v, amt, document.getElementById('ipay-account').value, document.getElementById('ipay-category').value, payDate);
       this.closeModal('invoice-pay-modal');
       this.renderPage(this.currentPage === 'invoices' ? 'invoices' : this.currentPage);
@@ -593,7 +607,7 @@ Object.assign(window.BlackBook, {
     v.payments.push({ date: date, amount: amt, accountId: accountId || null, categoryId: categoryId || null, txId: txId, seq: seqN });
     v.amountPaid = Math.round(((v.amountPaid || 0) + amt) * 100) / 100;
     v.paidDate = this.invIsPaid(v) ? date : '';
-    await this.save();
+    await this.save({ undoable: true, label: 'Record invoice payment' });
   },
 
   removeInvoicePaymentByTx(txId) {

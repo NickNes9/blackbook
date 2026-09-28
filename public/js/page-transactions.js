@@ -231,7 +231,7 @@ Object.assign(window.BlackBook, {
     return Math.round(eur / rateTo * 100) / 100;
   },
 
-  async doTransfer(fromId, toId, amountOut, noteExtra, date, amountInOverride) {
+  async doTransfer(fromId, toId, amountOut, noteExtra, date, amountInOverride, deferSave = false) {
     const cat = this.transferCategoryObj();
     const fromAcc = this.data.accounts.find(a => a.id === fromId);
     const toAcc = this.data.accounts.find(a => a.id === toId);
@@ -260,7 +260,7 @@ Object.assign(window.BlackBook, {
       note: note,
       pairId: pairId
     });
-    await this.save();
+    if (!deferSave) await this.save({ undoable: true, label: 'Transfer money' });
     return true;
   },
 
@@ -309,20 +309,21 @@ Object.assign(window.BlackBook, {
           tx.currencyIn = curT;
           tx.date = date;
           tx.note = noteExtra || (fromAcc ? fromAcc.name : '?') + ' → ' + (toAcc ? toAcc.name : '?');
-          await this.save();
+          await this.save({ undoable: true, label: 'Edit transfer' });
           this._editingTransferId = null;
         }
       } else {
-        const ok = await this.doTransfer(from, to, amountOut, noteExtra, date, amountIn);
+        const mergeSources = this._transferSourceIds && this._transferSourceIds.length === 2;
+        const ok = await this.doTransfer(from, to, amountOut, noteExtra, date, amountIn, !!mergeSources);
         if (!ok) return;
-        if (this._transferSourceIds && this._transferSourceIds.length === 2) {
+        if (mergeSources) {
           const src = this._transferSourceIds;
           this._transferSourceIds = null;
           this._mergeIds = null;
           this._bulkSel = new Set();
           this._bulkOnly = false;
           this.data.transactions = this.data.transactions.filter(t => !src.includes(t.id));
-          await this.save();
+          await this.save({ undoable: true, label: 'Merge into transfer' });
         }
       }
       this.closeModal('transfer-modal');
@@ -384,7 +385,7 @@ Object.assign(window.BlackBook, {
     this.applyTransactionLinkRemove(tx);
     const removed = tx;
     this.data.transactions = this.data.transactions.filter(t => t.id !== txId);
-    try { await this.save(); } catch (e) { if (removed) this.data.transactions.push(removed); }
+    await this.save({ undoable: true, label: 'Delete transaction' });
     this.renderPage(this.currentPage);
     const nw = document.querySelector('.tx-list-wrap');
     if (nw) nw.scrollTop = scrollTop;
@@ -438,7 +439,7 @@ Object.assign(window.BlackBook, {
     if (inst && inst.seq != null) {
       return {
         title: 'Delete Installment Payment',
-        message: 'This installment payment is linked to the purchase plan "' + ((inst.inst && inst.inst.name) || '') + '" (period ' + inst.seq + '). Deleting it will mark that period UNPAID on the plan.',
+        message: 'This installment payment is linked to the purchase plan "' + ((inst.inst && inst.inst.name) || '') + '" (period ' + inst.seq + '). Deleting it will reduce the amount paid toward that installment.',
         detail: 'card'
       };
     }
@@ -505,6 +506,7 @@ Object.assign(window.BlackBook, {
     });
     const wrap = document.querySelector('.tx-list-wrap');
     if (wrap) { const sc = wrap.scrollTop; this.renderOverview(); const nw = document.querySelector('.tx-list-wrap'); if (nw) nw.scrollTop = sc; }
+    this.updateFooterHotkeys();
   },
 
   bulkClear() {
@@ -571,7 +573,7 @@ Object.assign(window.BlackBook, {
       await this.confirmModal({ title: 'Bulk Edit', message: 'Selected transactions not found in data (' + this._bulkSel.size + ' selected).', danger: false });
       return;
     }
-    await this.save();
+    await this.save({ undoable: true, label: 'Edit transactions' });
     this.closeModal('bulk-edit-modal');
     this.bulkClear();
     await this.confirmModal({ title: 'Bulk Edit', message: 'Updated ' + changed + ' transaction' + (changed === 1 ? '' : 's') + '.', danger: false });
@@ -582,7 +584,7 @@ Object.assign(window.BlackBook, {
     if (!n) return;
     if (!(await this.confirmModal({ title: 'Delete Transactions', message: 'Delete ' + n + ' selected transaction' + (n === 1 ? '' : 's') + '?' }))) return;
     this.data.transactions = this.data.transactions.filter(t => !this._bulkSel.has(t.id));
-    await this.save();
+    await this.save({ undoable: true, label: 'Delete transactions' });
     this.bulkClear();
   },
 
@@ -665,7 +667,7 @@ Object.assign(window.BlackBook, {
     delete tgt.nativeAmount; delete tgt.nativeCurrency; delete tgt.baseAmount; delete tgt.feeAmount;
     const keep = tgt.id;
     this.data.transactions = this.data.transactions.filter(t => t.id === keep || !this._mergeIds.includes(t.id));
-    await this.save();
+    await this.save({ undoable: true, label: 'Merge transactions' });
     this.closeModal('merge-modal');
     this.bulkClear();
     this.showToast('Merged ' + txs.length + ' transactions successfully.');
@@ -720,7 +722,7 @@ Object.assign(window.BlackBook, {
       const rawParsed = this.evalAmount(document.getElementById('tx-amount').value);
       if (isNaN(rawParsed)) { alert('Please enter a valid amount.'); return; }
       const txDate = this.parseDateInput(document.getElementById('tx-date').value);
-      if (!txDate) { alert('Enter a valid date (DD/MM/YYYY).'); return; }
+      if (!txDate) { alert('Enter a valid date (' + this.dateFormatPattern() + ').'); return; }
       const rawAmt = Math.abs(Math.round(rawParsed * 100) / 100);
       const txType = document.getElementById('tx-type').value;
       const accountVal = document.getElementById('tx-account').value;
@@ -773,7 +775,7 @@ Object.assign(window.BlackBook, {
       this.syncViewToDate(txData.date);
       const wrap = document.querySelector('.tx-list-wrap');
       const scrollTop = wrap ? wrap.scrollTop : 0;
-      await this.save(); this.closeModal('transaction-modal'); this.renderPage(this.currentPage);
+      await this.save({ undoable: true, label: id ? 'Edit transaction' : 'Add transaction' }); this.closeModal('transaction-modal'); this.renderPage(this.currentPage);
       const nw = document.querySelector('.tx-list-wrap');
       if (nw) nw.scrollTop = scrollTop;
     });
