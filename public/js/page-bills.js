@@ -337,19 +337,18 @@ billsGridHtml() {
     return fallback ? fallback.id : null;
   },
 
-  billMatchTx(bill, monthKey) {
-    const amt = bill.amount != null ? Math.abs(bill.amount) : null;
-    const from = this.billPayFrom(bill);
-    const mp = monthKey.split('-');
-    const y = parseInt(mp[0]), m = parseInt(mp[1]);
+  billMatchTx(bill, pay) {
+    const amt = pay.amount != null ? Math.abs(pay.amount) : (bill.amount != null ? Math.abs(bill.amount) : null);
+    const from = pay.accountId || this.billPayFrom(bill);
     const linked = new Set((this.data.billPayments || []).map(p => p.txId).filter(Boolean));
-    return (this.data.transactions || []).find(t => {
+    const candidates = (this.data.transactions || []).filter(t => {
       if (t.type !== 'expense' || this.isTransfer(t)) return false;
       if (linked.has(t.id)) return false;
-      const d = new Date(t.date);
-      if (d.getFullYear() !== y || d.getMonth() !== m) return false;
-      const payAcc = from && from.startsWith('card:') ? t.cardId === from.slice(5) : (t.accountId === from);
-      if (!payAcc) return false;
+      if (String(t.date).slice(0, 7) !== pay.month) return false;
+      if (pay.accountId) {
+        const payAcc = from.startsWith('card:') ? t.cardId === from.slice(5) : t.accountId === from;
+        if (!payAcc) return false;
+      }
       if (bill.categoryId && t.categoryId && t.categoryId !== bill.categoryId) return false;
       if (bill.name) {
         const bn = String(bill.name).trim().toLowerCase();
@@ -357,12 +356,17 @@ billsGridHtml() {
         if (!tn || (tn !== bn && !tn.includes(bn) && !bn.includes(tn))) return false;
       }
       if (amt != null) {
-        const tAmt = this.toBase(Math.abs(t.amount), t.currency || this.baseCurrency() || 'RSD');
-        const tolerance = Math.max(amt * 0.05, 1);
-        if (Math.abs(tAmt - amt) > tolerance) return false;
+        const payCur = pay.amountCurrency || pay.payCurrency || bill.currency || this.baseCurrency() || 'RSD';
+        const txCur = t.currency || this.baseCurrency() || 'RSD';
+        const tAmt = txCur === payCur ? Math.abs(t.amount) : this.toBase(Math.abs(t.amount), txCur);
+        const expected = txCur === payCur ? amt : this.toBase(amt, payCur);
+        if (Math.abs(tAmt - expected) > 0.011) return false;
       }
       return true;
     });
+    const onAccount = candidates.filter(t => from && (from.startsWith('card:') ? t.cardId === from.slice(5) : t.accountId === from));
+    if (onAccount.length === 1) return onAccount[0];
+    return !pay.accountId && candidates.length === 1 ? candidates[0] : null;
   },
 
   attachBillTransaction(bill, pay) {
@@ -370,14 +374,10 @@ billsGridHtml() {
     const amt = pay.amount != null ? pay.amount : bill.amount;
     const from = pay.accountId || this.billPayFrom(bill);
     if (amt == null || !from) return;
-    const existing = this.billMatchTx(bill, pay.month);
+    const existing = this.billMatchTx(bill, pay);
     if (existing) {
       pay.txId = existing.id;
-      const rsd = this.toBase(Math.abs(existing.amount), existing.currency || this.baseCurrency() || 'RSD');
-      const actual = amt;
-      if (Math.abs(rsd - Math.abs(actual)) > 0.005 && existing.currency === this.baseCurrency()) {
-        existing.amount = -Math.round(Math.abs(actual) * 100) / 100;
-      }
+      existing.note = bill.name;
       pay.amount = Math.abs(existing.amount);
       if (existing.baseAmount != null) pay.baseAmount = Math.abs(existing.baseAmount);
       if (existing.feeAmount != null) pay.feeAmount = Math.abs(existing.feeAmount);
