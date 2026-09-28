@@ -92,6 +92,11 @@ Object.assign(window.BlackBook, {
     return null;
   },
 
+  overviewChartVisibility() {
+    const filter = this.ovActiveTypes();
+    return { income: filter !== 'expense', expenses: filter !== 'income' };
+  },
+
   setOvSortBy(field) {
     const wrap = document.querySelector('.tx-list-wrap');
     const scrollTop = wrap ? wrap.scrollTop : 0;
@@ -611,11 +616,10 @@ Object.assign(window.BlackBook, {
     }
     const incCol = this.data.settings.incomeColor || '#4ade80';
     const expCol = this.data.settings.expenseColor || '#f87171';
-    const showIncome = !this._ovExp || this._ovInc;
-    const showExpenses = !this._ovInc || this._ovExp;
+    const visible = this.overviewChartVisibility();
     const datasets = [];
-    if (showIncome) datasets.push({ label: 'Income', data: income, borderColor: incCol, backgroundColor: incCol, fill: { target: 'origin', above: this.hexToRgba(incCol, 0.1), below: this.hexToRgba(incCol, 0.1) }, tension: 0.3 });
-    if (showExpenses) datasets.push({ label: 'Expenses', data: expenses, borderColor: expCol, backgroundColor: expCol, fill: { target: 'origin', above: this.hexToRgba(expCol, 0.1), below: this.hexToRgba(expCol, 0.1) }, tension: 0.3 });
+    if (visible.income) datasets.push({ label: 'Income', data: income, borderColor: incCol, backgroundColor: incCol, fill: { target: 'origin', above: this.hexToRgba(incCol, 0.1), below: this.hexToRgba(incCol, 0.1) }, tension: 0.3 });
+    if (visible.expenses) datasets.push({ label: 'Expenses', data: expenses, borderColor: expCol, backgroundColor: expCol, fill: { target: 'origin', above: this.hexToRgba(expCol, 0.1), below: this.hexToRgba(expCol, 0.1) }, tension: 0.3 });
     this.overviewLineChart = new Chart(canvas.getContext('2d'), {
       type: 'line',
       data: { labels, datasets: datasets },

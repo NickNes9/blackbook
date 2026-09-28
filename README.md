@@ -26,11 +26,16 @@ A local-first personal finance console. Terminal aesthetic with light/dark theme
 
 ## What's new in 0.9.5
 
-- **Session undo and redo** — Ctrl+Z and Ctrl+Shift+Z reverse or restore recent transaction, transfer, bill, card, debt, savings, and invoice changes. History is temporary, limited to 100 recent changes, and clears when the session ends; the bottom shortcut bar reflects the current page and selection.
-- **Credit card installments** — partial payments accumulate against the selected installment and display the paid amount out of its due amount. A slot is marked paid when its full amount is covered, and the progress markers follow each installment's actual share of the total.
-- **Linked payment history** — bill, installment, savings, debt, and invoice payment records link to their exact transactions. Deleting a linked transaction updates its payment record and remaining balance.
-- **Dates and graphs** — choose a day-first date format in Settings, including abbreviated month names; transaction dates remain on one line. Expenses plot below zero on the Overview graph, and selected-only charts reflect the selected transactions.
+- **Update download progress** — applying an update now shows download progress, verification, installation, and restart in the app's top notification and Settings, followed by an in-app confirmation.
+- **Overview chart filters** — the chart follows the active TYPE, EXPENSES, or INCOME filter, showing both series for TYPE and only the matching series for the other filters.
 - **Responsive account filters** — the selected account tile uses less padding and width on narrow layouts while retaining its full label.
+
+## What's new in 0.9.4
+
+- **Session undo and redo** — Ctrl+Z and Ctrl+Shift+Z reverse or restore up to 100 recent transaction, transfer, bill, card, debt, savings, and invoice changes. History is temporary and clears when the session ends; the bottom shortcut bar reflects the current page and selection.
+- **Credit card installments** — partial payments accumulate against an installment and show the paid amount out of its due amount. A slot is marked paid when fully covered, and progress markers follow each installment's actual share of the total.
+- **Linked payment history** — bills, installments, savings, debts, and invoices link payment records to their exact transactions. Deleting a linked transaction updates its payment record and remaining balance.
+- **Dates and graphs** — choose a day-first date format in Settings, including abbreviated month names; transaction dates remain on one line. Expenses plot below zero on the Overview graph, and selected-only charts reflect selected transactions.
 
 ## What's new in 0.9.3
 
@@ -40,7 +45,7 @@ A local-first personal finance console. Terminal aesthetic with light/dark theme
 - **UI and reliability** — chart tooltips float above data points without being clipped, graphs no longer flash on redraw, forecast account controls and compact bill amounts fit narrow screens, and the startup update notice appears in the top-center header. Amount expressions now handle multiple comma decimals.
 - **Bills** — manual and automatic payments now match existing expenses in the correct month, using the paid amount; ambiguous matches remain separate, and linking never rewrites a transaction's amount.
 
-## What's new in 0.9.2 (local release candidate)
+## What's new in 0.9.2
 
 - Reconciliation controls are parked on the local `local/reconciliation-parked-20260926` branch; existing reconciliation fields remain in profile JSON for compatibility.
 - JSON restore previews its contents and saves the previous profile under `profiles/BACKUPS/profile-<name>/` before replacement.
@@ -58,7 +63,7 @@ A local-first personal finance console. Terminal aesthetic with light/dark theme
 
 ## What's new in 0.9.0
 
-- **Automatic updates** — Black Book checks GitHub Releases on each launch and shows an “UPDATE AVAILABLE · vX.Y.Z” card in the top-center header when one is available; clicking it opens Settings → ABOUT & UPDATES, where one click downloads the build (SHA-256 verified), installs it without touching your `profiles/`, and restarts on the same port while your open tab reloads automatically. The header card can be dismissed for the current run; manual checking remains in Settings.
+- **Automatic updates** — Black Book checks GitHub Releases on each launch and shows an “UPDATE AVAILABLE · vX.Y.Z” card in the top-center header when one is available; applying an update shows live download progress and verification/install/restart status in the same theme-aware notification style, then confirms the new version after reload. Downloads are SHA-256 verified, never touch your `profiles/`, and restart on the same port; the header card can be dismissed for the current run, and manual checking remains in Settings.
 - **Forecast** — a separate 30/60/90-day cash timeline and balance graph using current balances, unpaid scheduled bills, remaining card-installment slots, and optional recurring income/expenses; account filters, missing-rate warnings, and a red/green balance chart keep projections explicit.
 - **Responsive layout** — navigation becomes a slide-out menu, accounts abbreviate early, and months stay on one line; monetary labels use compact values such as 70k in tight spaces while stored amounts stay exact.
 - **Two-line bills amounts** — each bill shows both years' amounts, clicking the header toggles the chart view, and forecast warnings surface above the grid.

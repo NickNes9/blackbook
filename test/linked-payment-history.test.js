@@ -91,7 +91,7 @@ test('installment progress markers are 2px wide and use the app background color
 
 test('installment plan progress shows the boundaries and links a paid installment to its own transaction', () => {
   const app = loadApp(cards);
-  const tx = { id: 'payment-1', pairId: 'inst-plan-1-s1', date: '2026-01-15' };
+  const tx = { id: 'payment-1', pairId: 'inst-plan-1-s1', date: '2026-01-15', amount: -25 };
   app.data = { transactions: [tx] };
   app.cardColor = () => '#123456';
   app.instCard = () => ({ id: 'card-1' });
@@ -149,5 +149,5 @@ test('linked payment actions are wired into savings, debt, invoice, and bill his
   assert.match(invoices, /this\.linkedTransactionButton\(tx\.id\)/);
   assert.match(bills, /this\.linkedTransactionButton\(paid\.txId\)/);
   assert.match(cards, /inst-progress-marker/);
-  assert.match(cards, /this\.linkedTransactionButton\(paymentTx\.id\)/);
+  assert.match(cards, /paymentTxs\.map\(item => this\.linkedTransactionButton\(item\.id\)\)/);
 });

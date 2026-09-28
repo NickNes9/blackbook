@@ -381,11 +381,30 @@ app.get('/api/updates/status', async (req, res) => {
 });
 
 app.post('/api/updates/apply', async (req, res) => {
+  const sendProgress = (event) => {
+    if (res.writableEnded || res.destroyed) return;
+    if (!res.headersSent) {
+      res.status(200).set({
+        'Content-Type': 'application/x-ndjson; charset=utf-8',
+        'Cache-Control': 'no-cache, no-transform',
+        'X-Accel-Buffering': 'no'
+      });
+      res.flushHeaders();
+    }
+    try { res.write(JSON.stringify(event) + '\n'); } catch (_) { }
+  };
   try {
-    const result = await updater.applyUpdate();
-    res.json(result);
+    const result = await updater.applyUpdate({ onProgress: sendProgress });
+    sendProgress({ type: 'complete', ...result });
+    res.end();
     setTimeout(scheduleRestart, 250);
   } catch (error) {
+    if (res.headersSent) {
+      if (!(error instanceof UpdateError)) logger('[update] Apply failed:', error?.message);
+      sendProgress({ type: 'error', error: error instanceof UpdateError ? error.message : 'Update failed. Please try again.' });
+      res.end();
+      return;
+    }
     if (error instanceof UpdateError) return res.status(error.status).json({ error: error.message });
     logger('[update] Apply failed:', error?.message);
     return res.status(500).json({ error: 'Update failed: ' + (error?.message || 'unknown error') });
