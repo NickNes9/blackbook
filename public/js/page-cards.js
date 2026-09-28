@@ -301,7 +301,7 @@ planBlockHtml(inst) {
       this.initCategoryPicker('ctx-category-input', 'ctx-category', 'ctx-category-dropdown');
     }
     const cats = this.data.categories.slice().sort((a, b) => a.name.localeCompare(b.name));
-    const def = this.data.settings.defaultCategoryId;
+    const def = this.categoriesAvailableOn(this.today()).some(c => c.id === this.data.settings.defaultCategoryId) ? this.data.settings.defaultCategoryId : null;
     if (def) { catHidden.value = def; catInput.value = this.data.categories.find(c => c.id === def)?.name?.toUpperCase() || ''; }
     document.getElementById('card-tx-title').textContent = 'New \u2014 ' + (card ? card.name : 'Credit Card');
     this.bindCardTxForm();
@@ -360,6 +360,8 @@ planBlockHtml(inst) {
       const months = parseInt(document.getElementById('ctx-months').value, 10) || 1;
       const categoryId = document.getElementById('ctx-category').value;
       const editId = document.getElementById('ctx-edit-id').value;
+      const original = editId ? this.data.transactions.find(t => t.id === editId) : null;
+      if (!this.categorySelectionAllowed(categoryId, date, original && original.categoryId)) { alert('That category was archived for this date. Choose another category.'); return; }
       if (editId) {
         const tx = this.data.transactions.find(t => t.id === editId);
         if (!tx) return;

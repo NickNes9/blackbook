@@ -4,7 +4,7 @@
 set -u
 cd "$(dirname "$0")"
 
-PORTS=(9999 9877 9653 9441 9227 8819)
+PORTS=(9597 9999 9877 9653 9441 9227 8819)
 
 port_open() {
   (exec 3<>/dev/tcp/127.0.0.1/"$1") >/dev/null 2>&1 || return 1
@@ -41,6 +41,6 @@ for ((i = 0; i < 60; i++)); do
   if [ -n "$bound" ]; then break; fi
   sleep 0.3
 done
-if [ -z "$bound" ]; then bound=9999; fi
+if [ -z "$bound" ]; then bound=9597; fi
 open "http://localhost:$bound"
 exit 0

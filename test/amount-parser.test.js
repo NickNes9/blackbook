@@ -18,6 +18,13 @@ test('amount parser supports ordinary values and safe arithmetic without dynamic
   assert.equal(evaluate('-10.25'), -10.25);
 });
 
+test('amount parser chains operations with precedence and multiple comma decimals', () => {
+  const evaluate = evaluator();
+  assert.equal(evaluate('10-5*2-10'), -10);
+  assert.equal(evaluate('100-5*2-10/2+3'), 88);
+  assert.equal(evaluate('10,5-2,5*2+1'), 6.5);
+});
+
 test('amount parser rejects malformed and unsafe expressions', () => {
   const evaluate = evaluator();
   assert.ok(Number.isNaN(evaluate('5/0')));

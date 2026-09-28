@@ -2,7 +2,7 @@
   const roundMoney = (value) => Number.isFinite(value) ? Math.round(value * 100) / 100 : NaN;
 
   function evaluateAmount(input) {
-    const text = String(input == null ? '' : input).trim().replace(/\s+/g, '').replace(',', '.');
+    const text = String(input == null ? '' : input).trim().replace(/\s+/g, '').replace(/,/g, '.');
     if (!text) return NaN;
     if (!/^[0-9+\-*/().]+$/.test(text)) return roundMoney(Number(text));
 

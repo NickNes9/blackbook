@@ -4,23 +4,32 @@ A local-first personal finance console. Terminal aesthetic with light/dark theme
 
 ## Features
 
-- **Accounts** — cash/bank accounts, multiple currencies (RSD base + EUR/USD/XAU auto-fetched rates with manual override), auto-assigned colors
-- **Transactions** — quick-entry popup (`A`), transfers between accounts (`T`), income vs expense sign convention (`-` = expense, `+` = income), click a row to bulk-select, bulk edit/delete/merge, date scroll-wheel stepping
-- **Budgets** — per-category monthly limits or a total allocated by category percentages from a chosen month onward; progress bars, % used, and remaining amount
-- **Bills** — yearly payment grid (sticky header, zebra rows, per-bill TOTAL) with pay-from-any-account/card, custom amounts per month (right-click a cell), AUTO mode marks the current month paid automatically and creates linked transactions, year selector + TODAY navigation, `H` toggles the graph
+- **Accounts** — cash/bank accounts, multiple currencies (RSD base + EUR/USD/XAU auto-fetched rates with manual override), auto-assigned colors; the account form shows card terms only for credit cards and foreign fee only for non-base currencies
+- **Transactions** — quick-entry popup (`A`) with a remembered +/− income/expense button (an explicitly typed sign overrides it), transfers between accounts (`T`), click a row to bulk-select, bulk edit/delete/merge, date scroll-wheel stepping
+- **Budgets** — per-category monthly limits or a whole-budget allocation from a chosen month onward; a compact donut sits beside the spending graph, while a modal edits category shares and the allocation total, with a Reset Plan action for 100% unassigned funds
+- **Bills** — yearly payment grid (sticky header, zebra rows, per-bill TOTAL) with pay-from-any-account/card, custom amounts per month (right-click a cell), AUTO mode marks the current month paid automatically and creates linked transactions, year selector + TODAY navigation, `H` toggles the graph; narrow cells use compact amounts and currency symbols
 - **Savings goals** — target tracking, deposit/withdraw history, progress bars, command-palette deposits (`dep goal 500`)
 - **Credit cards** — installment plans with interest baked into the debt (100 @ 5% = 105; first installment carries the interest), PAY/PAID slots, greedy custom payments, edit plans, advance credit
 - **Debts / Invoices** — OWED · I OWE and INCOMES · EXPENSES · ALL filters inline with the period controls; debts carry a category; invoices support line items and links to existing local files (openable from the card)
-- **Overview** — metric panels, category breakdown bar, month filters that drive both the income-vs-expenses graph and the transaction list, sort by category or date, `H` hides the graph
-- **Forecast** — a separate 30/60/90-day cash timeline and balance graph using current balances, unpaid scheduled bills, remaining card-installment slots, and optional recurring income/expenses; account filters and missing-rate warnings keep projections explicit.
+- **Overview** — metric panels, category breakdown bar, end-of-month balance, and category cards that support Shift-click multi-selection; month filters drive both the income-vs-expenses graph and transaction list. `H` hides the graph, and the income/expense donut has a clickable center percentage.
+- **Forecast** — a separate 30/60/90-day cash timeline and balance graph using current balances, unpaid scheduled bills, remaining card-installment slots, and optional recurring income/expenses; colored account chips and missing-rate warnings keep projections explicit. Unpaid invoices and open personal debts remain on their own pages rather than entering the projection.
 - **Attention bar** — the header shows up to three highest-priority items (urgent first, then nearest date), with a `+N MORE` summary and a per-profile hide option.
-- **Categories** — picker everywhere (transactions, debts, invoices, purchases), auto-created during import, palette of theme-aware colors
-- **Import / Export** — Settings → EXPORT CSV (transactions) and EXPORT JSON (profile data); IMPORT JSON previews counts and makes a dated pre-import backup before replacing a profile. IMPORT CSV/XLSX stages valid rows, applies reusable description-to-category rules, and warns about likely duplicates before anything is saved.
+- **Categories** — picker everywhere (transactions, debts, invoices, purchases), auto-created during import, palette of theme-aware colors; archive a category from a chosen date without hiding its earlier transactions
+- **Import / Export** — Settings → Data contains exports, imports, and Import Rules together. IMPORT JSON previews counts and makes a dated pre-import backup before replacing a profile. IMPORT CSV/XLSX stages valid rows, applies reusable description-to-category rules, and warns about likely duplicates before anything is saved.
 - **Themes** — dark (default) and light, device-level toggle in Settings; customizable highlight, income and expense colors used across UI *and* charts; all native dropdowns themed to match
+- **Chart details** — graph values use floating tooltips above the hovered point or slice, clamped to the screen so they stay readable instead of being clipped by panels. Charts redraw without a delayed blank or entrance animation when data changes.
+- **Exchange rates** — one row per currency, with compact action icons on narrow screens instead of wrapped controls or sideways scrolling.
 - **Responsive layout** — navigation becomes a slide-out menu, accounts abbreviate early, and months stay on one line (full names → JAN/FEB → numbers). Monetary labels use compact values such as 70k in tight spaces, with exact amounts available on hover; entry fields and stored amounts stay exact. Budget text keeps its normal size and percentages stay centered. Forecast uses the Overview chart style, and hidden charts leave no empty panel.
-- **Math in amount fields** — type `50+20*3`, `(2+3)*4` or `12,5` anywhere an amount is accepted
-- **Profiles** — isolated data sets (default + named profiles) stored as separate files, per-profile page visibility
+- **Math in amount fields** — type chained expressions such as `100-5*2-10`, `(2+3)*4`, or `10,5-2,5` anywhere an amount is accepted
+- **Profiles** — isolated data sets (default + named profiles) stored as separate files; edit the active profile's name and base currency together, or open another profile to edit it; per-profile page visibility
 - **Command palette** — `/` or `Ctrl-K`: search transactions, pages, quick commands (`t 500 cash bank`, `pay electricity`, `bg groceries 20000`, `csv`, …)
+
+## What's new in 0.9.3
+
+- **Overview filtering and transactions** — Shift-click category cards to show several categories together, including transfers; normal click isolates one, and removing the final selection restores ALL. The selected month now shows its end-of-month balance. E/Delete act on selected transactions first, otherwise on the hovered row; merge completion appears in the top bar.
+- **Budgets and categories** — edit allocation shares in a roomier modal with a live donut and Reset Plan; unassigned funds remain visible. Category archiving takes effect from its archive date while older transactions and earlier months remain accessible. Budget and Bills total graph lines start hidden.
+- **Invoices** — save reusable invoice templates, record a paid date separately from issue date, and date the linked transaction to the actual payment. Local file links open in the computer's default app without storing file contents in the profile.
+- **UI and reliability** — chart tooltips float above data points without being clipped, graphs no longer flash on redraw, forecast account controls and compact bill amounts fit narrow screens, and the startup update notice appears in the top-center header. Amount expressions now handle multiple comma decimals.
 
 ## What's new in 0.9.2 (local release candidate)
 
@@ -28,19 +37,19 @@ A local-first personal finance console. Terminal aesthetic with light/dark theme
 - JSON restore previews its contents and saves the previous profile under `profiles/BACKUPS/profile-<name>/` before replacement.
 - Chart.js, the Hack font, and SheetJS spreadsheet import are bundled locally for offline use. SheetJS is vendored from its official 0.20.3 standalone build.
 - Budget allocation plans distribute a monthly total by category percentages and carry forward until changed.
-- New invoice file links remember a local file handle without copying its bytes. Existing stored attachments still open; a moved file or changed browser origin may need re-linking. New links require a Chromium browser with File System Access support. PDFs and raster images preview; other file types download for safe opening.
+- Link an invoice with the computer's native file picker. Black Book stores only the original file path and name; its INVOICE button opens that file in the system's default app. The file is never copied into Black Book, and Firefox works because file selection and opening are handled by the local app.
 
 ## What's new in 0.9.1
 
 - **Profile passwords** — optionally encrypt any profile at rest with AES-256-GCM (uses `node:crypto`). Lock the default profile or any named profile from Settings; the browser prompts for the password on every launch. Removing or changing a password requires the current password. A forgotten password cannot be recovered from an encrypted profile. Show/hide eye-toggle on all password fields.
 - **Overview filter toggle** — the INCOME / EXPENSES chips on Overview have been replaced by a single TYPE toggle (TYPE → EXPENSES → INCOME cycle).
 - **Budget graph chrome** — the budget page now matches Overview / Bills with an orange accent line, "SPEND BY CATEGORY" title bar, and the `overview-line-panel` class so all four chart pages look consistent. Filter chips sit between the orange line and the graph title. Over-100% category percentages turn red.
-- **Default port 9999** — the server, launchers (`Black Book.exe`, `.sh`, `.command`), and preferred-port fallback list now default to `9999` instead of `3000`, to reduce collisions with other local tools.
+- **Default port 9597** — the server and launchers use `9597` first, then `9999` as the secondary port before trying the remaining fallback ports.
 - **Functions doc** — a comprehensive user-facing capabilities document (`functions.txt`) now lives in the repo root, covering every page, modal, keyboard shortcut, and command-palette command.
 
 ## What's new in 0.9.0
 
-- **Automatic updates** — Black Book checks GitHub Releases for a newer version and shows a banner when one is available; one click downloads the build (SHA-256 verified), installs it without touching your `profiles/`, and restarts on the same port while your open tab reloads automatically. Settings → ABOUT & UPDATES shows the current version and lets you check for or apply updates manually.
+- **Automatic updates** — Black Book checks GitHub Releases on each launch and shows an “UPDATE AVAILABLE · vX.Y.Z” card in the top-center header when one is available; clicking it opens Settings → ABOUT & UPDATES, where one click downloads the build (SHA-256 verified), installs it without touching your `profiles/`, and restarts on the same port while your open tab reloads automatically. The header card can be dismissed for the current run; manual checking remains in Settings.
 - **Forecast** — a separate 30/60/90-day cash timeline and balance graph using current balances, unpaid scheduled bills, remaining card-installment slots, and optional recurring income/expenses; account filters, missing-rate warnings, and a red/green balance chart keep projections explicit.
 - **Responsive layout** — navigation becomes a slide-out menu, accounts abbreviate early, and months stay on one line; monetary labels use compact values such as 70k in tight spaces while stored amounts stay exact.
 - **Two-line bills amounts** — each bill shows both years' amounts, clicking the header toggles the chart view, and forecast warnings surface above the grid.
@@ -56,7 +65,8 @@ A local-first personal finance console. Terminal aesthetic with light/dark theme
 | `A` | New transaction |
 | `T` | Transfer |
 | `D` | Jump to today |
-| `E` | Edit hovered transaction |
+| `E` | Edit selected transactions, or the hovered transaction when none are selected |
+| `Delete` | Delete selected transactions, or the hovered transaction when none are selected |
 | `H` | Show/hide graph (Overview, Bills) |
 | `←` / `→` | Previous / next month (year on Bills & Savings) |
 | `1–8` | Switch pages |
@@ -71,14 +81,14 @@ npm install
 node server.js
 ```
 
-Open http://localhost:9999 — or just run the launcher that matches your OS:
+Open http://localhost:9597 (or `http://localhost:9999` if the primary port is busy) — or just run the launcher that matches your OS:
 - **Windows** — `Black Book.exe` starts the server hidden and opens your browser; `Stop Black Book.bat` shuts down that Black Book server only.
 - **Linux** — double-click `Black Book.sh` (or run it from a terminal); `Stop Black Book.sh` stops it. The script needs `node` on the PATH.
 - **macOS** — double-click `Black Book.command` opens it in Terminal; `Stop Black Book.command` stops it. The script needs `node` on the PATH.
 
 ## Data & privacy
 
-All data lives in `profiles/*.json` next to `server.js` (`profiles/data.json` = default profile). This folder is **gitignored** — code backups never contain your finances. Each successful save first retains the immediately previous file as `.bak`; JSON import also creates a dated copy under `profiles/BACKUPS/profile-<name>/`. For portable profile data use Settings → EXPORT JSON / EXPORT CSV. New invoice links store only a browser-scoped handle, not file bytes; the linked file is not included in a JSON export. Older browser-stored attachments remain readable and are likewise not included, unless a legacy profile already contains inline `fileData`.
+All data lives in `profiles/*.json` next to `server.js` (`profiles/data.json` = default profile). This folder is **gitignored** — code backups never contain your finances. Each successful save first retains the immediately previous file as `.bak`; JSON import also creates a dated copy under `profiles/BACKUPS/profile-<name>/`. For portable profile data use Settings → EXPORT JSON / EXPORT CSV. Invoice links store only a local file path and name; invoice files are not copied into Black Book or included in a JSON export. Older browser-stored attachments remain readable and are likewise not included, unless a legacy profile already contains inline `fileData`.
 
 ## Local-only operation
 
@@ -100,8 +110,8 @@ The app self-updates from GitHub Releases. It looks for `black-book-vX.Y.Z-{win,
 To publish a release from a checkout of this repo:
 
 ```bash
-npm run release -- -Version 0.9.2   # builds dist\0.9.2\*.zip + checksums
-gh release create v0.9.2 --title "v0.9.2" --notes "<changelog>" dist\0.9.2\black-book-v0.9.2-win.zip dist\0.9.2\black-book-v0.9.2-linux.zip dist\0.9.2\black-book-v0.9.2-mac.zip dist\0.9.2\checksums.sha256
+npm run release -- -Version 0.9.3   # builds dist\0.9.3\*.zip + checksums
+gh release create v0.9.3 --title "v0.9.3" --notes "<changelog>" dist\0.9.3\black-book-v0.9.3-win.zip dist\0.9.3\black-book-v0.9.3-linux.zip dist\0.9.3\black-book-v0.9.3-mac.zip dist\0.9.3\checksums.sha256
 ```
 
 Windows users keep using `Black Book.exe`; Linux/macOS users keep using `Black Book.sh` / `Black Book.command`. Updates ship each platform's launcher and re-apply the executable bit automatically. Applied updates keep the previous code under `updates/backup-<version>/` for rollback.
@@ -112,6 +122,6 @@ Every user-facing feature — pages, modals, buttons, keyboard shortcuts, comman
 
 ---
 
-**BLACK BOOK v0.9.2**
+**BLACK BOOK v0.9.3**
 
 Created by Nikola Nešić

@@ -5,6 +5,10 @@
     return Math.round((Number(n) || 0) * 100) / 100;
   }
 
+  function round6(n) {
+    return Math.round((Number(n) || 0) * 1000000) / 1000000;
+  }
+
   const asNumber = (value) => Number(value) || 0;
 
   function effectiveAllocation(allocations, month) {
@@ -25,7 +29,7 @@
     const out = [];
     for (const key of Object.keys(percents || {})) {
       if (roster && !roster.has(key)) continue;
-      const value = round2(asNumber(percents[key]));
+      const value = round6(asNumber(percents[key]));
       if (!(value > 0)) continue;
       out.push({ categoryId: key, pct: value });
     }
@@ -37,22 +41,12 @@
     return { used: used, unassigned: round2(Math.max(0, 100 - used)) };
   }
 
-  function equalSplit(n) {
-    if (n <= 0) return [];
-    const base = round2(100 / n);
-    const vals = [];
-    for (let i = 0; i < n; i++) vals.push(base);
-    const diff = 100 - vals.reduce((a, b) => a + b, 0);
-    if (diff !== 0) vals[vals.length - 1] = round2(vals[vals.length - 1] + diff);
-    return vals;
-  }
-
   function setShare(active, index, targetPct) {
     if (!active || !active[index]) return (active || []).slice();
     const cur = active[index].pct;
     const othersTotal = active.reduce((sum, o, i) => (i === index ? sum : sum + asNumber(o.pct)), 0);
-    const target = Math.max(0, Math.min(100, round2(targetPct)));
-    const maxNoSteal = round2(100 - othersTotal);
+    const target = Math.max(0, Math.min(100, round6(targetPct)));
+    const maxNoSteal = round6(100 - othersTotal);
     if (target <= maxNoSteal || target <= cur) {
       return active.map((o, i) => (i === index ? { categoryId: o.categoryId, pct: target } : o));
     }
@@ -62,12 +56,12 @@
       const scaled = [];
       for (let i = 0; i < active.length; i++) {
         if (i === index) continue;
-        scaled.push([i, round2(asNumber(active[i].pct) * scale)]);
+        scaled.push([i, round6(asNumber(active[i].pct) * scale)]);
       }
       let scaledSum = scaled.reduce((s, x) => s + x[1], 0);
       const slack = 100 - target - scaledSum;
       if (slack > 0 && scaled.length) {
-        scaled[scaled.length - 1][1] = round2(scaled[scaled.length - 1][1] + slack);
+        scaled[scaled.length - 1][1] = round6(scaled[scaled.length - 1][1] + slack);
       }
       scaledSum = scaled.reduce((s, x) => s + x[1], 0);
       const map = new Map(scaled);
@@ -78,24 +72,28 @@
     return active.map((o, i) => (i === index ? { categoryId: o.categoryId, pct: target } : o));
   }
 
+  function setShareFromAmount(active, index, amount, total) {
+    if (!(Number(total) > 0)) return (active || []).slice();
+    return setShare(active, index, Number(amount) / Number(total) * 100);
+  }
+
   function toggleActive(active, categoryId, suggestedPct) {
     const list = (active || []).slice();
     const existing = list.findIndex(o => o.categoryId === categoryId);
     if (existing >= 0) return list.filter(o => o.categoryId !== categoryId);
+    if (!list.length) return [{ categoryId: categoryId, pct: 100 }];
     if (suggestedPct != null && suggestedPct > 0) {
       const added = list.concat([{ categoryId: categoryId, pct: round2(suggestedPct) }]);
       return setShare(added, added.length - 1, round2(suggestedPct));
     }
-    const n = list.length + 1;
-    const vals = equalSplit(n);
-    return list.map((o, i) => ({ categoryId: o.categoryId, pct: vals[i] }))
-      .concat([{ categoryId: categoryId, pct: vals[vals.length - 1] }]);
+    const unassigned = Math.max(0, 100 - list.reduce((sum, item) => sum + asNumber(item.pct), 0));
+    return list.concat([{ categoryId: categoryId, pct: round6(unassigned) }]);
   }
 
   function toPercents(active) {
     const percents = {};
     for (const o of (active || [])) {
-      percents[o.categoryId] = round2(asNumber(o.pct));
+      percents[o.categoryId] = round6(asNumber(o.pct));
     }
     return percents;
   }
@@ -116,23 +114,28 @@
   function monthlyView(budgets, allocations, month, categoryIds) {
     const entry = effectiveAllocation(allocations, month);
     const limits = {};
-    for (const b of (budgets || [])) {
-      if (b && b.categoryId) limits[b.categoryId] = round2(b.amount);
-    }
     const slices = [];
     let leftover = null;
     if (entry && entry.amount > 0) {
       const active = activeFromPercents(entry.percents, categoryIds);
       let usedPercent = 0;
       for (const slice of active) {
-        usedPercent += slice.pct;
-        limits[slice.categoryId] = round2(entry.amount * slice.pct / 100);
-        slices.push({ categoryId: slice.categoryId, percent: slice.pct, value: round2(entry.amount * slice.pct / 100) });
+        const percent = round6(Math.min(slice.pct, Math.max(0, 100 - usedPercent)));
+        if (!(percent > 0)) continue;
+        usedPercent = round6(usedPercent + percent);
+        const value = round2(entry.amount * percent / 100);
+        limits[slice.categoryId] = value;
+        slices.push({ categoryId: slice.categoryId, percent, value });
       }
-      const leftoverPercent = round2(100 - usedPercent);
+      const leftoverPercent = round6(100 - usedPercent);
       if (leftoverPercent > 0) {
-        leftover = { percent: leftoverPercent, value: round2(entry.amount * leftoverPercent / 100) };
+        leftover = { percent: leftoverPercent, value: round2(entry.amount - slices.reduce((sum, slice) => sum + slice.value, 0)) };
       }
+      return { allocation: entry, slices, leftover, limits, total: round2(entry.amount) };
+    }
+    const roster = categoryIds ? new Set(categoryIds) : null;
+    for (const b of (budgets || [])) {
+      if (b && b.categoryId && (!roster || roster.has(b.categoryId))) limits[b.categoryId] = round2(b.amount);
     }
     let total = 0;
     for (const categoryId in limits) {
@@ -154,6 +157,7 @@
     activeFromPercents: activeFromPercents,
     shareTotals: shareTotals,
     setShare: setShare,
+    setShareFromAmount: setShareFromAmount,
     toggleActive: toggleActive,
     toPercents: toPercents,
     planFromSuggested: planFromSuggested

@@ -1,8 +1,8 @@
 import express from 'express';
 import { spawn } from 'node:child_process';
-import { existsSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs';
+import { existsSync, readFileSync, realpathSync, statSync, unlinkSync, writeFileSync } from 'node:fs';
 import http from 'node:http';
-import { join } from 'node:path';
+import { basename, isAbsolute, join } from 'node:path';
 import { WebSocketServer } from 'ws';
 import { APP_DIR, HOST, LEGACY_DATA_FILE, PID_FILE, PROFILES_DIR, preferredPorts } from './lib/server-config.js';
 import { createProfileStore, isImportableProfile, isProfileDocument, StorageError } from './lib/storage.js';
@@ -19,7 +19,7 @@ for (const stream of [process.stdout, process.stderr]) {
   });
 }
 
-const PORT = Number(process.env.PORT) || 9999;
+const PORT = Number(process.env.PORT) || 9597;
 const RATE_TIMEOUT_MS = 8_000;
 const IDLE_SHUTDOWN_MS = 600_000;
 const OZ_TO_GRAM = 31.1034768;
@@ -100,6 +100,108 @@ app.post('/api/save', (req, res) => {
     }
     return res.json({ ok: true });
   } catch (error) { return sendError(res, error); }
+});
+
+function runLocalCommand(command, args) {
+  return new Promise((resolve, reject) => {
+    let child;
+    try { child = spawn(command, args, { windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] }); }
+    catch (error) { reject(error); return; }
+    let stdout = '';
+    let stderr = '';
+    child.stdout?.setEncoding('utf8').on('data', chunk => { stdout += chunk; });
+    child.stderr?.setEncoding('utf8').on('data', chunk => { stderr += chunk; });
+    child.once('error', reject);
+    child.once('close', code => resolve({ code, stdout: stdout.trim(), stderr: stderr.trim() }));
+  });
+}
+
+function powershellArgs(script) {
+  return ['-NoProfile', '-STA', '-WindowStyle', 'Hidden', '-EncodedCommand', Buffer.from(script, 'utf16le').toString('base64')];
+}
+
+async function pickInvoiceFile() {
+  if (process.platform === 'win32') {
+    const script = "Add-Type -AssemblyName System.Windows.Forms; [Console]::OutputEncoding = New-Object System.Text.UTF8Encoding($false); $dialog = New-Object System.Windows.Forms.OpenFileDialog; $dialog.Title = 'Link invoice file'; $dialog.Filter = 'Invoice files (*.pdf;*.png;*.jpg;*.jpeg)|*.pdf;*.png;*.jpg;*.jpeg|All files (*.*)|*.*'; $dialog.Multiselect = $false; if ($dialog.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) { [Console]::Write($dialog.FileName) }";
+    return (await runLocalCommand('powershell.exe', powershellArgs(script))).stdout;
+  }
+  if (process.platform === 'darwin') {
+    const result = await runLocalCommand('osascript', ['-e', 'POSIX path of (choose file with prompt "Link invoice file")']);
+    if (result.code !== 0 && /user canceled|-128/i.test(result.stderr)) return '';
+    if (result.code !== 0) throw new Error(result.stderr || 'The file picker could not open.');
+    return result.stdout;
+  }
+  try {
+    const result = await runLocalCommand('zenity', ['--file-selection', '--title=Link invoice file', '--file-filter=Invoice files | *.pdf *.png *.jpg *.jpeg']);
+    if (result.code === 1) return '';
+    if (result.code !== 0) throw new Error(result.stderr || 'The file picker could not open.');
+    return result.stdout;
+  } catch (error) {
+    if (error.code !== 'ENOENT') throw error;
+    const result = await runLocalCommand('kdialog', ['--getopenfilename', '', '*.pdf *.png *.jpg *.jpeg|Invoice files']);
+    if (result.code === 1) return '';
+    if (result.code !== 0) throw new Error(result.stderr || 'Install zenity or kdialog to choose invoice files.');
+    return result.stdout;
+  }
+}
+
+async function openWithDefaultApp(filePath) {
+  if (process.platform === 'win32') {
+    const escapedPath = filePath.replaceAll("'", "''");
+    const script = `Start-Process -FilePath '${escapedPath}'`;
+    const result = await runLocalCommand('powershell.exe', ['-NoProfile', '-NonInteractive', '-WindowStyle', 'Hidden', '-EncodedCommand', Buffer.from(script, 'utf16le').toString('base64')]);
+    if (result.code !== 0) throw new Error(result.stderr || 'Windows could not open the linked file.');
+    return;
+  }
+  const result = process.platform === 'darwin'
+    ? await runLocalCommand('open', ['--', filePath])
+    : await runLocalCommand('xdg-open', [filePath]);
+  if (result.code !== 0) throw new Error(result.stderr || 'The default file application could not open the linked file.');
+}
+
+function invoiceFileProfile(profile) {
+  if (typeof profile !== 'string') throw new StorageError('Invalid profile', 400);
+  if (store.hasPassword(profile)) {
+    const session = unlocked.get(profile);
+    if (!session) throw new StorageError('Profile is locked', 401);
+    return session.doc;
+  }
+  return store.read(profile);
+}
+
+app.post('/api/invoice-file/pick', async (req, res) => {
+  try {
+    if (req.get('Sec-Fetch-Site') === 'cross-site') return res.sendStatus(403);
+    const profile = typeof req.body?.profile === 'string' ? req.body.profile : '';
+    invoiceFileProfile(profile); // Ensure the active profile exists and is unlocked before showing a system dialog.
+    const selected = await pickInvoiceFile();
+    if (!selected) return res.json({ cancelled: true });
+    const filePath = realpathSync(selected);
+    if (!statSync(filePath).isFile()) throw new StorageError('Choose a file, not a folder.', 400);
+    return res.json({ cancelled: false, filePath, fileName: basename(filePath) });
+  } catch (error) {
+    if (error && ['ENOENT', 'ENOTDIR'].includes(error.code)) error = new StorageError('The selected file could not be found.', 404);
+    return sendError(res, error);
+  }
+});
+
+app.post('/api/invoice-file/open', async (req, res) => {
+  try {
+    if (req.get('Sec-Fetch-Site') === 'cross-site') return res.sendStatus(403);
+    const profile = typeof req.body?.profile === 'string' ? req.body.profile : '';
+    const id = typeof req.body?.id === 'string' ? req.body.id : '';
+    const doc = invoiceFileProfile(profile);
+    const invoice = Array.isArray(doc.invoices) ? doc.invoices.find(item => item.id === id) : null;
+    const filePath = invoice && invoice.filePath;
+    if (!filePath || typeof filePath !== 'string' || !isAbsolute(filePath)) throw new StorageError('No local file is linked to this invoice.', 404);
+    const actual = realpathSync(filePath);
+    if (!statSync(actual).isFile()) throw new StorageError('The linked file is not a file.', 404);
+    await openWithDefaultApp(actual);
+    return res.json({ ok: true });
+  } catch (error) {
+    if (error && ['ENOENT', 'ENOTDIR'].includes(error.code)) error = new StorageError('The linked file could not be found. Edit the invoice and link it again.', 404);
+    return sendError(res, error);
+  }
 });
 
 app.post('/api/import', (req, res) => {

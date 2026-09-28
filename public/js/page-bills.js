@@ -4,7 +4,7 @@ Object.assign(window.BlackBook, {
     const bills = this.data.bills;
     let html = '<div class="cat-filter">';
     const hc = this.data.settings.highlightColor || '#fa8c3c';
-    const totOn = this._billsTotalOn !== false;
+    const totOn = this._billsTotalOn === true;
     html += '<div class="cat-filter-chip' + (totOn ? ' selected' : '') + '" style="--cc:' + hc + ';' + (totOn ? 'background:' + hc + ';color:var(--on-fill);' : '') + '" onclick="BlackBook.toggleBillsTotal()" title="Monthly total line \u00b7 click to toggle">' +
       '<span style="' + (totOn ? '' : 'opacity:0.5;') + '">TOTAL</span></div>';
     for (const b of bills) {
@@ -18,13 +18,14 @@ Object.assign(window.BlackBook, {
   },
 
   toggleBillsTotal() {
-    this._billsTotalOn = (this._billsTotalOn === false);
+    this._billsTotalOn = this._billsTotalOn !== true;
     this.renderBills();
   },
 
   renderBills() {
     const el = document.getElementById('page-bills');
     if (!el) return;
+    this.hideDonutTooltip();
     if (this.billsChart) { this.billsChart.destroy(); this.billsChart = null; }
     this.repairBillPayments();
     const hideGraph = !!(this.data.settings && this.data.settings.hideBillsGraph);
@@ -42,7 +43,7 @@ Object.assign(window.BlackBook, {
         ? ''
         : '<div class="list-sep"></div>' + this.billsChipsHtml() +
           '<div class="overview-charts"><div class="chart-panel overview-line-panel"><div class="chart-head-row"><span class="chart-title-text">BILLS BY MONTH</span></div><canvas id="bills-chart"></canvas></div></div>');
-    if (!hideGraph) setTimeout(() => this.renderBillsChart(), 50);
+    if (!hideGraph) this.renderBillsChart();
     this.finishFocus('bill');
   },
 
@@ -74,6 +75,13 @@ Object.assign(window.BlackBook, {
 
 billsGridHtml() {
     const formatGridAmount = (amount) => this.fmtNumber(amount);
+    const compactAmount = (amount) => new Intl.NumberFormat('en-US', { notation: 'compact', maximumFractionDigits: 0 }).format(amount).toLowerCase();
+    const responsiveAmount = (amount, currency, native = false) => {
+      const symbol = { EUR: '€', USD: '$', GBP: '£', JPY: '¥', CHF: 'CHF' }[currency] || currency;
+      const full = formatGridAmount(amount) + (native ? ' ' + currency : '');
+      const short = (native ? symbol : '') + compactAmount(amount);
+      return '<span class="bill-amount-full" title="' + this.escapeHtml(full) + '">' + this.escapeHtml(full) + '</span><span class="bill-amount-short" title="' + this.escapeHtml(full) + '">' + this.escapeHtml(short) + '</span>';
+    };
     const MONTHS_F = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
     let html = '<div class="bills-grid">';
     html += '<div class="bills-grid-head">BILL</div>';
@@ -135,14 +143,14 @@ billsGridHtml() {
             nativeAbs = paid.nativeAmount != null ? Math.abs(paid.nativeAmount) : null;
           }
           const natCur = (tx && tx.nativeCurrency) || paid.nativeCurrency || bill.currency || this.baseCurrency() || 'RSD';
-          const rsd = formatGridAmount(rsdAmount);
+          const rsd = responsiveAmount(rsdAmount, this.baseCurrency());
           let nativeVal = nativeAbs != null ? Math.abs(nativeAbs) : null;
           if (nativeVal == null && natCur !== this.baseCurrency()) {
             if (tx && tx.currency && tx.currency !== this.baseCurrency() && tx.nativeAmount == null) nativeVal = Math.abs(tx.amount);
             else if (bill.amount != null && (bill.currency || '') !== this.baseCurrency()) nativeVal = Math.abs(bill.amount);
           }
           amtLabel = nativeVal != null && natCur !== this.baseCurrency()
-            ? '<div class="bill-amt-lines"><span class="bill-amt-rsd">' + rsd + '</span><span class="bill-amt-native">(' + formatGridAmount(nativeVal) + ' ' + natCur + ')</span></div>'
+            ? '<div class="bill-amt-lines" title="' + this.escapeHtml(formatGridAmount(rsdAmount) + ' ' + this.baseCurrency() + ' / ' + formatGridAmount(nativeVal) + ' ' + natCur) + '"><span class="bill-amt-rsd">' + rsd + '</span><span class="bill-amt-native">' + responsiveAmount(nativeVal, natCur, true) + '</span></div>'
             : rsd;
         } else {
           amtLabel = '';
@@ -154,7 +162,7 @@ billsGridHtml() {
           (paid ? ' \u00b7 paid \u00b7 click to unpay' : ' \u00b7 click to mark paid') +
           ' &middot; right-click for custom amount">' + amtLabel + '</div>';
       }
-      html += '<div class="bill-cell-total' + alt + '"' + (yearHasPaid ? ' style="background:' + color + '22;color:' + color + ';font-weight:700;"' : '') + '>' + (yearHasPaid ? formatGridAmount(yearTotal) : '') + '</div>';
+      html += '<div class="bill-cell-total' + alt + '"' + (yearHasPaid ? ' style="background:' + color + '22;color:' + color + ';font-weight:700;" title="' + this.escapeHtml(formatGridAmount(yearTotal) + ' ' + this.baseCurrency()) + '"' : '') + '>' + (yearHasPaid ? responsiveAmount(yearTotal, this.baseCurrency()) : '') + '</div>';
       bi++;
     }
     html += '</div>';
@@ -185,7 +193,7 @@ billsGridHtml() {
       catInput.value = '';
       this.initCategoryPicker('bill-category-input', 'bill-category', 'bill-category-dropdown');
     }
-    const billCat = this.data.categories.find(c => /^bill/i.test(String(c.name).trim()));
+    const billCat = this.categoriesAvailableOn(this.today()).find(c => /^bill/i.test(String(c.name).trim()));
     if (billCat) { catHidden.value = billCat.id; catInput.value = billCat.name.toUpperCase(); }
     const paySel = document.getElementById('bill-payfrom');
     paySel.innerHTML = this.accountSelectOptions(this.defaultAccountForCurrency(this.baseCurrency()));
@@ -438,7 +446,7 @@ billsGridHtml() {
     const months = [];
     for (let m = 1; m <= 12; m++) months.push(this.vy() + '-' + String(m).padStart(2, '0'));
     const datasets = [];
-    if (this._billsTotalOn !== false) {
+    if (this._billsTotalOn === true) {
       const hc = this.data.settings.highlightColor || '#fa8c3c';
       datasets.push({
         label: 'TOTAL',
@@ -520,16 +528,15 @@ billsGridHtml() {
       options: {
         responsive: true,
         maintainAspectRatio: false,
+        animation: false,
+        interaction: { mode: 'index', intersect: false },
         plugins: {
           legend: { display: false },
           title: { display: false },
-          tooltip: {
-            usePointStyle: true,
-            boxPadding: 3,
-            callbacks: {
-              label: (c) => ' ' + c.dataset.label + ': ' + this.fmtNumber(c.parsed.y)
-            }
-          }
+          tooltip: { enabled: false, external: ({ chart, tooltip }) => this.showDonutTooltip(chart, tooltip,
+            tooltip.dataPoints && tooltip.dataPoints.length
+              ? [tooltip.title && tooltip.title[0], ...tooltip.dataPoints.map(c => c.dataset.label + ': ' + this.fmtNumber(c.parsed.y))].filter(Boolean).join('\n')
+              : '') }
         },
         scales: {
           x: { ticks: { color: '#555555', autoSkip: false, maxRotation: 0, font: { size: 11 } }, grid: { color: '#141414' } },
