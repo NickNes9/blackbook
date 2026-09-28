@@ -34,6 +34,11 @@ GLOBAL / ALL PAGES
     * E      - bulk edit selected transactions
     * M      - merge selected transactions
     * B      - toggle bulk "selected only" filter
+    * Ctrl+Z - undo the latest supported financial change in this session
+    * Ctrl+Shift+Z - redo an undone change in this session
+  Undo is temporary, keeps at most 100 recent changes, and is cleared when
+  the app session ends. The footer only shows shortcuts available on the
+  current page and for the current selection.
     * H      - show/hide the graph on the current page
     * Tab    - cycle through the displayed accounts
     * Space  - open command palette
@@ -110,6 +115,8 @@ TRANSACTIONS
   transfer, or bulk-delete.
 - Speed-dial style date input understands the configured date separator;
   smart dates (numeric offsets) are accepted.
+- Date display format is configurable in Settings → Appearance using
+  D/DD, M/MM/MMM, and YY/YYYY tokens (MMM is the longest month name).
 
 ----------------------------------------------------------------------
 BILLS
@@ -176,14 +183,15 @@ CREDIT CARDS
 - Create an installment plan: months, interest %, and funding account.
   Installment purchases are paid automatically each month into a linked
   transaction.
-- Pay off installments early (custom amount) - remaining installments
-  shrink accordingly.
+- Pay installments in one or more amounts; partial amounts accumulate on
+  that installment and show paid amount / amount due. A slot becomes paid
+  when the full amount is covered; custom plan payments fill slots in order.
 - Mark "Advance paid" - funding the card with a lump sum makes installments
   convert into a single up-front payment per month.
 - Track installments month by month (seq / total), fully-paid plans are
   shown closed with a checkmark.
-- Open a plan to see its monthly payment transactions; visually track
-  progress (paid % bar).
+- Open payment history to see installment slots and their linked transactions;
+  visually track progress with amount-weighted markers on the paid % bar.
 - Chart shows installment plan amounts over months.
 
 ----------------------------------------------------------------------
@@ -193,8 +201,8 @@ SAVINGS
 - Create savings goals with a target amount and currency.
 - Add deposits and withdrawals per goal (with date and note); each entry
   creates an automatic transaction in the ledger.
-- Expand a goal to see its entry history, edit/delete entries (linked
-  transactions update too).
+- Goal totals and progress stay visible; expand Payment History to see
+  entries and their transaction links. Delete entries from their history.
 - Total savings progress bar across all goals.
 - Pick the display year on this page (its own year picker).
 - Edit/delete goals entirely.
@@ -208,7 +216,9 @@ DEBTS
 - Mark a debt as settled when paid off.
 - Record payments (default amount or custom) - each creates a linked
   transaction.
-- Open a debt to see all payments; remove the last payment to undo.
+- Debt totals, progress, dates, and notes stay visible; expand Payment
+  History to see linked transactions. Delete individual linked payment
+  transactions from the history.
 - Filter debts by direction (chips + cycle button).
 - Summary of totals for each direction and what's overdue.
 - Colors/bars show remaining proportion.
@@ -318,7 +328,12 @@ CSV:
 
 Appearance / behavior:
 - Dark/light theme with accent + income/expense color pickers.
-- Date separator preference (e.g. DD/MM/YYYY vs YYYY.MM.DD).
+- Date format uses D/DD, M/MM/MMM, and YY/YYYY tokens; the default is
+  DD/MM/YYYY and month names can be abbreviated with MMM.
+- Undo/redo recent financial changes with Ctrl+Z / Ctrl+Shift+Z; history is
+  session-only and capped at 100 changes.
+- The footer shows only keyboard shortcuts available on the current page
+  and for the current selection.
 - Space-bar/Enter-driven dialogs and pre-filled forms.
 - Attention bar can be shown/hidden.
 

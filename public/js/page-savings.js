@@ -18,9 +18,13 @@ Object.assign(window.BlackBook, {
   async openSavingsEntries(goalId) {
     const goal = this.data.savingsGoals.find(g => g.id === goalId);
     if (!goal) return;
-    const first = (goal.entries || [].slice()).slice().sort((a, b) => b.date.localeCompare(a.date))[0];
-    if (first && first.date) this.syncViewToDate(first.date);
-    this.navigateTo('overview');
+    const latest = (goal.entries || []).slice().sort((a, b) => String(b.date || '').localeCompare(String(a.date || '')))
+      .map(entry => this.savingsTransactionForEntry(entry)).find(Boolean);
+    if (latest) this.openLinkedTransaction(latest.id);
+  },
+
+  savingsTransactionForEntry(entry) {
+    return (this.data.transactions || []).find(tx => tx && (tx.linkId === entry.id || tx.id === entry.id)) || null;
   },
 
   savingsSummaryHtml() {
@@ -54,20 +58,17 @@ Object.assign(window.BlackBook, {
     const saved = this.goalSaved(goal);
     const pct = target > 0 ? Math.min(Math.round(saved / target * 100), 100) : 0;
     const barClass = pct < 80 ? 'under' : pct <= 100 ? 'warning' : 'over';
-    const expanded = this._expandedGoals[goal.id];
     let html = '<div class="savings-card' + this.focusRecordHtml('savings', goal.id) + '">' +
       '<div class="savings-header">' +
       '<span class="savings-name">' + this.escapeHtml(goal.name) + '</span>' +
       '<span class="savings-actions">' +
-      ((goal.entries && goal.entries.length) ? '<button class="btn btn-sm btn-secondary" onclick="BlackBook.openSavingsEntries(\x27' + goal.id + '\x27)" title="View entries in transactions">LINK</button>' : '') +
+      ((goal.entries || []).some(entry => this.savingsTransactionForEntry(entry)) ? '<button class="btn btn-sm btn-secondary" onclick="BlackBook.openSavingsEntries(\x27' + goal.id + '\x27)" title="Open the latest linked transaction">LINK</button>' : '') +
       '<button class="btn btn-sm btn-primary" onclick="BlackBook.openNewSavingsEntry(\x27' + goal.id + '\x27)">+ ADD</button>' +
       '<button class="btn btn-sm btn-secondary" onclick="BlackBook.openEditSavingsGoal(\x27' + goal.id + '\x27)">EDIT</button>' +
       '<button class="btn btn-sm btn-danger btn-icon" title="Delete goal" onclick="BlackBook.deleteSavingsGoal(\x27' + goal.id + '\x27)">' + this.xIcon() + '</button></span></div>' +
       '<div class="savings-progress-text"><span>' + this.fmtBase(saved) + ' of ' + this.fmtBase(target) + '</span><span>' + pct + '%</span></div>' +
       '<div class="savings-progress-bar"><div class="savings-progress-fill ' + barClass + '" style="width:' + pct + '%;"></div></div>' +
-      '<button class="btn btn-sm btn-secondary savings-expand-btn" onclick="BlackBook.toggleSavingsGoal(\x27' + goal.id + '\x27)">' + (expanded ? '&#9650; HIDE ENTRIES' : '&#9660; SHOW ENTRIES') + ' (' + (goal.entries || []).length + ')</button>';
-    if (expanded) { html += this.savingsEntriesHtml(goal); }
-    html += '</div>';
+      '<details class="item-details"><summary>PAYMENT HISTORY · ' + (goal.entries || []).length + '</summary>' + this.savingsEntriesHtml(goal) + '</details></div>';
     return html;
   },
 
@@ -103,7 +104,7 @@ Object.assign(window.BlackBook, {
     const entryIds = new Set(((goal && goal.entries) || []).map(e => e.id));
     this.data.savingsGoals = this.data.savingsGoals.filter(g => g.id !== goalId);
     this.data.transactions = (this.data.transactions || []).filter(t => !entryIds.has(t.linkId));
-    await this.save();
+    await this.save({ undoable: true, label: 'Delete savings goal' });
     this.renderSavings();
   },
 
@@ -121,7 +122,7 @@ Object.assign(window.BlackBook, {
       } else {
         this.data.savingsGoals.push({ id: crypto.randomUUID(), name: name, targetAmount: targetAmount, currency: currency, entries: [] });
       }
-      await this.save();
+      await this.save({ undoable: true, label: id ? 'Edit savings goal' : 'Add savings goal' });
       this.closeModal('savings-modal');
       this.renderSavings();
     });
@@ -159,7 +160,7 @@ Object.assign(window.BlackBook, {
       note: 'Savings: ' + goal.name + (note ? ' — ' + note : '')
     };
     this.data.transactions.push(tx);
-    await this.save();
+    await this.save({ undoable: true, label: 'Add savings contribution' });
   },
 
   bindSavingsEntryForm() {
@@ -167,7 +168,7 @@ Object.assign(window.BlackBook, {
       e.preventDefault();
       const goalId = document.getElementById('savings-entry-goal-id').value;
       const date = this.parseDateInput(document.getElementById('savings-entry-date').value);
-      if (!date) { alert('Enter a valid date (DD/MM/YYYY).'); return; }
+      if (!date) { alert('Enter a valid date (' + this.dateFormatPattern() + ').'); return; }
       const amount = this.evalAmount(document.getElementById('savings-entry-amount').value);
       const note = document.getElementById('savings-entry-note').value.trim();
       if (!goalId || isNaN(amount) || amount === 0) return;
@@ -188,9 +189,10 @@ Object.assign(window.BlackBook, {
     for (const e of sorted) {
       const neg = e.amount < 0;
       rows += '<div class="savings-entry-item">' +
-        '<span class="savings-entry-date">' + e.date + '</span>' +
+        '<span class="savings-entry-date">' + this.escapeHtml(this.fmtDateInput(e.date)) + '</span>' +
         '<span class="savings-entry-note">' + this.escapeHtml(e.note || '') + '</span>' +
         '<span class="savings-entry-amount ' + (neg ? 'savings-withdraw' : '') + '">' + (neg ? '' : '+') + this.fmtBase(e.amount) + '</span>' +
+        this.linkedTransactionButton((this.savingsTransactionForEntry(e) || {}).id) +
         '<button class="savings-entry-delete" onclick="BlackBook.deleteSavingsEntry(\x27' + goal.id + '\x27, \x27' + e.id + '\x27)">&times;</button></div>';
     }
     return '<div class="savings-entries">' + rows + '</div>';
@@ -201,7 +203,7 @@ Object.assign(window.BlackBook, {
     if (!goal) return;
     goal.entries = (goal.entries || []).filter(e => e.id !== entryId);
     this.data.transactions = (this.data.transactions || []).filter(t => t.linkId !== entryId);
-    await this.save();
+    await this.save({ undoable: true, label: 'Delete savings contribution' });
     this.renderSavings();
   },
 

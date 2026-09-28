@@ -19,6 +19,11 @@ window.BlackBook = {
   _cmdPaletteItems: [],
   _ovSortBy: 'date',
   _ovSortDir: 'desc',
+  _undoHistory: null,
+  _undoBaseline: null,
+  _undoReady: false,
+  _undoBusy: false,
+  _saveQueue: Promise.resolve(),
 
   async init() {
     this.enhancePasswordFields();
@@ -169,10 +174,27 @@ this.connectWebSocket();
       }
     });
 
+    document.addEventListener('pointerover', (e) => {
+      const row = e.target.closest && e.target.closest('.tx-row');
+      if (!row || (e.relatedTarget && row.contains(e.relatedTarget))) return;
+      const match = (row.getAttribute('onclick') || '').match(/bulkToggle\('([^']+)'/);
+      this._footerHoveredTxId = match ? match[1] : null;
+      this.updateFooterHotkeys();
+    });
+    document.addEventListener('pointerout', (e) => {
+      const row = e.target.closest && e.target.closest('.tx-row');
+      if (!row || (e.relatedTarget && row.contains(e.relatedTarget))) return;
+      this._footerHoveredTxId = null;
+      this.updateFooterHotkeys();
+    });
+    document.addEventListener('focusin', () => this.updateFooterHotkeys());
+    document.addEventListener('focusout', () => setTimeout(() => this.updateFooterHotkeys(), 0));
+
     this.populateCurrencyDropdowns();
     this.updateBaseCurrencyLabels();
     this.upgradeAllSelects(document);
     this.initChartResize();
+    this.resetUndoHistory();
     this.navigateTo('overview');
   },
 
@@ -240,6 +262,14 @@ this.connectWebSocket();
       if (confirmOpen) {
         if (e.key === 'y' || e.key === 'Y' || e.key === 'Enter') { e.preventDefault(); this._resolveConfirm(true); return; }
         if (e.key === 'n' || e.key === 'N' || e.key === 'Escape') { e.preventDefault(); this._resolveConfirm(false); return; }
+        return;
+      }
+      if ((e.ctrlKey || e.metaKey) && !e.altKey && (e.key === 'z' || e.key === 'Z')) {
+        const active = document.activeElement;
+        const editable = active && (['INPUT', 'SELECT', 'TEXTAREA'].includes(active.tagName) || active.isContentEditable);
+        if (editable || modalOpen || paletteOpen) return;
+        e.preventDefault();
+        this.undoFinancialChange(e.shiftKey ? 'redo' : 'undo');
         return;
       }
       if (e.ctrlKey && (e.key === 'k' || e.key === 'K')) {
@@ -461,15 +491,17 @@ this.connectWebSocket();
       if (page === 'settings' && window.UpdateUi) { try { UpdateUi.renderSettings(); } catch (err) { console.error('Update UI render failed:', err); } }
       const pageEl = document.getElementById('page-' + page);
       if (pageEl) this.upgradeAllSelects(pageEl);
+      this.syncDateInputHints();
       this.refreshAttention();
       this.updateGraphFooter();
+      this.updateFooterHotkeys();
     } catch (err) {
       console.error('renderPage failed:', err);
       if (!this._renderErrShown) { this._renderErrShown = true; alert('Render error: ' + err.message); }
     }
   },
 
-updateGraphFooter() {
+  updateGraphFooter() {
     const button = document.getElementById('footer-graph-toggle');
     if (!button) return;
     const graphPage = this.currentPage === 'overview' || this.currentPage === 'bills' || this.currentPage === 'budget' || this.currentPage === 'forecast';
@@ -550,28 +582,120 @@ updateGraphFooter() {
     if (label) label.textContent = state === 'saving' ? 'SAVING\u2026' : state === 'failed' ? 'UNSAVED' : 'SAVED';
   },
 
-  async save() {
+  resetUndoHistory() {
+    if (!window.UndoHistory || !this.data) return;
+    this._undoHistory = new window.UndoHistory(100, 5 * 1024 * 1024);
+    this._undoBaseline = this._undoHistory.snapshot(this.stripTransient(this.data));
+    this._undoReady = true;
+  },
+
+  footerHotkeys() {
+    const modalOpen = typeof document !== 'undefined' && document.querySelector('.modal:not(.hidden), #command-overlay:not(.hidden)');
+    if (modalOpen) return [];
+    const active = typeof document !== 'undefined' ? document.activeElement : null;
+    const editing = active && (['INPUT', 'SELECT', 'TEXTAREA'].includes(active.tagName) || active.isContentEditable);
+    const shortcuts = [];
+    const add = (key, label) => shortcuts.push({ key, label });
+    if (!editing) {
+      add('A', 'NEW TRANSACTION');
+      add('T', 'TRANSFER');
+      add('D', 'TODAY');
+    }
+    if (!editing && this.currentPage === 'overview') {
+      const selected = this._bulkSel ? this._bulkSel.size : 0;
+      const hovered = !!(this._footerHoveredTxId || this.hoveredTransactionId());
+      if (selected || hovered) add('E', selected ? 'EDIT SELECTED' : 'EDIT');
+      if (selected >= 2) add('M', 'MERGE SELECTED');
+      if (selected) add('B', 'FILTER SELECTED');
+      if (selected || hovered) add('DEL', selected ? 'DELETE SELECTED' : 'DELETE');
+    }
+    if (!editing && ['overview', 'bills', 'budget', 'forecast'].includes(this.currentPage)) add('H', 'GRAPH');
+    if (!editing && this.currentPage === 'overview') add('TAB', 'ACCOUNT');
+    if (!editing) add('← →', 'MONTH');
+    const pageCount = this.pageList().filter(page => this.isPageEnabled(page)).length;
+    if (!editing && pageCount > 1) add('1–' + pageCount, 'PAGES');
+    if (!editing) add('Space', 'COMMAND');
+    if (!editing && this._undoReady && !this._undoBusy && this._undoHistory) {
+      if (this._undoHistory.undoStack.length) add('Ctrl Z', 'UNDO');
+      if (this._undoHistory.redoStack.length) add('Ctrl Shift Z', 'REDO');
+    }
+    return shortcuts;
+  },
+
+  updateFooterHotkeys() {
+    if (typeof document === 'undefined') return;
+    const host = document.getElementById('footer-hotkeys');
+    if (!host) return;
+    host.innerHTML = this.footerHotkeys().map(item => '<span class="hotkey"><kbd>' + item.key + '</kbd> ' + item.label + '</span>').join('');
+  },
+
+  async undoFinancialChange(direction) {
+    if (!this._undoReady || this._undoBusy) return;
+    try { await (this._saveQueue || Promise.resolve()); } catch (_) {}
+    if ((this._lastSaveFailure || 0) > (this._lastSaveSuccess || 0)) {
+      this.showToast('Undo unavailable while changes are unsaved');
+      return;
+    }
+    const from = direction === 'redo' ? this._undoHistory.redoStack : this._undoHistory.undoStack;
+    const to = direction === 'redo' ? this._undoHistory.undoStack : this._undoHistory.redoStack;
+    const entry = from[from.length - 1];
+    if (!entry) { this.showToast(direction === 'redo' ? 'Nothing to redo' : 'Nothing to undo'); return; }
+    const previous = this._undoHistory.snapshot(this.stripTransient(this.data));
+    this._undoHistory.apply(this.data, entry.delta, direction);
+    this._undoBusy = true;
+    const ok = await this.save({ historyReplay: true });
+    this._undoBusy = false;
+    if (!ok) {
+      for (const key of Object.keys(previous)) this.data[key] = previous[key];
+      this.showToast((direction === 'redo' ? 'Redo' : 'Undo') + ' could not be saved');
+      return;
+    }
+    if (from[from.length - 1] === entry) from.pop();
+    to.push(entry);
+    this._undoHistory.trim();
+    this.renderPage(this.currentPage);
+    this.showToast((direction === 'redo' ? 'Redid' : 'Undid') + ' last financial change');
+  },
+
+  async save(options = {}) {
     const sequence = (this._saveSequence || 0) + 1;
     this._saveSequence = sequence;
     this._pendingSaves = (this._pendingSaves || 0) + 1;
     this.setSaveState('saving');
-    const payload = this.stripTransient(this.data);
-    try {
-      const response = await fetch('/api/save', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(this.profile ? { profile: this.profile, data: payload } : payload) });
-      if (!response.ok) throw new Error((await response.json().catch(() => ({}))).error || 'Save failed');
-      this._lastSaveSuccess = Math.max(this._lastSaveSuccess || 0, sequence);
-      return true;
-    } catch (error) {
-      this._lastSaveFailure = Math.max(this._lastSaveFailure || 0, sequence);
-      console.error('Save failed:', error);
-      return false;
-    } finally {
-      this._pendingSaves = (this._pendingSaves || 0) - 1;
-      if (this._pendingSaves <= 0) {
-        this._pendingSaves = 0;
-        this.setSaveState((this._lastSaveFailure || 0) > (this._lastSaveSuccess || 0) ? 'failed' : 'saved');
+    const payload = JSON.parse(JSON.stringify(this.stripTransient(this.data)));
+    const profile = this.profile;
+    const perform = async () => {
+      const before = this._undoBaseline || (this._undoHistory && this._undoHistory.snapshot(payload));
+      const after = this._undoHistory && this._undoHistory.snapshot(payload);
+      const delta = before && after && this._undoHistory ? this._undoHistory.diff(before, after) : null;
+      try {
+        const response = await fetch('/api/save', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(profile ? { profile, data: payload } : payload) });
+        if (!response.ok) throw new Error((await response.json().catch(() => ({}))).error || 'Save failed');
+        this._lastSaveSuccess = Math.max(this._lastSaveSuccess || 0, sequence);
+        if (this.profile === profile && this._undoHistory) {
+          if (this._undoReady && delta && !options.historyReplay) {
+            if (options.undoable) this._undoHistory.push({ label: options.label || 'Financial change', delta });
+            else this._undoHistory.clear();
+          }
+          this._undoBaseline = after;
+          this.updateFooterHotkeys();
+        }
+        return true;
+      } catch (error) {
+        this._lastSaveFailure = Math.max(this._lastSaveFailure || 0, sequence);
+        console.error('Save failed:', error);
+        return false;
+      } finally {
+        this._pendingSaves = (this._pendingSaves || 0) - 1;
+        if (this._pendingSaves <= 0) {
+          this._pendingSaves = 0;
+          this.setSaveState((this._lastSaveFailure || 0) > (this._lastSaveSuccess || 0) ? 'failed' : 'saved');
+        }
       }
-    }
+    };
+    const queued = (this._saveQueue || Promise.resolve()).catch(() => false).then(perform);
+    this._saveQueue = queued;
+    return queued;
   },
 
   enhancePasswordFields() {
@@ -821,15 +945,64 @@ updateGraphFooter() {
     return (this.data.settings && this.data.settings.dateSeparator) || '/';
   },
 
+  dateFormatPattern() {
+    const configured = this.data && this.data.settings && this.data.settings.dateFormat;
+    return this.validDateFormat(configured) ? configured : 'DD/MM/YYYY';
+  },
+
+  dateFormatParts(pattern) {
+    return String(pattern || '').match(/YYYY|MMM|YY|DD|MM|D|M|[^DMY]+/g) || [];
+  },
+
+  validDateFormat(pattern) {
+    if (typeof pattern !== 'string' || pattern.length > 40) return false;
+    const parts = this.dateFormatParts(pattern);
+    if (parts.join('') !== pattern) return false;
+    const count = re => parts.filter(part => re.test(part)).length;
+    return count(/^(DD|D)$/) === 1 && count(/^(MMM|MM|M)$/) === 1 && count(/^(YYYY|YY)$/) === 1 &&
+      parts.every(part => /^(YYYY|MMM|YY|DD|MM|D|M)$/.test(part) || /^[^A-Za-z0-9]+$/.test(part));
+  },
+
   fmtDateInput(iso) {
     const p = String(iso || '').split('-');
     if (p.length !== 3 || p[0].length !== 4) return '';
-    const sep = this.getDateSeparator();
-    return parseInt(p[2], 10) + sep + parseInt(p[1], 10) + sep + p[0];
+    const day = Number(p[2]), month = Number(p[1]), year = Number(p[0]);
+    if (!day || month < 1 || month > 12) return '';
+    const months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+    const values = { D: String(day), DD: String(day).padStart(2, '0'), M: String(month), MM: String(month).padStart(2, '0'), MMM: months[month - 1].slice(0, 3).toUpperCase(), YY: String(year).slice(-2), YYYY: String(year) };
+    return this.dateFormatParts(this.dateFormatPattern()).map(part => values[part] || part).join('');
   },
 
   parseDateInput(str) {
-    let s = String(str || '').trim().replace(/\s+/g, '');
+    const original = String(str || '').trim();
+    if (!original) return null;
+    const parts = this.dateFormatParts(this.dateFormatPattern());
+    const captures = [];
+    const source = parts.map(part => {
+      if (/^(DD|D|MM|M|YY|YYYY)$/.test(part)) {
+        captures.push(part);
+        return part === 'YYYY' ? '(\\d{4})' : part === 'YY' || part === 'DD' || part === 'MM' ? '(\\d{2})' : '(\\d{1,2})';
+      }
+      if (part === 'MMM') { captures.push(part); return '([A-Za-z]+)'; }
+      return part.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/\s+/g, '\\s+');
+    }).join('');
+    const matched = original.match(new RegExp('^' + source + '$', 'i'));
+    if (matched) {
+      const fields = {};
+      captures.forEach((part, index) => { fields[part] = matched[index + 1]; });
+      const day = Number(fields.DD || fields.D);
+      let month = Number(fields.MM || fields.M);
+      if (fields.MMM) {
+        const names = ['january', 'february', 'march', 'april', 'may', 'june', 'july', 'august', 'september', 'october', 'november', 'december'];
+        month = names.findIndex(name => name.slice(0, 3) === String(fields.MMM).toLowerCase()) + 1;
+      }
+      const year = fields.YYYY ? Number(fields.YYYY) : 2000 + Number(fields.YY);
+      const date = new Date(year, month - 1, day);
+      if (date.getFullYear() === year && date.getMonth() === month - 1 && date.getDate() === day)
+        return year + '-' + String(month).padStart(2, '0') + '-' + String(day).padStart(2, '0');
+      return null;
+    }
+    let s = original.replace(/\s+/g, '');
     if (!s) return null;
     const sep = this.getDateSeparator();
     const sepEscaped = sep.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -848,6 +1021,18 @@ updateGraphFooter() {
     const dt = new Date(y, m - 1, d);
     if (dt.getFullYear() !== y || dt.getMonth() !== m - 1 || dt.getDate() !== d) return null;
     return y + '-' + String(m).padStart(2, '0') + '-' + String(d).padStart(2, '0');
+  },
+
+  syncDateInputHints() {
+    const pattern = this.dateFormatPattern();
+    const textMonth = /MMM/.test(pattern);
+    for (const id of ['tx-date', 'tr-date', 'ctx-date', 'savings-entry-date', 'debt-date', 'debt-due', 'invoice-date', 'invoice-paid-date', 'ipay-date']) {
+      const input = document.getElementById(id);
+      if (!input) continue;
+      input.placeholder = pattern;
+      input.inputMode = textMonth ? 'text' : 'numeric';
+      input.dataset.dateInput = '';
+    }
   },
 
   parseSmartDate(input) {
@@ -905,7 +1090,7 @@ updateGraphFooter() {
     return String(dateStr || '').substring(0, 7);
   },
 
-  openModal(id) { document.getElementById(id).classList.remove('hidden'); },
+  openModal(id) { document.getElementById(id).classList.remove('hidden'); this.updateFooterHotkeys(); },
   closeModal(id) {
     document.getElementById(id).classList.add('hidden');
     this.hideDonutTooltip();
@@ -915,6 +1100,7 @@ updateGraphFooter() {
       this._budgetAllocationDraft = null;
       if (this.budgetPreviewDonutChart) { this.budgetPreviewDonutChart.destroy(); this.budgetPreviewDonutChart = null; }
     }
+    this.updateFooterHotkeys();
   },
 
   showToast(message, duration = 3500) {
@@ -1263,7 +1449,7 @@ updateGraphFooter() {
           const tx = { id: crypto.randomUUID(), date: parsed.date, type: parsed.type, amount: Math.round((parsed.type === 'expense' ? -1 : 1) * Math.abs(parsed.amount) * 100) / 100, currency: parsed.account.currency || this.baseCurrency(), accountId: parsed.account.id, categoryId: parsed.category.id, note: parsed.note };
           this.data.transactions.unshift(tx);
           this.syncViewToDate(tx.date);
-          await this.save();
+          await this.save({ undoable: true, label: 'Add transaction' });
           this.closeCommandPalette();
           this.renderPage(this.currentPage);
         }
@@ -1723,7 +1909,7 @@ updateGraphFooter() {
       if (!this.data.billPayments) this.data.billPayments = [];
       this.data.billPayments.push({ billId: bill.id, month: mk, paid: true, amount: Math.abs(tx.amount), txId: tx.id });
     }
-    this.save();
+    this.save({ undoable: true, label: 'Mark bill paid' });
     this.renderPage(this.currentPage);
   },
 
@@ -1915,8 +2101,7 @@ updateGraphFooter() {
     document.addEventListener('wheel', (e) => {
       const el = e.target;
       if (!el || el.tagName !== 'INPUT' || el.type !== 'text' || el.readOnly || el.disabled) return;
-      const ph = (el.placeholder || '').toUpperCase();
-      if (ph.indexOf('DD/MM/YYYY') === -1 && ph.indexOf('DD.MM.YYYY') === -1 && ph.indexOf('YYYY') === -1) return;
+      if (!el.matches('[data-date-input]')) return;
       if (!el.value.trim()) { e.preventDefault(); el.value = this.fmtDateInput(this.today()); return; }
       const parsed = this.parseDateInput(el.value);
       if (!parsed) return;
@@ -1982,7 +2167,7 @@ updateGraphFooter() {
       if (!this.categorySelectionAllowed(billData.categoryId, this.today(), original && original.categoryId)) { alert('That category is archived. Choose another category.'); return; }
       if (id) { const bill = this.data.bills.find(b => b.id === id); if (bill) Object.assign(bill, billData); }
       else { billData.id = crypto.randomUUID(); this.data.bills.push(billData); }
-      await this.save(); this.closeModal('bill-modal'); this.renderPage(this.currentPage);
+      await this.save({ undoable: true, label: id ? 'Edit bill' : 'Add bill' }); this.closeModal('bill-modal'); this.renderPage(this.currentPage);
     });
   },
 
@@ -2033,19 +2218,26 @@ updateGraphFooter() {
   vm() { return this.vw().m; },
   vy() { return this.vw().y; },
 
-  pickMonth(m) { this.vw().m = m; this.renderPage(this.currentPage); },
-  shiftYear(d) { this.vw().y += d; this.renderPage(this.currentPage); },
+  clearTransactionSelectionForPeriod() {
+    if (this._bulkSel) this._bulkSel.clear();
+    this._bulkOnly = false;
+    this._linkedTransactionFocusId = null;
+  },
+  pickMonth(m) { if (this.vw().m !== m) this.clearTransactionSelectionForPeriod(); this.vw().m = m; this.renderPage(this.currentPage); },
+  shiftYear(d) { if (d) this.clearTransactionSelectionForPeriod(); this.vw().y += d; this.renderPage(this.currentPage); },
   arrowPeriod(dir) {
     if (this.currentPage === 'savings') { this.shiftYear(dir); return; }
     const v = this.vw();
     let y = v.y, m = v.m + dir;
     if (m < 0) { m = 11; y--; } else if (m > 11) { m = 0; y++; }
+    if (y !== v.y || m !== v.m) this.clearTransactionSelectionForPeriod();
     v.y = y; v.m = m;
     this.renderPage(this.currentPage);
   },
   gotoToday() {
     const n = new Date();
     const v = this.vw();
+    if (v.m !== n.getMonth() || v.y !== n.getFullYear()) this.clearTransactionSelectionForPeriod();
     v.m = n.getMonth();
     v.y = n.getFullYear();
     this.renderPage(this.currentPage);
@@ -2081,6 +2273,32 @@ updateGraphFooter() {
     }
     this._focusRecord = { type, id };
     this.navigateTo(page);
+  },
+
+  transactionLinkIcon() {
+    return '<svg class="transaction-link-icon" viewBox="0 0 874 870" aria-hidden="true" focusable="false" xmlns="http://www.w3.org/2000/svg" style="fill-rule:evenodd;clip-rule:evenodd;stroke-linejoin:round;stroke-miterlimit:2;"><g transform="matrix(1,0,0,1,36,40)"><path fill="currentColor" d="M584.703,352.703C585.861,351.553 663.384,274.104 666.173,271.191C681.687,254.99 691.281,228.812 692.092,212.466C696.216,129.287 621.859,91.139 565.435,107.273C531.042,117.107 522.14,133.437 451.297,203.293C421.428,232.747 369.415,215.489 365.936,171.454C363.816,144.624 381.91,131.315 411.112,102.112C452.445,60.779 488.069,16.578 564.528,5.718C721.175,-16.531 843.543,146.221 771.056,293.293C754.189,327.516 741.51,337.254 638.889,439.891C591.862,486.925 568.933,514.468 522.571,531.689C401.562,576.636 313.371,495.179 303.392,478.573C271.143,424.905 339.028,375.939 380.327,415.681C386.432,421.556 425.982,459.613 483.516,439.546C509.557,430.463 511.85,425.541 584.703,352.703Z"/></g><g transform="matrix(1,0,0,1,36,40)"><path fill="currentColor" d="M211.297,443.297C121.841,532.797 120.282,532.235 111.46,553.484C78.109,633.819 155.256,718.172 241.322,685.056C262.665,676.843 268.466,668.953 333.702,603.702C340.165,597.239 367.238,562.414 407.297,585.851C417.874,592.039 451.18,627.426 411.889,666.891C338.33,740.776 328.976,750.143 312.679,759.814C294.869,770.383 275.67,783.532 229.519,790.608C163.409,800.744 108.451,768.262 99.28,762.841C9.628,709.853 -26.722,584.517 33.124,488.253C49.354,462.147 50.464,462.777 186.111,327.109C207.403,305.814 247.968,257.758 332.496,251.424C402.422,246.183 452.113,281.915 460.78,288.147C471.877,296.127 515.535,323.63 496.084,366.294C487.047,386.116 450.773,413.558 413.172,377.844C378.797,345.194 316.387,338.267 273.777,380.777C268.771,385.771 237.093,417.374 211.297,443.297Z"/></g></svg>';
+  },
+
+  linkedTransactionButton(txId) {
+    const tx = (this.data.transactions || []).find(item => item && item.id === txId);
+    if (!tx) return '';
+    return '<button type="button" class="btn btn-sm btn-secondary linked-tx-action" data-tx-id="' + this.escapeHtml(tx.id) + '" onclick="event.stopPropagation();BlackBook.openLinkedTransaction(this.dataset.txId)" title="Open this transaction" aria-label="Open linked transaction">' + this.transactionLinkIcon() + '</button>';
+  },
+
+  openLinkedTransaction(txId) {
+    const tx = (this.data.transactions || []).find(item => item && item.id === txId);
+    if (!tx) return;
+    const { y, m } = this.ymOf(tx.date);
+    if (!isNaN(y) && !isNaN(m)) {
+      if (!this._pageView) this._pageView = {};
+      if (!this._pageView.overview) this._pageView.overview = { y, m };
+      this._pageView.overview.y = y;
+      this._pageView.overview.m = m;
+    }
+    this._linkedTransactionFocusId = tx.id;
+    this._bulkSel = new Set([tx.id]);
+    this._bulkOnly = false;
+    this.navigateTo('overview');
   },
 
   focusRecordHtml(type, id) {

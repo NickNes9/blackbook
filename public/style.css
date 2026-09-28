@@ -180,7 +180,7 @@ body.sb-collapsed .app-sidebar { overflow: hidden; }
   position: relative;
   height: 28px;
   background: var(--surface-raised);
-  margin-bottom: 6px;
+  margin-bottom: 10px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -432,6 +432,7 @@ body.sb-collapsed .header-logo-mark { transform: rotate(-90deg); }
   gap: 24px;
   z-index: 50;
 }
+.footer-hotkeys { display:flex; align-items:center; justify-content:center; gap:24px; width:100%; min-width:max-content; }
 .footer-graph-toggle { position:absolute; right:12px; }
 .footer-graph-toggle.hidden { display:none; }
 
@@ -452,6 +453,13 @@ body.sb-collapsed .header-logo-mark { transform: rotate(-90deg); }
   font-weight: 700;
   color: var(--accent);
   background: var(--block);
+}
+
+@media (max-width: 1450px) and (min-width: 761px) {
+  .app-footer { gap: 12px; }
+  .footer-hotkeys { gap:12px; }
+  .app-footer .hotkey { font-size: 10px; gap: 4px; }
+  .app-footer .hotkey kbd { padding-left: 4px; padding-right: 4px; font-size: 10px; }
 }
 
 /* ===== BUTTONS — solid color blocks only ===== */
@@ -1181,6 +1189,7 @@ select:disabled {
 .debt-badge-out { color: var(--expense); border-color: var(--expense); }
 .debt-badge-settled { color: var(--on-fill); background: var(--income); border-color: var(--income); }
 .tx-row.bulk-selected { position: relative; }
+.tx-row.linked-transaction-focus { outline:2px solid var(--accent); outline-offset:-2px; }
 .tx-row.bulk-selected::before {
   content: '';
   position: absolute;
@@ -1259,6 +1268,8 @@ select:disabled {
   height: 16px;
 }
 
+.transaction-link-icon { display:block; width:16px; height:16px; }
+
 .tx-row:hover .tx-actions { display: flex; }
 
 .record-focused {
@@ -1289,10 +1300,11 @@ select:disabled {
 }
 
 .tx-date {
-  width: 90px;
+  width: 100px;
   font-size:14px;
   color: var(--text-dim);
   flex-shrink: 0;
+  white-space: nowrap;
 }
 
 .tx-cat {
@@ -1423,10 +1435,16 @@ select:disabled {
 /* ===== MONTH SUMMARY ===== */
 .month-summary {
   display: flex;
+  align-items: center;
   gap: 24px;
+  min-height: 28px;
   margin-bottom: 10px;
   font-size:16px;
 }
+.selected-transaction-details { display:flex; align-items:center; gap:8px; min-width:0; overflow-x:auto; padding:6px 0; border-top:1px solid var(--divider); white-space:nowrap; }
+.selected-transaction-details-label { flex:none; color:var(--text-muted); font-size:10px; font-weight:700; }
+.selected-transaction-detail { display:inline-flex; align-items:center; gap:8px; flex:none; padding:4px 8px; background:var(--surface-raised); color:var(--text-dim); font-size:11px; }
+.selected-transaction-note { color:var(--text-bright); max-width:260px; overflow:hidden; text-overflow:ellipsis; }
 
 .month-summary-item {
   display: flex;
@@ -1453,6 +1471,8 @@ select:disabled {
   margin-bottom: 12px;
   flex-wrap: wrap;
 }
+
+.month-picker > .btn { box-sizing:border-box; height:28px; min-height:28px; padding:2px 10px; font-size:12px; font-weight:600; line-height:1.1; }
 
 .mp-year {
   display: flex;
@@ -1627,17 +1647,25 @@ select:disabled {
   position: relative;
   margin-bottom: 20px;
   overflow-x: auto;
+  width: 100%;
+  min-width: 0;
 }
 
 .account-chips-row {
   display: flex;
   gap: 0;
   flex-wrap: nowrap;
-  min-width: max-content;
+  width: 100%;
+  min-width: 0;
+  overflow: visible;
 }
 
-.account-chip-spacer {
-  flex: 1;
+.account-chip-list {
+  display: flex;
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
 }
 
 .account-chip {
@@ -1664,8 +1692,9 @@ select:disabled {
   background: var(--accent);
   color: var(--on-fill);
 }
+.account-chip.selected:not(.ov-chip):not(.account-mgr-square) { flex-grow: 2; }
 
-.chip-name { font-weight: 700; letter-spacing: 4px; }
+.chip-name { min-width:0; max-width:100%; overflow:hidden; text-overflow:ellipsis; font-weight:700; }
 
 .chip-balance {
   font-size:21px;
@@ -1685,7 +1714,6 @@ select:disabled {
   overflow: hidden;
 }
 .account-chip.chip-compact .chip-name {
-  letter-spacing: 2px;
   overflow: hidden;
   text-overflow: ellipsis;
   max-width: 55%;
@@ -1951,6 +1979,8 @@ select:disabled {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
   margin-bottom: 4px;
 }
 
@@ -1963,7 +1993,15 @@ select:disabled {
   display: flex;
   gap: 6px;
   align-items: center;
+  flex-wrap: wrap;
 }
+
+.item-details > summary { display:inline-flex; align-items:center; min-height:24px; margin:2px 0 6px; color:var(--text-dim); font-size:11px; font-weight:700; cursor:pointer; user-select:none; }
+.item-details > summary:hover { color:var(--text-bright); }
+.item-details > summary:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
+.item-details > summary::marker { color:var(--accent); }
+.debt-payment-details > summary { margin-bottom:0; }
+.debt-payment-details > .linked-payment-history { margin-top:0; }
 
 .invoice-card .savings-actions > .btn {
   box-sizing: border-box;
@@ -1998,6 +2036,13 @@ select:disabled {
   background: var(--accent);
   transition: width 0.3s ease;
 }
+
+.inst-progress-bar { position:relative; }
+.inst-progress-marker { position:absolute; top:0; bottom:0; height:auto; margin:0; width:2px; background:var(--bg); transform:translateX(-50%); z-index:1; pointer-events:none; }
+.debt-progress-bar { position:relative; }
+.debt-progress-marker { position:absolute; top:0; bottom:0; width:2px; background:var(--bg); transform:translateX(-50%); z-index:1; pointer-events:none; }
+.debt-progress-marker.is-start { transform:none; }
+.debt-progress-marker.is-end { transform:translateX(-100%); }
 
 .savings-expand-btn {
   font-size:11px;
@@ -2477,7 +2522,9 @@ select:disabled {
 /* ===== RESPONSIVE SHELL ===== */
 @media (max-width: 1180px) {
   .app-workspace { padding-left: 16px; padding-right: 16px; }
-  .app-footer { gap: 14px; }
+  .app-footer { justify-content:flex-start; overflow-x:auto; gap:14px; padding:0 84px 0 12px; white-space:nowrap; }
+  .footer-hotkeys { justify-content:flex-start; gap:14px; width:max-content; }
+  .app-footer .hotkey { flex:0 0 auto; }
   .app-footer .hotkey { font-size: 10px; gap: 4px; }
   .month-summary { gap: 14px; flex-wrap: wrap; }
   .month-summary-item { min-width: 0; }
@@ -2528,7 +2575,7 @@ select:disabled {
   .account-chips-row { width:max-content; min-width:100%; flex-wrap:nowrap; }
   .account-chip { flex:0 0 auto; flex-direction:row; gap:7px; min-width:102px; padding:6px 10px; font-size:15px; white-space:nowrap; }
   .account-name-full { display:none; }
-  .account-name-short { display:inline; letter-spacing:2px; }
+  .account-name-short { display:inline; }
   .chip-balance { font-size:12px; }
   .account-chip.ov-chip, .account-chip.account-mgr-square { width:34px !important; height:34px !important; min-width:34px; flex-basis:34px; }
   .account-chip.ov-chip .ov-triangle { border-left-width:10px; border-right-width:10px; border-top-width:15px; }
@@ -2767,7 +2814,7 @@ h1, h2, h3 {
 
 .inst-row {
   display: grid;
-  grid-template-columns: 32px 90px 1fr auto;
+  grid-template-columns: 32px 90px minmax(0, 1fr) 82px auto minmax(30px, auto);
   align-items: center;
   gap: 8px;
   padding: 3px 6px;
@@ -2782,7 +2829,22 @@ h1, h2, h3 {
 .inst-seq { color: var(--text-muted); font-weight: 700; }
 .inst-month { color: var(--text-dim); letter-spacing: 0.5px; }
 .inst-amt { text-align: right; padding-right: 12px; }
+.inst-paid-date { color:var(--text-muted); font-size:11px; text-align:right; white-space:nowrap; }
 .inst-status { min-width: 52px; text-align: right; }
+.inst-tx-link { width:auto; display:flex; justify-content:flex-end; gap:2px; }
+.inst-tx-link .linked-tx-action { width:24px; min-width:24px; height:22px; padding:0; justify-content:center; }
+
+.linked-payment-history { display:flex; flex-direction:column; margin-top:8px; border-top:1px solid var(--divider); }
+.linked-payment-heading { padding:6px 2px 3px; color:var(--text-muted); font-size:10px; font-weight:700; }
+.linked-payment-row { display:grid; grid-template-columns:minmax(90px, 1fr) minmax(110px, auto) auto; gap:8px; align-items:center; min-height:32px; padding:3px 2px; border-bottom:1px solid var(--divider); font-size:12px; }
+.linked-payment-date { color:var(--text-dim); white-space:nowrap; }
+.linked-payment-amount { text-align:right; white-space:nowrap; }
+.linked-payment-unlinked { color:var(--text-muted); font-size:10px; text-align:center; }
+.linked-payment-actions { display:flex; align-items:center; justify-content:flex-end; gap:4px; }
+.linked-payment-actions .btn-icon { width:24px; min-width:24px; height:24px; padding:0; }
+.linked-tx-action { min-width:24px; width:24px; height:24px; padding:2px; justify-content:center; line-height:1; }
+.linked-tx-action .transaction-link-icon { width:14px; height:14px; }
+.savings-entry-item .linked-tx-action { flex:0 0 24px; width:24px; min-width:24px; padding:0; justify-content:center; }
 
 .bills-grid-empty {
   grid-column: 1 / -1;
@@ -2851,6 +2913,7 @@ h1, h2, h3 {
 .bill-actions-mini .btn.btn-icon { width: 26px; min-width: 26px; padding: 0; flex: 0 0 26px; }
 
 .bill-cell {
+  position:relative;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -2863,9 +2926,15 @@ h1, h2, h3 {
   user-select: none;
   min-height: 34px;
 }
+.bill-cell .linked-tx-action { position:absolute; right:1px; bottom:1px; z-index:2; width:13px; min-width:13px; height:13px; padding:0; justify-content:center; border:0; background:transparent; color:inherit; font-size:10px; }
+.bill-cell .linked-tx-action .transaction-link-icon { width:10px; height:10px; }
 
 .bill-amount-short { display:none; }
 @container bill-amount (max-width: 84px) {
+  .bill-amount-full-native { display:none; }
+  .bill-amount-short-native { display:inline; }
+}
+@container bill-amount (max-width: 72px) {
   .bill-amount-full { display:none; }
   .bill-amount-short { display:inline; }
 }
@@ -3075,8 +3144,9 @@ h1, h2, h3 {
 .month-name-short, .month-name-number { display:none; }
 .account-name-full { display:inline; }
 .account-name-short { display:none; }
-.account-chips { overflow:visible; }
-.account-chips-row { min-width:0; width:100%; overflow-x:auto; }
+.account-chips { width:100%; min-width:0; overflow:visible; }
+.account-chips-row { min-width:0; width:100%; overflow:visible; }
+.account-chip-list { flex:1 1 auto; min-width:0; overflow-x:auto; overflow-y:hidden; }
 .accounts-panel { max-width:100%; }
 .account-chip { flex-shrink:0; white-space:nowrap; }
 .account-chip.ov-chip, .account-chip.account-mgr-square { min-width:0; }
@@ -3121,6 +3191,10 @@ h1, h2, h3 {
 .chart-head-row { flex-shrink:0; }
 
 @media (max-width: 720px) {
+  .inst-row { grid-template-columns:24px 56px minmax(60px, 1fr) 66px auto 24px; gap:4px; padding:3px 2px; font-size:11px; }
+  .inst-status { min-width:48px; }
+  .inst-tx-link { width:24px; }
+  .inst-tx-link .linked-tx-action { width:22px; min-width:22px; }
   .budget-charts, .overview-charts.with-donut { flex-direction:column; }
   .budget-charts .chart-panel, .overview-charts.with-donut .chart-panel { flex:none; width:100%; }
   .budget-charts .budget-donut-panel, .overview-charts.with-donut .donut-panel { height:170px; }
@@ -3149,7 +3223,8 @@ h1, h2, h3 {
   .account-chip:not(.selected) .money-full { display:none; }
   .account-chip:not(.selected) .money-short { display:inline; }
   .account-chip { font-size:22px; padding:6px 12px; }
-  .account-chip.selected:not(.ov-chip):not(.account-mgr-square) { flex:1 0 210px; min-width:210px; }
+  .account-chip:not(.ov-chip):not(.account-mgr-square) { flex:1 1 0; width:auto; padding-left:8px; padding-right:8px; white-space:nowrap; }
+  .account-chip.selected:not(.ov-chip):not(.account-mgr-square) { flex:1.5 1 0; width:auto; min-width:144px; padding-left:4px; padding-right:4px; }
   .account-chip.selected .account-name-full { display:inline; }
   .account-chip.selected .account-name-short { display:none; }
 }
@@ -3163,7 +3238,7 @@ h1, h2, h3 {
   .money-short { display:inline; }
   .budget-headrow { grid-template-columns:100px minmax(0, 1fr) 56px 56px; gap:8px; }
   .account-chip { min-width:100px; }
-  .account-chip.selected:not(.ov-chip):not(.account-mgr-square) { min-width:180px; }
+  .account-chip.selected:not(.ov-chip):not(.account-mgr-square) { min-width:144px; }
 }
 @container page-space (max-width: 700px) {
   .month-name-short { display:none; }
@@ -3314,3 +3389,16 @@ h1, h2, h3 {
   font-size: 12px;
   text-align: center;
 }
+
+/* Equal account tiles whenever every full label and balance will fit. */
+.account-chips.account-chips-measure .account-chip-list > .account-chip { flex:0 0 auto !important; width:max-content !important; min-width:120px !important; }
+.account-chips.account-chips-measure .account-name-full,
+.account-chips.account-chips-fit .account-name-full,
+.account-chips.account-chips-measure .money-full,
+.account-chips.account-chips-fit .money-full { display:inline !important; }
+.account-chips.account-chips-measure .account-name-short,
+.account-chips.account-chips-fit .account-name-short,
+.account-chips.account-chips-measure .money-short,
+.account-chips.account-chips-fit .money-short { display:none !important; }
+.account-chips.account-chips-measure .chip-name { max-width:none; overflow:visible; }
+.account-chips.account-chips-fit .account-chip-list > .account-chip { flex:1 1 0 !important; width:0 !important; min-width:0 !important; }

@@ -9,6 +9,7 @@ Object.assign(window.BlackBook, {
     this.bindSettingsEvents(el);
     this.bindSettingsModals();
     this.refreshProfilesList();
+    this.syncDateInputHints();
   },
 
   organizeSettingsSections(el) {
@@ -69,6 +70,11 @@ Object.assign(window.BlackBook, {
       this._unlockForSwitch = true;
       this.showUnlockOverlay(name || '');
       return;
+    }
+    if ((name || '') !== (this.profile || '') && this._undoHistory) {
+      this._undoHistory.clear();
+      this._undoBaseline = null;
+      this._undoReady = false;
     }
     localStorage.setItem('mb_profile', name || '');
     location.reload();
@@ -728,6 +734,21 @@ Object.assign(window.BlackBook, {
         }
       });
     }
+    const dateFormatInput = el.querySelector('#settings-date-format');
+    if (dateFormatInput) {
+      dateFormatInput.addEventListener('change', async () => {
+        const pattern = dateFormatInput.value.trim().toUpperCase();
+        const error = el.querySelector('#settings-date-format-error');
+        if (!this.validDateFormat(pattern)) {
+          dateFormatInput.setAttribute('aria-invalid', 'true');
+          if (error) error.textContent = 'Use one day, one month, and one year token. Example: DD MMM YYYY';
+          return;
+        }
+        this.data.settings.dateFormat = pattern;
+        await this.save();
+        this.renderSettings();
+      });
+    }
     const defaultAcc = el.querySelector('#settings-default-account');
     if (defaultAcc) {
       defaultAcc.addEventListener('change', async () => {
@@ -821,9 +842,8 @@ Object.assign(window.BlackBook, {
           }
         }
         try {
-          await this.save();
           this.migrateCreditCards();
-          await this.save();
+          if (!(await this.save({ undoable: true, label: idVal ? 'Edit account' : 'Add account' }))) throw new Error('save failed');
         } catch (e) {
           if (prevCounts.accSnap) {
             const acc = this.data.accounts.find(a => a.id === idVal);
@@ -958,7 +978,7 @@ Object.assign(window.BlackBook, {
     const j = i + dir;
     if (i < 0 || j < 0 || j >= arr.length) return;
     const tmp = arr[i]; arr[i] = arr[j]; arr[j] = tmp;
-    await this.save();
+    await this.save({ undoable: true, label: 'Reorder accounts' });
     this.renderPage(this.currentPage);
     if (this.syncAccountsPanel) this.syncAccountsPanel();
   },
@@ -991,7 +1011,7 @@ Object.assign(window.BlackBook, {
     if (this.selectedAccount === id) this.selectedAccount = null;
     if (this.data.settings.defaultAccountId === id) this.data.settings.defaultAccountId = null;
     this.data.installments = (this.data.installments || []).filter(i => i.accountId !== id);
-    await this.save();
+    await this.save({ undoable: true, label: 'Delete account' });
     this.renderPage(this.currentPage);
   },
   settingsHtml() {
@@ -1067,13 +1087,7 @@ Object.assign(window.BlackBook, {
       '<div class="form-group"><label>Highlight Color</label><div style="display:flex;align-items:center;gap:8px;"><input type="color" id="settings-highlight-color" value="' + (this.data.settings.highlightColor || '#fa8c3c') + '" style="width:28px;height:28px;border:none;background:none;cursor:pointer;padding:0;"><span style="font-size:13px;color:var(--text-dim);">' + (this.data.settings.highlightColor || '#fa8c3c') + '</span></div></div>' +
       '<div class="form-group"><label>Income Color</label><div style="display:flex;align-items:center;gap:8px;"><input type="color" id="settings-income-color" value="' + (this.data.settings.incomeColor || '#4ade80') + '" style="width:28px;height:28px;border:none;background:none;cursor:pointer;padding:0;"><span style="font-size:13px;color:var(--text-dim);">' + (this.data.settings.incomeColor || '#4ade80') + '</span></div></div>' +
       '<div class="form-group"><label>Expense Color</label><div style="display:flex;align-items:center;gap:8px;"><input type="color" id="settings-expense-color" value="' + (this.data.settings.expenseColor || '#f87171') + '" style="width:28px;height:28px;border:none;background:none;cursor:pointer;padding:0;"><span style="font-size:13px;color:var(--text-dim);">' + (this.data.settings.expenseColor || '#f87171') + '</span></div></div>' +
-      '<div class="form-group"><label>Date Separator</label><select id="settings-date-separator" class="input">' +
-      '<option value="/"' + ((this.data.settings.dateSeparator || '/') === '/' ? ' selected' : '') + '>/ (' + this.fmtDateInput(this.today()).replace(/\//g, '/') + ')</option>' +
-      '<option value="-"' + ((this.data.settings.dateSeparator || '/') === '-' ? ' selected' : '') + '>- (' + this.fmtDateInput(this.today()).replace(/\//g, '-') + ')</option>' +
-      '<option value="."' + ((this.data.settings.dateSeparator || '/') === '.' ? ' selected' : '') + '>. (' + this.fmtDateInput(this.today()).replace(/\//g, '.') + ')</option>' +
-      '<option value=","' + ((this.data.settings.dateSeparator || '/') === ',' ? ' selected' : '') + '>, (' + this.fmtDateInput(this.today()).replace(/\//g, ',') + ')</option>' +
-      '<option value="|"' + ((this.data.settings.dateSeparator || '/') === '|' ? ' selected' : '') + '>| (' + this.fmtDateInput(this.today()).replace(/\//g, '|') + ')</option>' +
-      '</select></div>' +
+      '<div class="form-group"><label for="settings-date-format">Date Format</label><input id="settings-date-format" class="input" type="text" value="' + this.escapeHtml(this.dateFormatPattern()) + '" spellcheck="false" autocomplete="off" aria-describedby="settings-date-format-help settings-date-format-error"><div class="form-hint" id="settings-date-format-help">D or DD · M, MM or MMM · YY or YYYY. Example: ' + this.escapeHtml(this.fmtDateInput(this.today())) + '</div><div class="form-hint amount-negative" id="settings-date-format-error" role="status"></div></div>' +
       '</div><div class="form-group"><label>Attention Bar</label><button class="btn btn-sm ' + (this.data.settings.attentionBarHidden ? 'btn-secondary' : 'btn-primary') + '" onclick="BlackBook.' + (this.data.settings.attentionBarHidden ? 'showAttentionBar()' : 'hideAttentionBar()') + '">' + (this.data.settings.attentionBarHidden ? 'SHOW' : 'HIDE') + '</button></div></div>' +
 
       '<div class="settings-section">' +

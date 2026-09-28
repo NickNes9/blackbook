@@ -74,13 +74,15 @@ Object.assign(window.BlackBook, {
   },
 
 billsGridHtml() {
-    const formatGridAmount = (amount) => this.fmtNumber(amount);
+    const formatGridAmount = (amount) => this.formatBillGridAmount(amount);
     const compactAmount = (amount) => new Intl.NumberFormat('en-US', { notation: 'compact', maximumFractionDigits: 0 }).format(amount).toLowerCase();
     const responsiveAmount = (amount, currency, native = false) => {
       const symbol = { EUR: '€', USD: '$', GBP: '£', JPY: '¥', CHF: 'CHF' }[currency] || currency;
       const full = formatGridAmount(amount) + (native ? ' ' + currency : '');
       const short = (native ? symbol : '') + compactAmount(amount);
-      return '<span class="bill-amount-full" title="' + this.escapeHtml(full) + '">' + this.escapeHtml(full) + '</span><span class="bill-amount-short" title="' + this.escapeHtml(full) + '">' + this.escapeHtml(short) + '</span>';
+      const fullClass = 'bill-amount-full' + (native ? ' bill-amount-full-native' : '');
+      const shortClass = 'bill-amount-short' + (native ? ' bill-amount-short-native' : '');
+      return '<span class="' + fullClass + '" title="' + this.escapeHtml(full) + '">' + this.escapeHtml(full) + '</span><span class="' + shortClass + '" title="' + this.escapeHtml(full) + '">' + this.escapeHtml(short) + '</span>';
     };
     const MONTHS_F = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
     let html = '<div class="bills-grid">';
@@ -157,10 +159,11 @@ billsGridHtml() {
         }
         const cellStyle = paid ? ' style="background:' + color + ';color:var(--on-fill);font-weight:700;"' : '';
         const clickFn = 'toggleBillPayment';
+        const transactionLink = paid && paid.txId ? this.linkedTransactionButton(paid.txId) : '';
         html += '<div class="bill-cell' + alt + (paid ? ' paid' : '') + '"' + cellStyle + ' onclick="BlackBook.' + clickFn + '(\x27' + bill.id + '\x27,\x27' + mk + '\x27)" oncontextmenu="BlackBook.openBillPayModal(\x27' + bill.id + '\x27,\x27' + mk + '\x27);return false;" title="' +
           bill.name + ' \u00b7 due ' + this.ordinalDay(bill.dueDay) +
           (paid ? ' \u00b7 paid \u00b7 click to unpay' : ' \u00b7 click to mark paid') +
-          ' &middot; right-click for custom amount">' + amtLabel + '</div>';
+          ' &middot; right-click for custom amount">' + amtLabel + transactionLink + '</div>';
       }
       html += '<div class="bill-cell-total' + alt + '"' + (yearHasPaid ? ' style="background:' + color + '22;color:' + color + ';font-weight:700;" title="' + this.escapeHtml(formatGridAmount(yearTotal) + ' ' + this.baseCurrency()) + '"' : '') + '>' + (yearHasPaid ? responsiveAmount(yearTotal, this.baseCurrency()) : '') + '</div>';
       bi++;
@@ -168,6 +171,8 @@ billsGridHtml() {
     html += '</div>';
     return html;
   },
+
+  formatBillGridAmount(amount) { return this.fmtNumber(amount).replace(/\.00$/, ''); },
 
   openNewBill() {
     document.getElementById('bill-id').value = '';
@@ -258,7 +263,7 @@ billsGridHtml() {
     this.data.bills = this.data.bills.filter(b => b.id !== billId);
     for (const p of (this.data.billPayments || [])) { if (p.billId === billId) this.removeBillTransaction(p); }
     this.data.billPayments = (this.data.billPayments || []).filter(p => p.billId !== billId);
-    await this.save();
+    await this.save({ undoable: true, label: 'Delete bill' });
     this.renderBills();
   },
 
@@ -266,7 +271,7 @@ billsGridHtml() {
     const bill = this.data.bills.find(b => b.id === billId);
     if (!bill) return;
     bill.active = !bill.active;
-    await this.save();
+    await this.save({ undoable: true, label: 'Change bill visibility' });
     this.renderBills();
   },
 
@@ -284,7 +289,7 @@ billsGridHtml() {
       if (bill) this.attachBillTransaction(bill, pay);
       this.data.billPayments.push(pay);
     }
-    await this.save();
+    await this.save({ undoable: true, label: idx >= 0 ? 'Mark bill unpaid' : 'Mark bill paid' });
     this.renderBills();
   },
 
@@ -293,7 +298,7 @@ billsGridHtml() {
     if (!bill) return;
     bill.autopay = !bill.autopay;
     if (bill.autopay) this.applyAutopayForBill(bill);
-    await this.save();
+    await this.save({ undoable: true, label: 'Change bill autopay' });
     this.renderBills();
   },
 
@@ -690,7 +695,7 @@ billsGridHtml() {
         this.attachBillTransaction(bill, pay);
       }
       this.data.billPayments.push(pay);
-      await this.save();
+      await this.save({ undoable: true, label: 'Record bill payment' });
       this.closeModal('bill-pay-modal');
       this.renderBills();
     });

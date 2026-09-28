@@ -13,15 +13,38 @@ Object.assign(window.BlackBook, {
     return this.instMonthlyAmount(inst);
   },
   instDueAmount(inst, seq) { return Math.round((this.instBaseAmount(inst, seq) + (seq === 1 ? this.instInterest(inst) : 0)) * 100) / 100; },
+  instPaymentPairId(inst, seq) { return 'inst-' + inst.id + '-s' + seq; },
+  instPaymentTxs(inst, seq) {
+    const pairId = this.instPaymentPairId(inst, seq);
+    return (this.data.transactions || []).filter(tx => tx && tx.pairId === pairId);
+  },
+  instSlotPaidAmount(inst, seq) {
+    const creditStart = Math.max(0, Number(inst.advance) || 0);
+    const entries = this.instPaidEntries(inst);
+    let credit = creditStart, paidAtTarget = 0;
+    for (let slot = 1; slot <= seq; slot++) {
+      const due = this.instDueAmount(inst, slot);
+      const entry = entries.find(item => item.seq === slot);
+      const txs = this.instPaymentTxs(inst, slot);
+      const txPaid = txs.reduce((sum, tx) => sum + (Number.isFinite(Number(tx.amount)) ? Math.abs(Number(tx.amount)) : 0), 0);
+      let paid = entry && entry.via === 'advance' ? due : txPaid;
+      if (entry && entry.via === 'tx' && !txs.length) paid = due;
+      paid = Math.min(due, Math.max(0, paid));
+      const fromCredit = Math.min(credit, due - paid);
+      credit = Math.max(0, credit - fromCredit);
+      paid = Math.round((paid + fromCredit) * 100) / 100;
+      if (slot === seq) paidAtTarget = paid;
+    }
+    return paidAtTarget;
+  },
   instOutstanding(inst) {
-    let paid = inst.advance || 0;
-    for (const e of this.instPaidEntries(inst)) paid += this.instDueAmount(inst, e.seq);
+    let paid = 0;
+    for (let seq = 1; seq <= inst.months; seq++) paid += this.instSlotPaidAmount(inst, seq);
     return Math.max(0, Math.round((this.instGrandTotal(inst) - paid) * 100) / 100);
   },
   instIsClosed(inst) {
     if (this.instOutstanding(inst) > 0.009) return false;
-    const entries = this.instPaidEntries(inst);
-    for (let s = 1; s <= inst.months; s++) if (!entries.some(e => e.seq === s)) return false;
+    for (let s = 1; s <= inst.months; s++) if (this.instSlotPaidAmount(inst, s) < this.instDueAmount(inst, s) - 0.009) return false;
     return true;
   },
   instFeeCategory() {
@@ -52,8 +75,25 @@ Object.assign(window.BlackBook, {
   async openCardPlanTxs(instId) {
     const inst = this.data.installments.find(i => i.id === instId);
     const tx = inst ? this.instPurchaseTx(inst) : null;
-    if (tx && tx.date) this.syncViewToDate(tx.date);
-    this.navigateTo('overview');
+    if (tx) this.openLinkedTransaction(tx.id);
+  },
+
+  installmentProgressMarkers(plan) {
+    const count = Math.max(1, Math.floor(Number(typeof plan === 'object' ? plan.months : plan) || 1));
+    if (count < 2) return '';
+    const amounts = typeof plan === 'object'
+      ? Array.from({ length: count }, (_, i) => this.instDueAmount(plan, i + 1))
+      : Array(count).fill(1);
+    const total = amounts.reduce((sum, amount) => sum + amount, 0);
+    let cumulative = 0;
+    return amounts.slice(0, -1).map(amount => {
+      cumulative += amount;
+      return '<i class="inst-progress-marker" style="left:' + (total > 0 ? (cumulative / total * 100) : 0) + '%;"></i>';
+    }).join('');
+  },
+
+  instPaymentTx(inst, seq) {
+    return this.instPaymentTxs(inst, seq)[0] || null;
   },
 
   cardsSummaryHtml() {
@@ -95,7 +135,8 @@ planBlockHtml(inst) {
     const color = this.cardColor(card);
     const closed = this.instIsClosed(inst);
     const paidEntries = this.instPaidEntries(inst);
-    const paidCount = closed ? inst.months : paidEntries.length;
+    const paidCount = closed ? inst.months : Array.from({ length: inst.months }, (_, i) => i + 1)
+      .filter(seq => this.instSlotPaidAmount(inst, seq) >= this.instDueAmount(inst, seq) - 0.009).length;
     const outstanding = this.instOutstanding(inst);
     const grandTotal = this.instGrandTotal(inst);
     const pct = grandTotal > 0 ? Math.min(Math.round((grandTotal - outstanding) / grandTotal * 100), 100) : 0;
@@ -112,27 +153,35 @@ planBlockHtml(inst) {
       '<button class="btn btn-sm btn-danger btn-icon" title="Delete installment plan" onclick="BlackBook.deleteInstallment(\x27' + inst.id + '\x27)">' + this.xIcon() + '</button></span></div>';
     html += '<div class="savings-progress-text"><span>' + (closed ? '&#10003; FULLY PAID OFF' :
       'LEFT ' + this.fmtBase(this.instOutstanding(inst)) + ' of ' + this.fmtBase(this.instGrandTotal(inst))) + '</span><span>' + pct + '%</span></div>' +
-      '<div class="savings-progress-bar"><div class="savings-progress-fill" style="width:' + pct + '%;background:' + color + ';"></div></div>';
+      '<div class="savings-progress-bar inst-progress-bar"><div class="savings-progress-fill" style="width:' + pct + '%;background:' + color + ';"></div>' + this.installmentProgressMarkers(inst) + '</div>';
     html += '<div class="bill-meta-line" style="display:block;margin-top:6px;">' +
       this.fmtBase(this.instMonthlyAmount(inst)) + ' &times; ' + inst.months +
       ' &middot; PRICE ' + this.fmtBase(inst.total) + ' + INT ' + (inst.ratePct != null ? inst.ratePct : 5) + '% (' + this.fmtBase(this.instInterest(inst)) + ') = TOTAL ' + this.fmtBase(this.instGrandTotal(inst)) +
       ' &middot; DUE ' + (inst.dueDay || 15) + '/mo &middot; FROM ' + inst.startMonth +
       (advance > 0 ? ' &middot; <span class="amount-positive">ADVANCE ' + this.fmtBase(advance) + '</span>' : '') + '</div>';
+    html += '<details class="item-details"><summary>PAYMENT HISTORY · ' + paidCount + '/' + inst.months + '</summary>';
     html += '<div class="inst-rows">';
     for (let s = 1; s <= inst.months; s++) {
       const entry = paidEntries.find(e => e.seq === s);
       const due = this.instDueAmount(inst, s);
+      const slotPaid = this.instSlotPaidAmount(inst, s);
+      const slotComplete = slotPaid >= due - 0.009;
+      const slotPartial = slotPaid > 0.009 && !slotComplete;
       const mk = this.mkOfSeq(inst, s);
-      html += '<div class="inst-row' + (entry ? ' inst-row-paid' : '') + '">' +
+      const paymentTxs = entry && entry.via === 'advance' ? [] : this.instPaymentTxs(inst, s);
+      const paymentTx = paymentTxs[0] || null;
+      html += '<div class="inst-row' + (slotComplete ? ' inst-row-paid' : slotPartial ? ' inst-row-partial' : '') + '">' +
         '<span class="inst-seq">' + String(s).padStart(2, '0') + '</span>' +
         '<span class="inst-month">' + this.monthLabel(mk) + '</span>' +
-        '<span class="inst-amt">' + this.fmtBase(due) + (s === 1 ? ' <span class="tip-dim">(incl INT)</span>' : '') + '</span>' +
-        '<span class="inst-status">' + (entry
+        '<span class="inst-amt">' + (slotPartial ? this.fmtBase(slotPaid) + ' of ' : '') + this.fmtBase(due) + (s === 1 ? ' <span class="tip-dim">(incl INT)</span>' : '') + '</span>' +
+        '<span class="inst-paid-date">' + (slotPaid > 0 ? (paymentTx ? this.fmtDateInput(paymentTx.date) : (entry && entry.via === 'advance' ? 'ADVANCE' : 'PAID')) : '') + '</span>' +
+        '<span class="inst-status">' + (slotComplete
           ? '<button class="btn btn-sm btn-toggle-paid" onclick="BlackBook.payInstallmentSlot(\x27' + inst.id + '\x27,' + s + ')" title="Click to undo this payment">PAID</button>'
-          : '<button class="btn btn-sm btn-secondary" onclick="BlackBook.payInstallmentSlot(\x27' + inst.id + '\x27,' + s + ')">PAY</button>') + '</span>' +
+          : '<button class="btn btn-sm btn-secondary" onclick="BlackBook.openPayInstallment(\x27' + inst.id + '\x27,' + s + ')" title="Add payment toward this installment">' + (slotPartial ? 'ADD' : 'PAY') + '</button>') + '</span>' +
+        '<span class="inst-tx-link">' + paymentTxs.map(item => this.linkedTransactionButton(item.id)).join('') + '</span>' +
         '</div>';
     }
-    html += '</div></div>';
+    html += '</div></details></div>';
     return html;
   },
 
@@ -160,55 +209,48 @@ planBlockHtml(inst) {
     if (!inst || seq < 1 || seq > inst.months) return;
     const paidEntries = this.instPaidEntries(inst);
     const entry = paidEntries.find(e => e.seq === seq);
-    if (!entry) {
-      if (this.instIsClosed(inst)) return;
-      const due = this.instDueAmount(inst, seq);
-      if ((inst.advance || 0) >= due - 0.009) {
-        inst.advance = Math.round(((inst.advance || 0) - due) * 100) / 100;
-        paidEntries.push({ seq: seq, via: 'advance' });
-      } else {
-        this.createInstPaymentTx(inst, seq);
-        paidEntries.push({ seq: seq, via: 'tx' });
-      }
-    } else {
-      inst.paid = paidEntries.filter(e => e.seq !== seq);
-      if (entry.via === 'advance') {
-        inst.advance = Math.round(((inst.advance || 0) + this.instDueAmount(inst, seq)) * 100) / 100;
-      } else {
-        const pairId = 'inst-' + inst.id + '-s' + seq;
-        this.data.transactions = this.data.transactions.filter(t => t.pairId !== pairId);
-      }
-    }
-    await this.save();
+    const due = this.instDueAmount(inst, seq);
+    const slotPaid = this.instSlotPaidAmount(inst, seq);
+    if (slotPaid < due - 0.009) return this.openPayInstallment(instId, seq);
+    const pairId = this.instPaymentPairId(inst, seq);
+    const txs = this.instPaymentTxs(inst, seq);
+    const directPaid = txs.reduce((sum, tx) => sum + (Number.isFinite(Number(tx.amount)) ? Math.abs(Number(tx.amount)) : 0), 0);
+    const advanceApplied = Math.max(0, slotPaid - Math.min(due, directPaid));
+    inst.paid = paidEntries.filter(e => e.seq !== seq);
+    if (entry && entry.via === 'advance') inst.advance = Math.round(((inst.advance || 0) + due) * 100) / 100;
+    else if (advanceApplied > 0) inst.advance = Math.max(0, Math.round(((inst.advance || 0) - advanceApplied) * 100) / 100);
+    this.data.transactions = this.data.transactions.filter(t => t.pairId !== pairId);
+    await this.save({ undoable: true, label: 'Change installment payment' });
     this.renderPage(this.currentPage === 'cards' ? 'cards' : this.currentPage);
   },
 
-  createInstPaymentTx(inst, seq) {
+  createInstPaymentTx(inst, seq, amount = this.instDueAmount(inst, seq)) {
     const fundingAccId = this.fundingAccountId();
     if (!fundingAccId) return;
     const acc = this.data.accounts.find(a => a.id === fundingAccId);
     const catId = this.instFeeCategory();
-    const amount = this.instDueAmount(inst, seq);
-    const pairId = 'inst-' + inst.id + '-s' + seq;
+    const pairId = this.instPaymentPairId(inst, seq);
+    const txId = 'tx-' + pairId + '-' + Date.now() + '-' + Math.floor(Math.random() * 10000);
     const date = this.mkOfSeq(inst, seq) + '-' + String(inst.dueDay || 15).padStart(2, '0');
     const note = 'Installment ' + inst.name + ' ' + seq + '/' + inst.months;
-    this.data.transactions.unshift({ id: 'tx-' + pairId, type: 'expense', amount: -amount, currency: acc.currency || this.baseCurrency() || 'RSD', accountId: fundingAccId, categoryId: catId, date: date, note: note, pairId: pairId });
+    this.data.transactions.unshift({ id: txId, type: 'expense', amount: -amount, currency: acc.currency || this.baseCurrency() || 'RSD', accountId: fundingAccId, categoryId: catId, date: date, note: note, pairId: pairId });
   },
 
-  openPayInstallment(instId) {
+  openPayInstallment(instId, seq = null) {
     const inst = this.data.installments.find(i => i.id === instId);
     if (!inst) return;
-    const outstanding = this.instOutstanding(inst);
+    if (seq != null && (seq < 1 || seq > inst.months)) return;
+    const due = seq == null ? this.instOutstanding(inst) : this.instDueAmount(inst, seq) - this.instSlotPaidAmount(inst, seq);
     const html = '<div class="modal-backdrop" onclick="BlackBook.closeModal(\'pay-installment-modal\')"></div>' +
       '<div class="modal-content" style="max-width:360px;">' +
-      '<div class="modal-header"><span class="modal-title">Pay ' + this.escapeHtml(inst.name) + '</span><button class="modal-close" onclick="BlackBook.closeModal(\'pay-installment-modal\')">&times;</button></div>' +
+      '<div class="modal-header"><span class="modal-title">Pay ' + this.escapeHtml(inst.name) + (seq == null ? '' : ' · ' + seq + '/' + inst.months) + '</span><button class="modal-close" onclick="BlackBook.closeModal(\'pay-installment-modal\')">&times;</button></div>' +
       '<div style="padding:14px;">' +
-      '<div style="font-size:13px;color:var(--text-muted);margin-bottom:10px;">Outstanding: ' + this.fmtBase(outstanding) + '</div>' +
+      '<div style="font-size:13px;color:var(--text-muted);margin-bottom:10px;">' + (seq == null ? 'Outstanding: ' : 'Remaining on installment: ') + this.fmtBase(due) + '</div>' +
       '<label style="font-size:12px;color:var(--text-muted);">AMOUNT</label>' +
       '<input type="text" inputmode="decimal" id="pay-inst-amount" class="input" style="width:100%;margin-top:4px;" placeholder="Enter amount" autofocus>' +
       '<div style="display:flex;gap:8px;margin-top:14px;justify-content:flex-end;">' +
       '<button class="btn btn-sm btn-secondary" onclick="BlackBook.closeModal(\'pay-installment-modal\')">CANCEL</button>' +
-      '<button class="btn btn-sm btn-primary" onclick="BlackBook.submitPayInstallment(\x27' + instId + '\x27)">PAY</button>' +
+      '<button class="btn btn-sm btn-primary" onclick="BlackBook.submitPayInstallment(\x27' + instId + '\x27,' + (seq == null ? 'null' : seq) + ')">PAY</button>' +
       '</div></div></div>';
     const wrapper = document.createElement('div');
     wrapper.id = 'pay-installment-modal';
@@ -217,20 +259,25 @@ planBlockHtml(inst) {
     document.body.appendChild(wrapper);
     this.openModal('pay-installment-modal');
     const inp = document.getElementById('pay-inst-amount');
-    if (inp) { inp.focus(); inp.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); this.submitPayInstallment(instId); } }); }
+    if (inp) { inp.focus(); inp.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); this.submitPayInstallment(instId, seq); } }); }
   },
 
-  async submitPayInstallment(instId) {
+  async submitPayInstallment(instId, seq = null) {
     const inp = document.getElementById('pay-inst-amount');
     const rawVal = inp ? String(inp.value || '').trim() : '';
     this.closeModal('pay-installment-modal');
     if (!rawVal) { await this.confirmModal({ title: 'Pay Installment', message: 'Enter an amount first.', danger: false }); return; }
-    await this.customPayInstallments(instId, rawVal);
+    await this.customPayInstallments(instId, rawVal, seq);
   },
 
-  async customPayInstallments(instId, rawVal) {
+  async customPayInstallments(instId, rawVal, targetSeq = null) {
     const inst = this.data.installments.find(i => i.id === instId);
     if (!inst) return;
+    if (targetSeq != null && (Number(targetSeq) < 1 || Number(targetSeq) > inst.months)) return;
+    if (targetSeq != null && this.instDueAmount(inst, Number(targetSeq)) - this.instSlotPaidAmount(inst, Number(targetSeq)) <= 0.009) {
+      await this.confirmModal({ title: 'Pay Installment', message: 'This installment is already paid.', danger: false });
+      return;
+    }
     if (!rawVal) { await this.confirmModal({ title: 'Pay Installment', message: 'Enter an amount first.', danger: false }); return; }
     const paidEntries = this.instPaidEntries(inst);
     const outstanding = this.instOutstanding(inst);
@@ -238,15 +285,21 @@ planBlockHtml(inst) {
     let amt = this.evalAmount(rawVal);
     if (!(amt > 0)) { await this.confirmModal({ title: 'Pay Installment', message: 'Enter a valid amount.', danger: false }); return; }
     let rem = amt, cleared = 0;
-    for (let s = 1; s <= inst.months; s++) {
-      if (paidEntries.some(e => e.seq === s)) continue;
+    const slots = targetSeq == null ? Array.from({ length: inst.months }, (_, i) => i + 1) : [Number(targetSeq)];
+    for (const s of slots) {
       const due = this.instDueAmount(inst, s);
-      if (rem >= due - 0.009) {
-        this.createInstPaymentTx(inst, s);
-        paidEntries.push({ seq: s, via: 'tx' });
-        rem = Math.round((rem - due) * 100) / 100;
+      const alreadyPaid = this.instSlotPaidAmount(inst, s);
+      const remaining = Math.max(0, Math.round((due - alreadyPaid) * 100) / 100);
+      if (remaining <= 0.009) continue;
+      const payment = Math.min(rem, remaining);
+      if (payment <= 0) break;
+      this.createInstPaymentTx(inst, s, payment);
+      rem = Math.round((rem - payment) * 100) / 100;
+      if (payment >= remaining - 0.009) {
+        if (!paidEntries.some(e => e.seq === s)) paidEntries.push({ seq: s, via: 'tx' });
         cleared++;
-      } else break;
+      }
+      if (rem <= 0.009) break;
     }
     if (rem > 0) {
       inst.advance = Math.round(((inst.advance || 0) + rem) * 100) / 100;
@@ -257,7 +310,7 @@ planBlockHtml(inst) {
         this.data.transactions.unshift({ id: 'tx-' + pid, type: 'expense', amount: -rem, currency: acc.currency || this.baseCurrency() || 'RSD', accountId: fundingAccId, categoryId: this.instFeeCategory(), date: this.today(), note: 'Advance ' + inst.name, pairId: pid });
       }
     }
-    await this.save();
+    await this.save({ undoable: true, label: 'Pay installment' });
     this.renderPage(this.currentPage === 'cards' ? 'cards' : this.currentPage);
   },
 
@@ -268,7 +321,7 @@ planBlockHtml(inst) {
     const pid = 'inst-' + inst.id + '-';
     this.data.installments = this.data.installments.filter(i => i.id !== instId);
     this.data.transactions = this.data.transactions.filter(t => !t.pairId || t.pairId.indexOf(pid) !== 0);
-    await this.save();
+    await this.save({ undoable: true, label: 'Delete purchase plan' });
     this.renderPage(this.currentPage === 'cards' ? 'cards' : this.currentPage);
   },
 
@@ -418,7 +471,7 @@ planBlockHtml(inst) {
         this.data.transactions.push(newTx);
       }
       this.syncViewToDate(date);
-      await this.save();
+      await this.save({ undoable: true, label: 'Change card transaction' });
       this.closeModal('card-tx-modal');
       this.renderPage(this.currentPage === 'cards' ? 'cards' : this.currentPage);
     });
@@ -433,7 +486,7 @@ planBlockHtml(inst) {
     const planIds = plans.map(p => p.id);
     this.data.creditCards = this.data.creditCards.filter(c => c.id !== id);
     this.data.installments = this.data.installments.filter(i => planIds.indexOf(i.id) === -1);
-    await this.save();
+    await this.save({ undoable: true, label: 'Delete credit card' });
     this.renderPage(this.currentPage);
   },
 
