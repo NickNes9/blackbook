@@ -30,6 +30,7 @@ A local-first personal finance console. Terminal aesthetic with light/dark theme
 - **Budgets and categories** — edit allocation shares in a roomier modal with a live donut and Reset Plan; unassigned funds remain visible. Category archiving takes effect from its archive date while older transactions and earlier months remain accessible. Budget and Bills total graph lines start hidden.
 - **Invoices** — save reusable invoice templates, record a paid date separately from issue date, and date the linked transaction to the actual payment. Local file links open in the computer's default app without storing file contents in the profile.
 - **UI and reliability** — chart tooltips float above data points without being clipped, graphs no longer flash on redraw, forecast account controls and compact bill amounts fit narrow screens, and the startup update notice appears in the top-center header. Amount expressions now handle multiple comma decimals.
+- **Bills** — manual and automatic payments now match existing expenses in the correct month, using the paid amount; ambiguous matches remain separate, and linking never rewrites a transaction's amount.
 
 ## What's new in 0.9.2 (local release candidate)
 
