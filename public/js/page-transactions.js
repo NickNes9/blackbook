@@ -13,7 +13,7 @@ Object.assign(window.BlackBook, {
     if (!usable) { alert('Create an account first — use CREATE FIRST ACCOUNT on the overview, or Settings → Accounts → + ADD.'); return; }
     document.getElementById('tx-id').value = '';
     document.getElementById('tx-date').value = this.fmtDateInput(this.todayForViewedMonth());
-    document.getElementById('tx-type').value = 'expense';
+    document.getElementById('tx-type').value = this.data.settings.transactionDefaultType === 'income' ? 'income' : 'expense';
     document.getElementById('tx-amount').value = '';
     document.getElementById('tx-note').value = '';
     const cardPrefill = targetId && String(targetId).startsWith('card:') ? targetId : null;
@@ -27,17 +27,47 @@ Object.assign(window.BlackBook, {
     document.getElementById('tx-fee-amount').value = '';
     document.getElementById('tx-preview').textContent = '';
     this.updateTxNativeRow();
-    const defaultCatId = this.data.settings.defaultCategoryId || (this.data.categories[0] && this.data.categories[0].id) || '';
+    const availableCats = this.categoriesAvailableOn(this.todayForViewedMonth());
+    const defaultCatId = availableCats.some(c => c.id === this.data.settings.defaultCategoryId)
+      ? this.data.settings.defaultCategoryId : (availableCats[0] && availableCats[0].id) || '';
     const catInput = document.getElementById('tx-category-input');
     const catHidden = document.getElementById('tx-category');
     const defaultCat = this.data.categories.find(c => c.id === defaultCatId);
     if (catInput && catHidden) { catHidden.value = defaultCatId; catInput.value = defaultCat ? defaultCat.name.toUpperCase() : ''; }
     const amountInput = document.getElementById('tx-amount');
-    amountInput.oninput = () => { document.getElementById('tx-type').value = amountInput.value.trim().startsWith('+') ? 'income' : 'expense'; };
+    amountInput.dataset.fallbackType = document.getElementById('tx-type').value;
+    amountInput.oninput = () => this.updateTransactionSign();
+    this.updateTransactionSign();
     this.openModal('transaction-modal');
     setTimeout(() => amountInput.focus(), 50);
     this.initCategoryPicker('tx-category-input', 'tx-category', 'category-dropdown');
     this.bindQuickEntryExtras();
+  },
+
+  updateTransactionSign() {
+    const amountInput = document.getElementById('tx-amount');
+    const raw = amountInput.value.trim();
+    const type = raw.startsWith('+') ? 'income' : raw.startsWith('-') ? 'expense' : (amountInput.dataset.fallbackType || 'expense');
+    document.getElementById('tx-type').value = type;
+    const button = document.getElementById('tx-sign-toggle');
+    button.textContent = type === 'income' ? '+' : '−';
+    button.classList.toggle('income', type === 'income');
+    button.classList.toggle('expense', type !== 'income');
+    button.setAttribute('aria-label', (type === 'income' ? 'Income' : 'Expense') + '. Click for ' + (type === 'income' ? 'expense' : 'income'));
+  },
+
+  async toggleTransactionSign() {
+    const amountInput = document.getElementById('tx-amount');
+    const type = document.getElementById('tx-type').value === 'income' ? 'expense' : 'income';
+    amountInput.dataset.fallbackType = type;
+    amountInput.value = amountInput.value.replace(/^\s*[+-]\s*/, '');
+    this.updateTransactionSign();
+    this.updateTxPreview();
+    if (!document.getElementById('tx-id').value) {
+      this.data.settings.transactionDefaultType = type;
+      await this.save();
+    }
+    amountInput.focus();
   },
 
   bindQuickEntryExtras() {
@@ -309,6 +339,9 @@ Object.assign(window.BlackBook, {
     document.getElementById('tx-date').value = this.fmtDateInput(tx.date);
     document.getElementById('tx-type').value = tx.type;
     document.getElementById('tx-amount').value = tx.baseAmount != null ? Math.abs(tx.baseAmount) : Math.abs(tx.amount);
+    document.getElementById('tx-amount').dataset.fallbackType = tx.type;
+    document.getElementById('tx-amount').oninput = () => this.updateTransactionSign();
+    this.updateTransactionSign();
     document.getElementById('tx-currency').value = tx.currency;
     document.getElementById('tx-currency-select').value = tx.nativeCurrency || tx.currency;
     document.getElementById('tx-native-amount').value = tx.nativeAmount != null ? Math.abs(tx.nativeAmount) : '';
@@ -328,7 +361,7 @@ Object.assign(window.BlackBook, {
     this.updateTxPreview();
   },
 
-  editHoveredTransaction() { if (this.hoveredTxId) this.openEditTransaction(this.hoveredTxId); },
+  editHoveredTransaction(txId = this.hoveredTransactionId()) { if (txId) this.openEditTransaction(txId); },
 
   async deleteTransaction(txId) {
     const wrap = document.querySelector('.tx-list-wrap');
@@ -484,7 +517,7 @@ Object.assign(window.BlackBook, {
     if (!this._bulkSel || !this._bulkSel.size) return;
     const catSel = document.getElementById('bulk-category');
     const accSel = document.getElementById('bulk-account');
-    catSel.innerHTML = '<option value="">-- keep current --</option>' + this.data.categories.slice().sort((a, b) => a.name.localeCompare(b.name)).map(c => '<option value="' + c.id + '">' + this.escapeHtml(c.name) + '</option>').join('');
+    catSel.innerHTML = '<option value="">-- keep current --</option>' + this.categoriesAvailableOn(this.today()).map(c => '<option value="' + c.id + '">' + this.escapeHtml(c.name) + '</option>').join('');
     accSel.innerHTML = '<option value="">-- keep current --</option>' + this.visibleAccounts().map(a => '<option value="' + a.id + '">' + this.escapeHtml(a.name) + '</option>').join('');
     catSel.value = ''; accSel.value = '';
     document.getElementById('bulk-count-title').textContent = 'Bulk Edit \u00b7 ' + this._bulkSel.size + ' transaction' + (this._bulkSel.size === 1 ? '' : 's');
@@ -635,7 +668,7 @@ Object.assign(window.BlackBook, {
     await this.save();
     this.closeModal('merge-modal');
     this.bulkClear();
-    alert('Merged ' + this._mergeIds.length + ' transactions into 1 (' + this.fmtAmount(sum, this._mergeCurrency) + ').');
+    this.showToast('Merged ' + txs.length + ' transactions successfully.');
   },
 
   mergeAsTransfer() {
@@ -693,6 +726,8 @@ Object.assign(window.BlackBook, {
       const accountVal = document.getElementById('tx-account').value;
       if (!accountVal) { alert('Select an account first.'); return; }
       const txData = { date: txDate, type: txType, amount: txType === 'income' ? rawAmt : -rawAmt, currency: document.getElementById('tx-currency-select').value, accountId: accountVal.startsWith('card:') ? null : accountVal, categoryId: document.getElementById('tx-category').value, note: document.getElementById('tx-note').value };
+      const original = id ? this.data.transactions.find(t => t.id === id) : null;
+      if (!this.categorySelectionAllowed(txData.categoryId, txDate, original && original.categoryId)) { alert('That category was archived for this date. Choose another category.'); return; }
       if (!accountVal.startsWith('card:') && txData.currency && txData.currency !== this.baseCurrency()) {
         const acc = this.data.accounts.find(a => a.id === accountVal);
         const accCur = (acc && acc.currency) || this.baseCurrency() || 'RSD';

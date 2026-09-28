@@ -3,6 +3,7 @@ Object.assign(window.BlackBook, {
   renderOverview() {
     const el = document.getElementById('page-overview');
     if (!this.data) { el.innerHTML = '<div class="empty-state"><div class="empty-state-text">Loading...</div></div>'; return; }
+    this.hideDonutTooltip();
     if (this.overviewPieChart) { this.overviewPieChart.destroy(); this.overviewPieChart = null; }
     if (this.overviewLineChart) { this.overviewLineChart.destroy(); this.overviewLineChart = null; }
     const hideGraph = !!(this.data.settings && this.data.settings.hideOverviewGraph);
@@ -10,13 +11,13 @@ Object.assign(window.BlackBook, {
       this.categoryFilterHtml() + '<div class="tx-list-wrap">' + this.recentTransactionsHtml() + '</div>' +
       (hideGraph
         ? ''
-        : '<div class="list-sep"></div><div class="overview-charts"><div class="chart-panel overview-line-panel"><div class="chart-head-row"><span class="chart-title-text">INCOME VS EXPENSES</span></div><canvas id="overview-line-chart"></canvas></div></div>');
+        : '<div class="list-sep"></div><div class="overview-charts with-donut"><div class="chart-panel donut-panel"><div class="chart-head-row"><span class="chart-title-text">THIS MONTH</span></div><div class="budget-donut-wrap"><canvas id="overview-donut-chart" aria-label="Income and expenses"></canvas><button id="overview-donut-toggle" class="overview-donut-toggle" type="button" onclick="BlackBook.toggleOverviewDonutPercent()" aria-label="Show expense percentage"></button></div></div><div class="chart-panel overview-line-panel"><div class="chart-head-row"><span class="chart-title-text">INCOME VS EXPENSES</span></div><canvas id="overview-line-chart"></canvas></div></div>');
     const txWrap = el.querySelector('.tx-list-wrap');
     if (txWrap && txWrap.querySelector('.empty-state')) txWrap.classList.add('tx-list-wrap-empty');
     this.bindBarTooltip(el);
     this.bindAccountsPanelDismiss();
     this.sizeAccountSquares();
-    if (!hideGraph) setTimeout(() => { this.renderOverviewLineChart(); }, 50);
+    if (!hideGraph) { this.renderOverviewLineChart(); this.renderOverviewDonut(); }
   },
 
   sizeAccountSquares() {
@@ -132,7 +133,7 @@ Object.assign(window.BlackBook, {
       '</div>';
   },
 
-  monthSummaryHtml() {
+  overviewMonthlyTotals() {
     const year = this.vy(), month = this.vm();
     let income = 0, expenses = 0;
     for (const tx of this.data.transactions) {
@@ -144,13 +145,33 @@ Object.assign(window.BlackBook, {
         if (tx.type === 'income') income += Math.abs(rsd); else expenses += Math.abs(rsd);
       }
     }
+    return { income, expenses };
+  },
+
+  monthEndBalanceAt() {
+    const year = this.vy();
+    const month = this.vm();
+    const lastDay = new Date(year, month + 1, 0).getDate();
+    const endDate = year + '-' + String(month + 1).padStart(2, '0') + '-' + String(lastDay).padStart(2, '0');
+    if (this.selectedAccount) return this.accountBalanceNative(this.selectedAccount, endDate);
+    const total = this.visibleAccounts().reduce((sum, account) => sum + this.accountBalance(account.id, endDate), 0);
+    return { amount: total, currency: this.baseCurrency() };
+  },
+
+  monthSummaryHtml() {
+    const { income, expenses } = this.overviewMonthlyTotals();
+    const monthEnd = this.monthEndBalanceAt();
     const sortLabel = this._ovSortBy === 'date' ? 'DATE' : this._ovSortBy === 'value' ? 'VALUE' : 'DATE';
-    return '<div class="month-summary"><div class="month-summary-item"><span class="month-summary-label">INCOME</span><span class="month-summary-value amount-positive">' + this.fmtBase(income) + '</span></div><div class="month-summary-item"><span class="month-summary-label">EXPENSES</span><span class="month-summary-value amount-negative">' + this.fmtBase(expenses) + '</span></div><div class="month-summary-item"><span class="month-summary-label">NET</span><span class="month-summary-value ' + (income - expenses >= 0 ? 'amount-positive' : 'amount-negative') + '">' + this.fmtBase(income - expenses) + '</span></div>' +
+    const mergeButton = this._bulkSel && this._bulkSel.size >= 2
+      ? '<button class="btn btn-sm btn-primary page-control ov-merge-selected" onclick="BlackBook.openMergeModal()">MERGE SELECTED</button>'
+      : '';
+    return '<div class="month-summary"><div class="month-summary-item"><span class="month-summary-label">INCOME</span><span class="month-summary-value amount-positive">' + this.fmtBase(income) + '</span></div><div class="month-summary-item"><span class="month-summary-label">EXPENSES</span><span class="month-summary-value amount-negative">' + this.fmtBase(expenses) + '</span></div><div class="month-summary-item"><span class="month-summary-label">NET</span><span class="month-summary-value ' + (income - expenses >= 0 ? 'amount-positive' : 'amount-negative') + '">' + this.fmtBase(income - expenses) + '</span></div><div class="month-summary-item month-end-balance"><span class="month-summary-label">END OF MONTH</span><span class="month-summary-value ' + (monthEnd.amount >= 0 ? 'amount-positive' : 'amount-negative') + '">' + this.fmtAmount(monthEnd.amount, monthEnd.currency) + '</span></div>' +
       '<span style="flex:1;"></span>' +
       '<span style="display:flex;gap:6px;align-items:center;">' +
       (this._bulkSel && this._bulkSel.size ? '<div class="cat-filter-chip bulk-filter-chip' + (this._bulkOnly ? ' selected' : '') + '" onclick="BlackBook.toggleBulkOnly()">SELECTED (' + this._bulkSel.size + ')</div>' : '') +
-      '<button class="btn btn-sm btn-secondary ov-type-cycle" onclick="BlackBook.cycleOvType()" title="Cycle filter: Type → Expenses → Income">' + this.ovTypeLabel() + '</button>' +
-      '<button class="btn btn-sm btn-secondary ov-sort-cycle" onclick="BlackBook.cycleOvSort()" title="Cycle sort: Date → Value">' + sortLabel + '</button>' +
+      mergeButton +
+      '<button class="btn btn-sm btn-secondary page-control ov-type-cycle" onclick="BlackBook.cycleOvType()" title="Cycle filter: Type → Expenses → Income">' + this.ovTypeLabel() + '</button>' +
+      '<button class="btn btn-sm btn-secondary page-control ov-sort-cycle" onclick="BlackBook.cycleOvSort()" title="Cycle sort: Date → Value">' + sortLabel + '</button>' +
       '<button class="btn btn-sm btn-secondary ov-sort-dir" onclick="BlackBook.toggleOvSortDir()" title="' + (this._ovSortDir === 'asc' ? 'Descending' : 'Ascending') + '">' + (this._ovSortDir === 'asc' ? '&#9650;' : '&#9660;') + '</button>' +
       '</span></div>';
   },
@@ -276,17 +297,25 @@ Object.assign(window.BlackBook, {
       if (!tx.categoryId) continue;
       used.add(tx.categoryId);
     }
-    let html = '<div class="cat-filter"><div class="cat-filter-chip' + (this.selectedCategory === null && !this._ovInc && !this._ovExp ? ' selected' : '') + '" onclick="BlackBook.selectCategory(null, event)" title="Click: select ALL · Alt-click: isolate">ALL</div>';
+    const selected = this.selectedCategories;
+    let html = '<div class="cat-filter"><div class="cat-filter-chip' + (!selected && !this._ovInc && !this._ovExp ? ' selected' : '') + '" onclick="BlackBook.selectCategory(null, event)" title="Show all categories">ALL</div>';
     if (hasTransfers) {
-      const sel = this.selectedCategory === '__TRANSFER__';
-      html += '<div class="cat-filter-chip' + (sel ? ' selected' : '') + '" style="--cc:#71717a;' + (sel ? 'background:#71717a;color:var(--on-fill);' : '') + '" onclick="BlackBook.selectCategory(\'__TRANSFER__\', event)" title="Alt-click: isolate">Transfer</div>';
+      const sel = selected && selected.has('__TRANSFER__');
+      html += '<div class="cat-filter-chip' + (sel ? ' selected' : '') + '" style="--cc:#71717a;' + (sel ? 'background:#71717a;color:var(--on-fill);' : '') + '" onclick="BlackBook.selectCategory(\'__TRANSFER__\', event)" title="Click: show only · Shift-click: add/remove · Alt-click: isolate">Transfer</div>';
     }
     const sorted = (this.data.categories || []).filter(c => used.has(c.id)).sort((a, b) => a.name.localeCompare(b.name));
     for (const c of sorted) {
-      const sel = this.selectedCategory === c.id;
-      html += '<div class="cat-filter-chip' + (sel ? ' selected' : '') + '" style="--cc:' + this.categoryColor(c) + ';' + (sel ? 'background:' + this.categoryColor(c) + ';color:var(--on-fill);' : '') + '" onclick="BlackBook.selectCategory(\x27' + c.id + '\x27, event)" title="Alt-click: isolate">' + this.escapeHtml(c.name) + '</div>';
+      const sel = selected && selected.has(c.id);
+      html += '<div class="cat-filter-chip' + (sel ? ' selected' : '') + '" style="--cc:' + this.categoryColor(c) + ';' + (sel ? 'background:' + this.categoryColor(c) + ';color:var(--on-fill);' : '') + '" onclick="BlackBook.selectCategory(\x27' + c.id + '\x27, event)" title="Click: show only · Shift-click: add/remove · Alt-click: isolate">' + this.escapeHtml(c.name) + '</div>';
     }
     return html + '</div>';
+  },
+
+  overviewCategoryMatches(tx) {
+    const selected = this.selectedCategories;
+    if (!selected || !selected.size) return true;
+    if (this.isTransfer(tx)) return selected.has('__TRANSFER__');
+    return selected.has(tx.categoryId);
   },
 
   recentTransactionsHtml() {
@@ -308,13 +337,7 @@ Object.assign(window.BlackBook, {
         return t.accountId === this.selectedAccount;
       });
     }
-    if (this.selectedCategory) {
-      if (this.selectedCategory === '__TRANSFER__') {
-        txs = txs.filter(t => this.isTransfer(t));
-      } else {
-        txs = txs.filter(t => t.categoryId === this.selectedCategory);
-      }
-    }
+    txs = txs.filter(t => this.overviewCategoryMatches(t));
     const typeFilter = this.ovActiveTypes();
     if (typeFilter) txs = txs.filter(t => t.type === typeFilter);
     txs = txs.filter(t => { const { y, m } = this.ymOf(t.date); return y === this.vy() && m === this.vm(); });
@@ -552,6 +575,43 @@ Object.assign(window.BlackBook, {
       data: { labels: months, datasets: datasets },
       options: this.lineChartOptions()
     });
+  },
+  renderOverviewDonut() {
+    const canvas = document.getElementById('overview-donut-chart');
+    if (!canvas) return;
+    const { income, expenses } = this.overviewMonthlyTotals();
+    const total = income + expenses;
+    const empty = !(total > 0);
+    const labels = empty ? ['No activity'] : ['Income', 'Expenses'];
+    const values = empty ? [1] : [income, expenses];
+    const colors = empty ? ['#454545'] : [this.data.settings.incomeColor || '#4ade80', this.data.settings.expenseColor || '#f87171'];
+    this.updateOverviewDonutPercent(income, expenses);
+    this.overviewPieChart = new Chart(canvas.getContext('2d'), {
+      type: 'doughnut',
+      data: { labels, datasets: [{ data: values, backgroundColor: colors, borderColor: 'rgba(0,0,0,0)', borderWidth: 1 }] },
+      options: { responsive: true, maintainAspectRatio: false, cutout: '67%', animation: false,
+        plugins: { legend: { display: false }, tooltip: { enabled: false, external: ({ chart, tooltip }) => {
+          const point = tooltip.dataPoints && tooltip.dataPoints[0];
+          const index = point && point.dataIndex;
+          this.showDonutTooltip(chart, tooltip, !empty && index != null
+            ? labels[index] + ': ' + this.fmtBase(values[index]) + ' · ' + this.round2(values[index] / total * 100) + '%' : '');
+        } } } }
+    });
+  },
+  toggleOverviewDonutPercent() {
+    this._overviewDonutSide = this._overviewDonutSide === 'expenses' ? 'income' : 'expenses';
+    const totals = this.overviewMonthlyTotals();
+    this.updateOverviewDonutPercent(totals.income, totals.expenses);
+  },
+  updateOverviewDonutPercent(income, expenses) {
+    const button = document.getElementById('overview-donut-toggle');
+    if (!button) return;
+    const side = this._overviewDonutSide === 'expenses' ? 'expenses' : 'income';
+    const total = income + expenses;
+    const pct = total > 0 ? Math.round((side === 'income' ? income : expenses) / total * 100) + '%' : '—';
+    button.textContent = pct;
+    button.style.color = side === 'income' ? (this.data.settings.incomeColor || '#4ade80') : (this.data.settings.expenseColor || '#f87171');
+    button.setAttribute('aria-label', (total > 0 ? side + ' ' + pct + '. ' : 'No income or expenses. ') + 'Click to show ' + (side === 'income' ? 'expense' : 'income') + ' percentage');
   }
 });
 })();

@@ -40,7 +40,9 @@ GLOBAL / ALL PAGES
     * Delete - delete the selected transactions
     * Y/N    - confirm/dismiss dialogs
 - Live save indicator in the header (SAVED / SAVING / UNSAVED).
-- Auto-update checks with an on-screen banner when a new release exists.
+- Check for an app update on each launch. A new release appears as an
+  UPDATE AVAILABLE version card in the top-center header; opening it
+  navigates to About & Updates, and its X dismisses it for this run.
 - Attention bar in the header flags urgent items (overdue bills and forecast
   shortfalls). Click an alert to jump to it;
   more than 3 alerts is summarized and expandable.
@@ -59,9 +61,10 @@ OVERVIEW
 - Pick a displayed month/year with the month picker.
 - Monthly summary: income, expenses, and net for the displayed month.
 - Category breakdown bars showing where this month's money went.
-- Filter the transaction list and graph by:
-    * Category filter chips (All / each category); Alt-click a category
-      to isolate it, Alt-click All to reset.
+- Filter the transaction list by:
+    * Category filter chips (All / each category); click for one category,
+      Shift-click to add/remove several, and Alt-click to isolate while
+      clearing the type filter. Removing the final selection restores All.
     * A type toggle cycling TYPE -> EXPENSES -> INCOME.
     * "Selected (n)" chip to show only bulk-selected rows.
 - Transaction list rows with account stripe, date, category, note,
@@ -70,18 +73,30 @@ OVERVIEW
 - Transfers appear as special rows with both amounts (out -> in).
 - Click a row to bulk-select; shift-click selects a range; click outside
   the list to clear; bulk-edit, merge, or delete the selection.
+- E and Delete act on selected transactions first. With nothing selected,
+  they act on the row under the pointer.
+- After merging, a temporary top-bar notice confirms how many rows merged.
 - Edit transactions, delete them, or open a transaction's linked bill /
   debt / invoice / savings / card plan from its row.
 - Graph "INCOME VS EXPENSES" (12-month lines), draggable to resize;
   H key or the footer button shows/hides it.
+- This month's income/expense donut shows one percentage in its center.
+  Click the percentage to switch between income (green) and expenses
+  (red); hover a slice for its exact amount and share in a floating
+  tooltip above the chart.
 
 ----------------------------------------------------------------------
 TRANSACTIONS
 ----------------------------------------------------------------------
 
 - Add a new transaction (expense or income) with amount, category,
-  account, currency, date, and note. Amount parsing understands math
-  expressions (e.g. "2*50").
+  account, currency, date, and note. Amount parsing understands chained
+  math expressions with normal precedence (e.g. "100-5*2-10") and
+  multiple comma decimals (e.g. "10,5-2,5+1").
+- The + / − amount button chooses income or expense. New transactions
+  remember the last button choice per profile; a typed leading sign
+  overrides it for that entry. Editing starts from the saved type. The
+  colored button is square and separated from the amount field.
 - Two-way currency conversion in the transaction modal: enter native +
   live vs base amounts; foreign fee percentage auto-applies for
   non-base currency accounts.
@@ -111,6 +126,9 @@ BILLS
   if needed).
 - Undo/toggle a payment - removes the linked transaction.
 - Toggle bills on/off in the graph (chips), and toggle the TOTAL line.
+- The graph's TOTAL line starts hidden. Narrow bill cells use compact
+  amounts and currency symbols where available; full values remain
+  available on hover.
 - 12-month graph "BILLS BY MONTH" per bill, plus a monthly bill total.
 - Repair / re-link bill payments to their transactions automatically.
 - Sort the bills grid; monthly totals are summarized per month.
@@ -122,10 +140,18 @@ BUDGET
 
 - Set a monthly budget limit per category (SET/EDIT button on each card).
   Editing a budget takes effect immediately on that card.
-- Use ALLOCATE to set a total and category percentage shares from the selected
-  month onward. SHARE edits the plan for allocated categories; unallocated
-  categories retain their individual limits. Use Individual Limits stops the
-  plan from the selected month without erasing older plans.
+- The budget donut sits beside the 12-month spending graph. It shows the
+  selected month's category shares and any unassigned portion of the total;
+  hovering a slice shows its exact amount and percentage.
+- Use ALLOCATE to open a modal with category cards and a donut preview.
+  Add/remove categories and edit either amount or percentage; the donut
+  updates live. The allocation total sits below the donut. RESET PLAN
+  clears the shares to 100% unassigned without changing the total;
+  SAVE PLAN can keep that unassigned state.
+  The plan starts in the selected month and carries forward. While active,
+  it replaces individual category limits in the monthly total, but keeps
+  them saved. Use Individual Limits stops the plan from the selected month
+  without erasing older plans.
 - See spent (or earned, for income categories), limit, percentage used, and
   a progress bar per category.
 - Expense categories over budget turn red (number + bar) when spend > 100%.
@@ -136,8 +162,9 @@ BUDGET
 - Total budgeted vs total spent is summarized for the month.
 - Cards without a budget are still listed so you can add one on the spot.
 - Choose which categories appear in the graph (chips below the graph),
-  and toggle the TOTAL line on/off.
-- 12-month "SPEND BY CATEGORY" line graph, draggable to resize.
+  and toggle the TOTAL line on/off (hidden by default).
+- 12-month "SPEND BY CATEGORY" line graph, draggable to resize. Hovering a
+  month shows exact values without needing to hit a tiny point.
 
 ----------------------------------------------------------------------
 CREDIT CARDS
@@ -191,22 +218,25 @@ INVOICES
 ----------------------------------------------------------------------
 
 - Create invoices with a party, number (NNN / YEAR auto-increments),
-  currency, date, due date, direction (incoming/outgoing), note and
-  category.
+  currency, issue date, optional paid date, direction (incoming/outgoing),
+  note and category.
+- Save and reuse per-profile invoice templates containing party, direction,
+  currency, category, note and line items. Invoice number, dates, payment
+  status and linked file are not copied into a new invoice.
 - Add/remove line items (description, qty, price); total is computed
   automatically and validation blocks empty invoices.
-- Link an existing local file to an invoice with + LINK FILE and reopen it
-  from the INVOICE button on its card. The browser remembers a file handle,
-  not a copy of the bytes; moving the file or losing browser permission
-  requires linking it again. Chromium File System Access is required for new
-  links. PDFs and common raster images preview in the browser; other file
-  types download for safe opening. Legacy stored attachments remain readable.
+- Use + LINK FILE to choose the original file in the computer's file picker.
+  The invoice stores its file path and name only; the INVOICE button opens
+  that original in the computer's default app. The file is never copied into
+  Black Book. Moving it requires linking it again. Legacy browser-stored
+  attachments remain readable where the browser still has access.
 - Edit invoices; changing totals/currency/direction re-validates existing
   payments first.
-- Record payments (default or custom amount) that create linked
-  transactions; track PAID / PARTIAL / UNPAID / OVERDUE state.
-- Mark an invoice paid/unpaid (adds/removes the corresponding
-  transaction).
+- Record payments (default or custom amount) with a chosen paid date; the
+  linked transaction uses that same date. Clicking PAID opens this form,
+  prefilled with the remaining balance and the invoice date or saved paid
+  date. Track PAID / PARTIAL / UNPAID state.
+- Mark a paid invoice unpaid (removes its linked payment transactions).
 - Expand a card to see line-item detail; delete invoices (removes linked
   payment transactions).
 - Filter by direction; next sequence number is suggested for new
@@ -218,9 +248,13 @@ FORECAST
 
 - See the forecasted cash balance over the coming months (lines per
   account, plus total).
-- Toggle individual accounts on/off in the forecast.
+- Toggle individual accounts on/off using their colored chips in the forecast.
+- Graph values appear in a floating tooltip above the chart, consistent
+  with the Overview and Budget donuts; the tooltip follows the hovered
+  point or slice and stays within the viewport.
 - Forecast accounts for recurring templates (Salary, Rent, etc.),
-  recurring bills, savings goals, debts, invoices, and card plans.
+  recurring bills, savings goals, and card plans. Unpaid invoices and open
+  personal debts stay in their own pages and are not included in the projection.
 - Open a recurring template from the forecast to edit it.
 - Forecast warnings for projected shortfalls; show them in a dialog.
 - Auto-balanced bill payments are folded into the projection.
@@ -229,9 +263,15 @@ FORECAST
 SETTINGS
 ----------------------------------------------------------------------
 
+- Sections appear in this order, including on narrow screens: Profiles,
+  Appearance, Data (including Import Rules), Defaults, Pages, Accounts,
+  Categories, Exchange Rates, About & Updates.
+
 Profiles:
 - Create a new profile (name + optional password), switch between
-  profiles, rename, delete, and set/remove a password.
+  profiles, edit the active profile name and base currency together,
+  delete profiles, and set/remove a password. Open an inactive profile
+  before editing it.
 - Passwords lock a profile; locked profiles need the password at load.
   Two seconds of disconnection don't lock you out; a dropdown picker
   selects the profile to unlock.
@@ -241,6 +281,9 @@ Accounts:
 - Add / edit / delete accounts: name, description, short name, color,
   currency, foreign fee %, type (cash / bank / credit card).
 - Credit cards get installment interest % + due day fields.
+- Installment interest and due day appear only for Credit Card; foreign
+  fee appears only when the account currency differs from the profile
+  base currency. Hidden saved fee values remain intact.
 - Reorder accounts; delete is disabled for protected accounts.
 
 Categories:
@@ -248,11 +291,17 @@ Categories:
 - Protected categories can't be deleted.
 
 Currencies & rates:
-- Base currency per profile (settings preset or manual).
+- Base currency per profile (chosen at creation or in the active
+  profile's Edit modal); changing it requires rates for both currencies.
 - Enable extra currencies; set or refresh their exchange rates
   (live fetch or manual "set rate" for a chosen date).
 - Rates table with per-day historical rate entries; manual rates take
   precedence over fetched ones.
+- Each currency occupies one row; narrow screens use compact action icons
+  so the rates list does not wrap or scroll sideways. The default currency
+  reserves a blank removal slot to keep dates and actions aligned.
+- Exchange Rates keeps the manual RATE action but no longer changes the
+  profile's base currency from its rows.
 
 CSV:
 - Import transactions from CSV with column mapping (auto-guessed):
@@ -274,7 +323,7 @@ Appearance / behavior:
 - Attention bar can be shown/hidden.
 
 Updates:
-- Check for / install app updates (banner, manual check button, and a
+- Check for / install app updates (header notice, manual check button, and a
   restart flow). During an update the UI shows install status.
 
 ----------------------------------------------------------------------
@@ -284,7 +333,7 @@ DATA MODEL HIGHLIGHTS (for reference)
 - profiles/<name>.json holds everything for a profile.
 - Data keys: accounts, categories, creditCards, transactions,
   billPayments, budgets, budgetAllocations, savingsGoals, debts, invoices, installments,
-  recurringTemplates, importRules, reconciliations (legacy data preserved), settings.
+  invoiceTemplates, recurringTemplates, importRules, reconciliations (legacy data preserved), settings.
 - Transactions can be plain, transfers (from/to accounts), bill payments,
   invoice payments, debt payments, savings entries, or installment
   payments - all cross-linked so deletions stay consistent.

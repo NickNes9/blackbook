@@ -3,7 +3,7 @@ window.BlackBook = {
   profile: localStorage.getItem('mb_profile') || '',
   currentPage: 'overview',
   selectedAccount: null,
-  selectedCategory: null,
+  selectedCategories: null,
   viewMonth: new Date().getMonth(),
   viewYear: new Date().getFullYear(),
   hoveredTxId: null,
@@ -109,6 +109,8 @@ this.connectWebSocket();
     document.querySelector('#savings-modal .modal-backdrop').addEventListener('click', () => this.closeModal('savings-modal'));
     document.querySelector('#savings-entry-modal .modal-backdrop').addEventListener('click', () => this.closeModal('savings-entry-modal'));
     document.querySelector('#budget-modal .modal-backdrop').addEventListener('click', () => this.closeModal('budget-modal'));
+    document.querySelector('#budget-allocation-modal .modal-backdrop').addEventListener('click', () => this.closeBudgetAllocationEditor());
+    document.querySelector('#forecast-recurring-modal .modal-backdrop').addEventListener('click', () => this.closeModal('forecast-recurring-modal'));
     document.querySelector('#settings-account-modal .modal-backdrop').addEventListener('click', () => this.closeModal('settings-account-modal'));
     document.querySelector('#settings-category-modal .modal-backdrop').addEventListener('click', () => this.closeModal('settings-category-modal'));
     document.querySelector('#transfer-modal .modal-backdrop').addEventListener('click', () => this.closeModal('transfer-modal'));
@@ -212,6 +214,12 @@ this.connectWebSocket();
     window.addEventListener('focus', reconnectNow);
   },
 
+  hoveredTransactionId() {
+    const row = document.querySelector('.tx-row:hover');
+    const match = row && (row.getAttribute('onclick') || '').match(/bulkToggle\('([^']+)'/);
+    return match ? match[1] : null;
+  },
+
   bindKeyboard() {
     document.addEventListener('keydown', (e) => {
       if (e.key === 'Escape') {
@@ -222,18 +230,11 @@ this.connectWebSocket();
           this.closeCommandPalette();
           return;
         }
-        document.querySelectorAll('.modal:not(.hidden)').forEach(m => m.classList.add('hidden'));
+        document.querySelectorAll('.modal:not(.hidden)').forEach(m => this.closeModal(m.id));
         return;
       }
       const tag = document.activeElement.tagName;
-      const modalOpen = !document.getElementById('transaction-modal').classList.contains('hidden') ||
-        !document.getElementById('bill-modal').classList.contains('hidden') ||
-        !document.getElementById('savings-modal').classList.contains('hidden') ||
-        !document.getElementById('savings-entry-modal').classList.contains('hidden') ||
-        !document.getElementById('budget-modal').classList.contains('hidden') ||
-        !document.getElementById('settings-account-modal').classList.contains('hidden') ||
-        !document.getElementById('settings-category-modal').classList.contains('hidden') ||
-        !document.getElementById('transfer-modal').classList.contains('hidden');
+      const modalOpen = !!document.querySelector('.modal:not(.hidden)');
       const paletteOpen = !document.getElementById('command-overlay').classList.contains('hidden');
       const confirmOpen = !document.getElementById('confirm-modal').classList.contains('hidden');
       if (confirmOpen) {
@@ -270,7 +271,10 @@ this.connectWebSocket();
       if (e.key === 'Delete' || e.key === 'Del') {
         e.preventDefault();
         if (this._bulkSel && this._bulkSel.size) this.bulkDelete();
-        else if (this.hoveredTxId) this.deleteTransaction(this.hoveredTxId);
+        else {
+          const hoveredId = this.hoveredTransactionId();
+          if (hoveredId) this.deleteTransaction(hoveredId);
+        }
       }
       if (e.key === 'h' || e.key === 'H') {
         e.preventDefault();
@@ -444,6 +448,7 @@ this.connectWebSocket();
 
   renderPage(page) {
     try {
+      this.hideDonutTooltip();
       if (page === 'overview') this.renderOverview();
       else if (page === 'forecast') this.renderForecast();
       else if (page === 'budget') this.renderBudget();
@@ -867,6 +872,30 @@ updateGraphFooter() {
     return this.data.categories.slice().sort((a, b) => String(a.name).localeCompare(String(b.name)));
   },
 
+  categoriesAvailableOn(date, retainedId) {
+    return this.sortedCategories().filter(category =>
+      CategoryAvailability.availableOn(category, date || this.today()) || category.id === retainedId);
+  },
+
+  categoriesVisibleInMonth(month) {
+    return this.sortedCategories().filter(category => CategoryAvailability.visibleInMonth(category, month));
+  },
+
+  categorySelectionAllowed(id, date, retainedId) {
+    if (!id) return true;
+    const category = this.data.categories.find(item => item.id === id);
+    return !!category && (id === retainedId || CategoryAvailability.availableOn(category, date));
+  },
+
+  categoryPickerDate(inputId) {
+    const dateId = {
+      'tx-category-input': 'tx-date', 'ctx-category-input': 'ctx-date',
+      'invoice-category-input': 'invoice-date', 'debt-category-input': 'debt-date'
+    }[inputId];
+    const input = dateId && document.getElementById(dateId);
+    return input ? (this.parseDateInput(input.value) || this.today()) : this.today();
+  },
+
   ymOf(dateStr) {
     const p = String(dateStr || '').split('-');
     return { y: parseInt(p[0], 10), m: parseInt(p[1], 10) - 1 };
@@ -877,7 +906,30 @@ updateGraphFooter() {
   },
 
   openModal(id) { document.getElementById(id).classList.remove('hidden'); },
-  closeModal(id) { document.getElementById(id).classList.add('hidden'); if (id === 'transfer-modal') this._transferSourceIds = null; },
+  closeModal(id) {
+    document.getElementById(id).classList.add('hidden');
+    this.hideDonutTooltip();
+    if (id === 'transfer-modal') this._transferSourceIds = null;
+    if (id === 'budget-allocation-modal') {
+      this._budgetEditorOpen = false;
+      this._budgetAllocationDraft = null;
+      if (this.budgetPreviewDonutChart) { this.budgetPreviewDonutChart.destroy(); this.budgetPreviewDonutChart = null; }
+    }
+  },
+
+  showToast(message, duration = 3500) {
+    const el = document.getElementById('app-toast');
+    if (!el) return;
+    clearTimeout(this._toastTimer);
+    el.textContent = String(message);
+    el.title = String(message);
+    el.classList.remove('hidden');
+    this._toastTimer = setTimeout(() => {
+      el.classList.add('hidden');
+      el.textContent = '';
+      this._toastTimer = null;
+    }, duration);
+  },
 
   confirmModal(opts) {
     return new Promise((resolve) => {
@@ -956,19 +1008,47 @@ updateGraphFooter() {
 
   lineChartOptions(xTicks = {}) {
     return {
-      responsive: true, maintainAspectRatio: false,
+      responsive: true, maintainAspectRatio: false, animation: false,
+      interaction: { mode: 'index', intersect: false },
       layout: { padding: { left: 8, right: 8, top: 8, bottom: 0 } },
       plugins: {
         legend: { display: false }, title: { display: false },
-        tooltip: { usePointStyle: true, boxPadding: 3, callbacks: {
-          label: c => ' ' + c.dataset.label + ': ' + this.fmtBase(c.parsed.y)
-        } }
+        tooltip: { enabled: false, external: ({ chart, tooltip }) => this.showDonutTooltip(chart, tooltip,
+          tooltip.dataPoints && tooltip.dataPoints.length
+            ? [tooltip.title && tooltip.title[0], ...tooltip.dataPoints.map(c => c.dataset.label + ': ' + this.fmtBase(c.parsed.y))].filter(Boolean).join('\n')
+            : '') }
       },
       scales: {
         x: { ticks: { color: '#888888', maxRotation: 0, autoSkip: false, font: { size: 11 }, ...xTicks }, grid: { color: '#2a2a2a', drawBorder: false }, border: { display: false } },
         y: { ticks: { color: '#888888', font: { size: 11 }, maxTicksLimit: 5, callback: value => new Intl.NumberFormat('en-US', { notation: 'compact', maximumFractionDigits: 1 }).format(value).toLowerCase() }, grid: { color: '#2a2a2a', drawBorder: false }, border: { display: false } }
       }
     };
+  },
+
+  hideDonutTooltip() {
+    const tip = document.getElementById('donut-tooltip');
+    if (tip) tip.style.display = 'none';
+  },
+
+  showDonutTooltip(chart, tooltip, label) {
+    if (!tooltip || !tooltip.opacity || !label) { this.hideDonutTooltip(); return; }
+    let tip = document.getElementById('donut-tooltip');
+    if (!tip) {
+      tip = document.createElement('div');
+      tip.id = 'donut-tooltip';
+      tip.setAttribute('role', 'tooltip');
+      document.body.appendChild(tip);
+    }
+    tip.textContent = label;
+    tip.style.display = 'block';
+    const canvas = chart.canvas.getBoundingClientRect();
+    const anchorX = canvas.left + (Number.isFinite(tooltip.caretX) ? tooltip.caretX : canvas.width / 2);
+    const anchorY = canvas.top + (Number.isFinite(tooltip.caretY) ? tooltip.caretY : canvas.height / 2);
+    const preferredLeft = anchorX - tip.offsetWidth / 2;
+    const preferredTop = anchorY - tip.offsetHeight - 10;
+    tip.style.left = Math.max(8, Math.min(preferredLeft, window.innerWidth - tip.offsetWidth - 8)) + 'px';
+    const top = preferredTop < 8 ? anchorY + 10 : preferredTop;
+    tip.style.top = Math.max(8, Math.min(top, window.innerHeight - tip.offsetHeight - 8)) + 'px';
   },
 
   fmtNumber(amount) {
@@ -1008,9 +1088,10 @@ updateGraphFooter() {
     return sign + this.fmtNumber(base) + ' ' + accCur + ' (' + this.fmtNumber(abs) + ' ' + cur + ')';
   },
 
-  accountBalance(accountId) {
+  accountBalance(accountId, throughDate = null) {
     let total = 0;
     for (const tx of this.data.transactions) {
+      if (throughDate && tx.date > throughDate) continue;
       if (tx.type === 'transfer') {
         if (tx.fromAccountId === accountId) total -= this.toBase(tx.amount, tx.currency);
         if (tx.toAccountId === accountId) total += this.toBase(tx.amountIn || tx.amount, tx.currencyIn || tx.currency);
@@ -1022,11 +1103,12 @@ updateGraphFooter() {
     return total;
   },
 
-  accountBalanceNative(accountId) {
+  accountBalanceNative(accountId, throughDate = null) {
     const acc = this.data.accounts.find(a => a.id === accountId);
     let total = 0;
     let currency = (acc && acc.currency) || this.baseCurrency();
     for (const tx of this.data.transactions) {
+      if (throughDate && tx.date > throughDate) continue;
       if (tx.type === 'transfer') {
         if (tx.fromAccountId === accountId) {
           let amt = tx.amount;
@@ -1271,7 +1353,7 @@ updateGraphFooter() {
   parseBudgetCommand(input) {
     const parts = input.trim().split(/\s+/);
     if (parts[0].toLowerCase() !== 'bg' && parts[0].toLowerCase() !== 'budget') throw new Error('not budget');
-    const cat = this.data.categories.find(c => c.name.toLowerCase().startsWith((parts[1] || '').toLowerCase()));
+    const cat = this.categoriesVisibleInMonth(this.monthKeyOf(this.todayForViewedMonth())).find(c => c.name.toLowerCase().startsWith((parts[1] || '').toLowerCase()));
     if (!cat) throw new Error('category not found');
     let clear = false, amount = 0;
     if ((parts[2] || '').toLowerCase() === 'clear') { clear = true; }
@@ -1333,8 +1415,6 @@ updateGraphFooter() {
     const amount = this.evalAmount(parts[0]);
     if (isNaN(amount)) throw new Error('Invalid amount');
     const catName = parts[1];
-    const category = this.data.categories.find(c => c.name.toLowerCase().startsWith(catName.toLowerCase()));
-    if (!category) throw new Error('Category not found: ' + catName);
     let date = this.today(); let account = null; let noteParts = []; let i = 2;
     if (i < parts.length && /^\d{1,2}\/\d{1,2}(\/\d{2,4})?$/.test(parts[i])) {
       const dp = parts[i].split('/');
@@ -1342,6 +1422,8 @@ updateGraphFooter() {
       const year = dp[2] ? (dp[2].length === 2 ? '20' + dp[2] : dp[2]) : String(new Date().getFullYear());
       date = year + '-' + month + '-' + day; i++;
     }
+    const category = this.categoriesAvailableOn(date).find(c => c.name.toLowerCase().startsWith(catName.toLowerCase()));
+    if (!category) throw new Error('Category not available on ' + date + ': ' + catName);
     if (i < parts.length) {
       const token = parts[i].toLowerCase();
       const ma = this.visibleAccounts().find(a => (a.shortName || '').toLowerCase() === token || a.name.toLowerCase() === token);
@@ -1746,6 +1828,19 @@ updateGraphFooter() {
   async openInvoiceFile(id) {
     const v = this.data.invoices.find(x => x.id === id);
     if (!v) return;
+    if (v.filePath) {
+      try {
+        const response = await fetch('/api/invoice-file/open', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ profile: this.profile || '', id: v.id })
+        });
+        const result = await response.json();
+        if (!response.ok) throw new Error(result.error || 'Could not open the linked file.');
+      } catch (error) {
+        alert(error.message || 'Could not open the linked file.');
+      }
+      return;
+    }
     const tab = window.open('', '_blank');
     let stored = await this._invFileGet(id);
     if (!stored && v.fileData) stored = this._dataURLToBlob(v.fileData);
@@ -1796,8 +1891,7 @@ updateGraphFooter() {
     this._outsideDeselectBound = true;
     document.addEventListener('pointerdown', (e) => {
       if (!this._bulkSel || !this._bulkSel.size) return;
-      if (e.target.closest('.tx-list-wrap')) return;
-      if (e.target.closest('.bulk-filter-chip')) return;
+      if (e.target.closest('.tx-row, .bulk-filter-chip, .ov-merge-selected, .ov-type-cycle, .ov-sort-cycle, .ov-sort-dir, .cat-filter-chip, .mp-month, .mp-year-btn, .mp-today, .account-chip, .modal')) return;
       this.bulkClear();
     });
   },
@@ -1884,6 +1978,8 @@ updateGraphFooter() {
       const isAuto = hexEl && hexEl.dataset.auto === '1';
       if (!isAuto && colorEl) color = this.normalizeHex(hexEl ? hexEl.value : colorEl.value);
       const billData = { name: document.getElementById('bill-name').value, amount: parsedAmt > 0 ? parsedAmt : null, currency: document.getElementById('bill-currency').value, dueDay: parseInt(document.getElementById('bill-dueDay').value), categoryId: document.getElementById('bill-category').value, active: document.getElementById('bill-active').value === 'true', autopay: document.getElementById('bill-autopay').checked, payAccountId: document.getElementById('bill-payfrom').value || null, color: isAuto ? null : color };
+      const original = id ? this.data.bills.find(b => b.id === id) : null;
+      if (!this.categorySelectionAllowed(billData.categoryId, this.today(), original && original.categoryId)) { alert('That category is archived. Choose another category.'); return; }
       if (id) { const bill = this.data.bills.find(b => b.id === id); if (bill) Object.assign(bill, billData); }
       else { billData.id = crypto.randomUUID(); this.data.bills.push(billData); }
       await this.save(); this.closeModal('bill-modal'); this.renderPage(this.currentPage);
@@ -1894,11 +1990,14 @@ updateGraphFooter() {
     if (ev && ev.altKey) {
       this._ovInc = false;
       this._ovExp = false;
-      this.selectedCategory = id;
-      this.renderPage(this.currentPage);
-      return;
     }
-    this.selectedCategory = id;
+    if (id == null) this.selectedCategories = null;
+    else if (ev && ev.shiftKey && !ev.altKey) {
+      const selected = new Set(this.selectedCategories || []);
+      if (selected.has(id)) selected.delete(id);
+      else selected.add(id);
+      this.selectedCategories = selected.size ? selected : null;
+    } else this.selectedCategories = new Set([id]);
     this.renderPage(this.currentPage);
   },
 
@@ -2019,7 +2118,7 @@ updateGraphFooter() {
 
     const sortedCats = (query = '') => {
       const needle = query.trim().toLocaleLowerCase();
-      return this.data.categories.slice()
+      return this.categoriesAvailableOn(this.categoryPickerDate(inputId), hidden.value)
         .filter((cat) => !needle || cat.name.toLocaleLowerCase().includes(needle))
         .sort((a, b) => a.name.localeCompare(b.name));
     };

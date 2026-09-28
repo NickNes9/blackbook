@@ -25,3 +25,11 @@ test('forecast includes invoices only when explicitly enabled', () => {
   assert.equal(buildForecast(data, { startDate: '2026-09-01', days: 10 }).events.length, 0);
   assert.equal(buildForecast(data, { startDate: '2026-09-01', days: 10, includeInvoices: true }).events[0].baseAmount, 300);
 });
+
+test('explicitly selecting no accounts gives an empty forecast, while omission includes all', () => {
+  const data = { settings: { baseCurrency: 'RSD' }, accounts: [{ id: 'cash' }], transactions: [{ accountId: 'cash', type: 'income', amount: 200, currency: 'RSD' }] };
+  assert.equal(buildForecast(data, { startDate: '2026-09-01', days: 2 }).daily[0].total, 200);
+  const none = buildForecast(data, { startDate: '2026-09-01', days: 2, accountIds: [] });
+  assert.equal(none.daily[0].total, 0);
+  assert.deepEqual(none.openingBalances, {});
+});

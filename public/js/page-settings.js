@@ -4,10 +4,31 @@ Object.assign(window.BlackBook, {
     const el = document.getElementById('page-settings');
     if (!el) return;
     el.innerHTML = this.settingsHtml();
+    this.organizeSettingsSections(el);
     this.upgradeAllSelects(el);
     this.bindSettingsEvents(el);
     this.bindSettingsModals();
     this.refreshProfilesList();
+  },
+
+  organizeSettingsSections(el) {
+    const sections = new Map(Array.from(el.querySelectorAll('.settings-section')).map(section => [
+      section.querySelector('.settings-section-title').textContent.trim().split(' · ')[0], section
+    ]));
+    const data = sections.get('DATA');
+    const rules = sections.get('IMPORT RULES');
+    if (data && rules) {
+      rules.classList.replace('settings-section', 'settings-subsection');
+      data.appendChild(rules);
+    }
+    const layout = document.createElement('div');
+    layout.className = 'settings-ordered';
+    for (const name of ['PROFILES', 'APPEARANCE', 'DATA', 'DEFAULTS', 'PAGES', 'ACCOUNTS', 'CATEGORIES', 'EXCHANGE RATES', 'ABOUT & UPDATES']) {
+      const section = sections.get(name);
+      if (section) layout.appendChild(section);
+    }
+    const footer = el.querySelector('.settings-footer');
+    el.replaceChildren(layout, ...(footer ? [footer] : []));
   },
 
   profilesListHtml() {
@@ -25,16 +46,16 @@ Object.assign(window.BlackBook, {
       this._defaultHasPassword = !!out.defaultHasPassword;
     } catch (e) {}
     this._profilesWithPasswords = profiles.filter(p => p.hasPassword).map(p => p.name);
-    let html = '<div class="settings-row' + (!this.profile ? ' settings-row-active' : '') + '"><span class="settings-row-name">DEFAULT</span><span class="settings-row-meta">' + (this.profile ? 'switch to default data set' : 'active') + '</span>' +
-      (!this.profile ? '<button class="btn btn-sm btn-secondary" onclick="BlackBook.renameProfile(\'\')">RENAME</button>' : '<button class="btn btn-sm btn-secondary" onclick="BlackBook.switchProfile(\'\')">OPEN</button>') + '</div>';
+    let html = '<div class="settings-row' + (!this.profile ? ' settings-row-active' : '') + '"><span class="settings-row-name">DEFAULT</span><span class="settings-row-meta">' + (this.profile ? 'switch to default data set' : 'active · ' + this.baseCurrency()) + '</span>' +
+      (!this.profile ? '<button class="btn btn-sm btn-secondary" onclick="BlackBook.openProfileEdit()">EDIT</button>' : '<button class="btn btn-sm btn-secondary" onclick="BlackBook.switchProfile(\'\')">OPEN</button>') + '</div>';
     if (!profiles.length) html += '<div style="padding:8px;color:var(--text-muted);font-size:13px;">No extra profiles yet.</div>';
     for (const p of profiles) {
       const active = p.name === this.profile;
       html += '<div class="settings-row' + (active ? ' settings-row-active' : '') + '">' +
         '<span class="settings-row-name">' + this.escapeHtml(p.name).toUpperCase() + '</span>' +
-        '<span class="settings-row-meta">' + (p.hasPassword ? '\ud83d\udd12 ' : '') + (active ? 'active profile' : '') + '</span>' +
+        '<span class="settings-row-meta">' + (p.hasPassword ? '\ud83d\udd12 ' : '') + (active ? 'active · ' + this.baseCurrency() : '') + '</span>' +
         (!active ? '<button class="btn btn-sm btn-secondary" onclick="BlackBook.switchProfile(\x27' + this.escapeHtml(p.name) + '\x27)">OPEN</button>' : '') +
-        '<button class="btn btn-sm btn-secondary" onclick="BlackBook.renameProfile(\x27' + this.escapeHtml(p.name) + '\x27)">RENAME</button>' +
+        (active ? '<button class="btn btn-sm btn-secondary" onclick="BlackBook.openProfileEdit()">EDIT</button>' : '') +
         '<button class="btn btn-sm btn-secondary" onclick="BlackBook.passwordModal(\x27' + this.escapeHtml(p.name) + '\x27)">PASSWORD</button>' +
         '<button class="btn btn-sm btn-danger btn-icon" title="Delete profile" onclick="BlackBook.deleteProfile(\x27' + this.escapeHtml(p.name) + '\x27)">' + this.xIcon() + '</button></div>';
     }
@@ -177,20 +198,54 @@ Object.assign(window.BlackBook, {
     await this.save();
     this.switchProfile(name);
   },
-  async renameProfile(name) {
-    const newName = await this.promptModal({
-      title: name ? 'Rename Profile' : 'Name Default Profile',
-      message: name ? 'Rename profile "' + name + '":' : 'Name the default profile (it becomes a named profile):',
-      defaultValue: name || 'default',
-      confirmText: 'Save'
-    });
-    if (!newName || !newName.trim() || newName.trim() === name) return;
-    const wasActive = this.profile === name;
-    const res = await fetch('/api/profiles', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'rename', name: name, newName: newName.trim() }) });
-    const out = await res.json();
-    if (!res.ok) { alert(out.error || 'Failed'); return; }
-    if (wasActive) this.switchProfile(newName.trim());
-    else this.refreshProfilesList();
+  openProfileEdit() {
+    document.getElementById('edit-profile-name').value = this.profile || 'default';
+    const currency = document.getElementById('edit-profile-currency');
+    currency.innerHTML = this.currencyList().map(code => '<option value="' + this.escapeHtml(code) + '">' + this.escapeHtml(code) + '</option>').join('');
+    currency.value = this.baseCurrency();
+    this.upgradeAllSelects(document.getElementById('edit-profile-modal'));
+    this.openModal('edit-profile-modal');
+  },
+
+  async saveProfileEdit(event) {
+    if (event) event.preventDefault();
+    const oldName = this.profile || '';
+    const enteredName = document.getElementById('edit-profile-name').value.trim();
+    const newName = !oldName && enteredName.toLowerCase() === 'default' ? '' : enteredName;
+    const oldCurrency = this.baseCurrency();
+    const oldEnabled = this.data.settings.enabledCurrencies;
+    const newCurrency = document.getElementById('edit-profile-currency').value;
+    if (!enteredName || !newCurrency) return;
+    if (newName === oldName && newCurrency === oldCurrency) { this.closeModal('edit-profile-modal'); return; }
+    if (newCurrency !== oldCurrency) {
+      const rates = this.getRates();
+      const hasRate = code => code === 'EUR' || Number((rates[code] || {}).rate) > 0;
+      const missing = [oldCurrency, newCurrency].filter(code => !hasRate(code));
+      if (missing.length) { alert('Set or refresh exchange rates for ' + missing.join(', ') + ' before changing the base currency.'); return; }
+      if (!(await this.confirmModal({ title: 'Change Base Currency', message: 'Converted totals will use ' + newCurrency + ' at current exchange rates. Original transaction amounts stay unchanged. Budget amounts are not converted. Continue?', confirmText: 'Change', danger: false }))) return;
+      this.data.settings.baseCurrency = newCurrency;
+      const enabled = this.data.settings.enabledCurrencies || [];
+      if (!enabled.includes(newCurrency)) this.data.settings.enabledCurrencies = [...enabled, newCurrency];
+      if (!(await this.save())) { this.data.settings.baseCurrency = oldCurrency; this.data.settings.enabledCurrencies = oldEnabled; alert('Could not save the base currency. No profile changes were made.'); return; }
+    }
+    if (newName !== oldName) {
+      try {
+        const res = await fetch('/api/profiles', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'rename', name: oldName, newName }) });
+        const out = await res.json();
+        if (!res.ok) throw new Error(out.error || 'Rename failed');
+      } catch (error) {
+        if (newCurrency !== oldCurrency) { this.data.settings.baseCurrency = oldCurrency; this.data.settings.enabledCurrencies = oldEnabled; await this.save(); }
+        alert('Could not rename profile: ' + error.message);
+        return;
+      }
+      this.closeModal('edit-profile-modal');
+      this.switchProfile(newName);
+      return;
+    }
+    this.closeModal('edit-profile-modal');
+    this.populateCurrencyDropdowns();
+    this.updateBaseCurrencyLabels();
+    this.renderSettings();
   },
   async deleteProfile(name) {
     if (!(await this.confirmModal({ title: 'Delete Profile', message: 'Delete profile "' + name + '" and all of its data?', confirmText: 'Delete' }))) return;
@@ -322,14 +377,18 @@ Object.assign(window.BlackBook, {
     const catMap = {};
     for (const c of this.data.categories) catMap[String(c.name).trim().toLowerCase()] = c.id;
     const newCategories = [];
-    const catByName = (cell, note) => {
-      const rule = (this.data.importRules || []).find(r => r.active !== false && r.categoryId && r.match && String(note || '').toLowerCase().includes(String(r.match).toLowerCase()));
+    const catByName = (cell, note, date) => {
+      const availableId = id => {
+        const cat = this.data.categories.find(c => c.id === id);
+        return !!cat && CategoryAvailability.availableOn(cat, date);
+      };
+      const rule = (this.data.importRules || []).find(r => r.active !== false && r.categoryId && availableId(r.categoryId) && r.match && String(note || '').toLowerCase().includes(String(r.match).toLowerCase()));
       if (rule) return rule.categoryId;
       if (!cell) return null;
       const s = cell.toLowerCase();
-      if (catMap[s]) return catMap[s];
+      if (catMap[s]) return (availableId(catMap[s]) || newCategories.some(c => c.id === catMap[s])) ? catMap[s] : null;
       for (const [name, id] of Object.entries(catMap)) {
-        if (name.length > 3 && (s.includes(name) || name.includes(s))) return id;
+        if (name.length > 3 && (s.includes(name) || name.includes(s))) return (availableId(id) || newCategories.some(c => c.id === id)) ? id : null;
       }
       const cat = { id: crypto.randomUUID(), name: cell.trim(), color: this.nextCategoryColor() };
       newCategories.push(cat);
@@ -357,7 +416,7 @@ Object.assign(window.BlackBook, {
         id: crypto.randomUUID(), date: date, type: type,
         amount: Math.round((type === 'income' ? Math.abs(amt) : -Math.abs(amt)) * 100) / 100,
         currency: currency, accountId: accountId, cardId: null,
-        categoryId: catByName(g(r, catCol), note), note: note
+        categoryId: catByName(g(r, catCol), note, date), note: note
       });
     }
     const duplicateCount = staged.filter(candidate => (this.data.transactions || []).some(existing => {
@@ -381,7 +440,7 @@ Object.assign(window.BlackBook, {
     const category = document.getElementById('import-rule-category');
     if (!category) return;
     document.getElementById('import-rule-match').value = '';
-    category.innerHTML = this.sortedCategories().map(item => '<option value="' + item.id + '">' + this.escapeHtml(item.name) + '</option>').join('');
+    category.innerHTML = this.categoriesAvailableOn(this.today()).map(item => '<option value="' + item.id + '">' + this.escapeHtml(item.name) + '</option>').join('');
     this.upgradeSelect(category);
     this.openModal('import-rule-modal');
     setTimeout(() => document.getElementById('import-rule-match').focus(), 20);
@@ -446,7 +505,7 @@ Object.assign(window.BlackBook, {
     const fmtRate = (v) => v != null
       ? v.toLocaleString('en-US', { maximumFractionDigits: 4 }) + ' <span class="rate-unit">' + base + '</span>'
       : '--';
-    let rows = '<div class="rate-grid-row rate-grid-head"><span>CUR</span><span>RATE (in ' + base + ')</span><span>UPDATED</span><span>SET</span><span>ORDER</span><span></span><span>DEFAULT</span><span></span><span></span></div>';
+    let rows = '<div class="rate-grid-row rate-grid-head"><span>CURRENCY / RATE (in ' + base + ')</span><span>UPDATED</span><span>ACTIONS</span></div>';
     for (const code of enabledList) {
       const r = rates[code] || { rate: null, source: null, updated: null };
       const shown = shownFor(code, r);
@@ -459,25 +518,20 @@ Object.assign(window.BlackBook, {
       const canDown = !isBase && idx >= 0 && idx < orderArr.length - 1 && orderArr[idx + 1] !== base;
       const setCell = '<button class="btn btn-sm btn-secondary" ' +
         (isBase ? 'disabled title="Base currency is always 1"' : 'title="Set manually" onclick="BlackBook.openManualRateModal(\x27' + code + '\x27)"') +
-        '>SET</button>';
+        ' aria-label="Set ' + code + ' rate manually"><span class="rate-action-text">RATE</span><span class="rate-action-icon" aria-hidden="true">✎</span></button>';
       const orderCell = '<span class="settings-row-order">' +
         '<button type="button" class="btn btn-sm btn-secondary" ' + (canUp ? 'onclick="BlackBook.moveCurrency(\x27' + code + '\x27,-1)"' : 'disabled') + ' title="Move up">&#9650;</button>' +
         '<button type="button" class="btn btn-sm btn-secondary" ' + (canDown ? 'onclick="BlackBook.moveCurrency(\x27' + code + '\x27,1)"' : 'disabled') + ' title="Move down">&#9660;</button>' +
         '</span>';
       const refreshCell = '<button class="btn btn-sm btn-secondary btn-icon" title="Refresh rate" onclick="BlackBook.refreshRate(\x27' + code + '\x27)">' + this.refreshIcon() + '</button>';
-      const defaultCell = isBase
-        ? '<button class="btn btn-sm btn-muted" disabled title="Current default currency">DEFAULT</button>'
-        : '<button class="btn btn-sm btn-secondary" onclick="BlackBook.setDefaultCurrency(\x27' + code + '\x27)">SET DEFAULT</button>';
       rows += '<div class="rate-grid-row">' +
-        '<span class="rate-code">' + code + '</span>' +
-        '<span class="rate-val">' + rateVal + '</span>' +
+        '<span class="rate-info"><span class="rate-code">' + code + '</span><span class="rate-val">' + rateVal + '</span></span>' +
         '<span class="rate-upd">' + updated + '</span>' +
-        setCell +
+        '<span class="rate-actions">' + setCell +
         orderCell +
         refreshCell +
-        defaultCell +
-        (removable ? '<button class="btn btn-sm btn-danger btn-icon" title="Remove currency" onclick="BlackBook.removeCurrency(\x27' + code + '\x27)">' + this.xIcon() + '</button>' : '<span></span>') +
-        '<span></span>' +
+        (removable ? '<button class="btn btn-sm btn-danger btn-icon" title="Remove currency" onclick="BlackBook.removeCurrency(\x27' + code + '\x27)">' + this.xIcon() + '</button>' : '<button class="btn btn-sm btn-danger btn-icon rate-remove-placeholder" disabled tabindex="-1" aria-hidden="true">' + this.xIcon() + '</button>') +
+        '</span>' +
         '</div>';
     }
     return rows;
@@ -518,8 +572,12 @@ Object.assign(window.BlackBook, {
     if (isNaN(val) || val <= 0) { alert('Invalid rate value.'); return; }
     const base = this.baseCurrency();
     const baseRate = (base === 'EUR' ? 1 : (this.getRates()[base] || {}).rate);
-    const eurPerUnit = baseRate ? val * baseRate : val;
-    this.getRates()[code] = { rate: eurPerUnit, source: 'manual', updated: new Date().toISOString() };
+    if (code !== 'EUR' && !baseRate) { alert('Set the EUR rate first to establish the exchange rate for ' + base + '.'); return; }
+    if (code === 'EUR' && base !== 'EUR') {
+      this.getRates()[base] = { rate: 1 / val, source: 'manual', updated: new Date().toISOString() };
+    } else {
+      this.getRates()[code] = { rate: val * baseRate, source: 'manual', updated: new Date().toISOString() };
+    }
     await this.save();
     this.renderSettings();
   },
@@ -535,15 +593,6 @@ Object.assign(window.BlackBook, {
     await this.save();
     this.renderPage(this.currentPage);
     this.populateCurrencyDropdowns();
-  },
-
-  async setDefaultCurrency(code) {
-    if (!code || code === this.baseCurrency()) return;
-    this.data.settings.baseCurrency = code;
-    this.populateCurrencyDropdowns();
-    this.updateBaseCurrencyLabels();
-    await this.save();
-    this.renderSettings();
   },
 
   bindSettingsEvents(el) {
@@ -722,6 +771,7 @@ Object.assign(window.BlackBook, {
     if (accForm && !accForm._bound) {
       accForm._bound = true;
       document.getElementById('settings-account-type').addEventListener('change', () => this.updateCreditFieldsVisibility());
+      document.getElementById('settings-account-currency').addEventListener('change', () => this.updateCreditFieldsVisibility());
       accForm.addEventListener('submit', async (e) => {
         e.preventDefault();
         const idVal = document.getElementById('settings-account-id').value;
@@ -822,6 +872,8 @@ Object.assign(window.BlackBook, {
     const typeSel = document.getElementById('settings-account-type');
     if (!typeSel) return;
     document.getElementById('credit-fields').classList.toggle('hidden', typeSel.value !== 'creditcard');
+    const currencySel = document.getElementById('settings-account-currency');
+    document.getElementById('settings-account-fee-row').classList.toggle('hidden', !currencySel || currencySel.value === this.baseCurrency());
   },
 
   openNewAccount() {
@@ -979,17 +1031,19 @@ Object.assign(window.BlackBook, {
     for (const c of sortedCats) {
       const txCount = this.data.transactions.filter(t => t.categoryId === c.id).length;
       const isProtected = c.name.toLowerCase() === 'transfer' || c.name.toLowerCase() === 'uncategorized' || c.name.toLowerCase() === 'invoice' || c.name.toLowerCase() === 'debt';
-      categoriesList += '<div class="settings-row">' +
+      const archived = CategoryAvailability.archivedOn(c, this.today());
+      categoriesList += '<div class="settings-row' + (archived ? ' category-archived' : '') + '">' +
         '<span class="row-swatch" style="background:' + this.categoryColor(c) + ';"></span>' +
         '<span class="settings-row-name">' + this.escapeHtml(c.name) + '</span>' +
-        '<span class="settings-row-meta">' + txCount + ' transaction' + (txCount === 1 ? '' : 's') + '</span>' +
+        '<span class="settings-row-meta">' + txCount + ' transaction' + (txCount === 1 ? '' : 's') + (archived ? ' · ARCHIVED' : '') + '</span>' +
         '<button class="btn btn-sm btn-secondary" onclick="BlackBook.openEditCategory(\x27' + c.id + '\x27)">EDIT</button>' +
+        (isProtected ? '' : '<button class="btn btn-sm btn-secondary" onclick="BlackBook.' + (archived ? 'restoreCategory' : 'archiveCategory') + '(\x27' + c.id + '\x27)">' + (archived ? 'RESTORE' : 'ARCHIVE') + '</button>') +
         (isProtected ? '<button class="btn btn-sm btn-danger btn-icon" onclick="BlackBook.deleteCategory(\x27' + c.id + '\x27)" disabled style="opacity:0.5;cursor:not-allowed;" title="Protected category">' + this.xIcon() + '</button>' : '<button class="btn btn-sm btn-danger btn-icon" title="Delete category" onclick="BlackBook.deleteCategory(\x27' + c.id + '\x27)">' + this.xIcon() + '</button>') + '</div>';
     }
     if (!this.data.categories.length) categoriesList = '<div style="padding:8px;color:var(--text-muted);font-size:13px;">No categories yet.</div>';
 
     const defaultAccountOpts = '<option value="">None</option>' + this.visibleAccounts().map(a => '<option value="' + a.id + '"' + (a.id === defaultAccountId ? ' selected' : '') + '>' + this.escapeHtml(a.name) + '</option>').join('');
-    const defaultCategoryOpts = '<option value="">None</option>' + this.sortedCategories().map(c => '<option value="' + c.id + '"' + (c.id === defaultCategoryId ? ' selected' : '') + '>' + this.escapeHtml(c.name) + '</option>').join('');
+    const defaultCategoryOpts = '<option value="">None</option>' + this.categoriesAvailableOn(this.today()).map(c => '<option value="' + c.id + '"' + (c.id === defaultCategoryId ? ' selected' : '') + '>' + this.escapeHtml(c.name) + '</option>').join('');
 
     let pagesList = '';
     const PAGE_LABELS = { forecast: 'Forecast', bills: 'Bills', budget: 'Budget', cards: 'Credit Cards', savings: 'Savings', debts: 'Debts', invoices: 'Invoices' };
@@ -1192,6 +1246,20 @@ Object.assign(window.BlackBook, {
     this.openModal('settings-category-modal');
   },
 
+  async archiveCategory(id) {
+    const cat = this.data.categories.find(c => c.id === id);
+    if (!cat || ['transfer', 'uncategorized', 'invoice', 'debt'].includes(cat.name.toLowerCase())) return;
+    cat.archivedPeriods = CategoryAvailability.archivePeriods(cat, this.today());
+    if (await this.save()) this.renderSettings();
+  },
+
+  async restoreCategory(id) {
+    const cat = this.data.categories.find(c => c.id === id);
+    if (!cat) return;
+    cat.archivedPeriods = CategoryAvailability.restorePeriods(cat, this.today());
+    if (await this.save()) this.renderSettings();
+  },
+
   async deleteCategory(id) {
     const cat = this.data.categories.find(c => c.id === id);
     if (!cat) return;
@@ -1210,7 +1278,10 @@ Object.assign(window.BlackBook, {
     }
     this.data.categories = this.data.categories.filter(c => c.id !== id);
     if (purgeTxs) this.data.transactions = this.data.transactions.filter(t => t.categoryId !== id);
-    if (this.selectedCategory === id) this.selectedCategory = null;
+    if (this.selectedCategories) {
+      this.selectedCategories.delete(id);
+      if (!this.selectedCategories.size) this.selectedCategories = null;
+    }
     if (this.data.settings.defaultCategoryId === id) this.data.settings.defaultCategoryId = null;
     this.data.budgets = (this.data.budgets || []).filter(b => b.categoryId !== id);
     if (this.data.budgetAllocations) {
@@ -1218,7 +1289,6 @@ Object.assign(window.BlackBook, {
         if (!alloc || !alloc.percents) continue;
         delete alloc.percents[id];
       }
-      this.data.budgetAllocations = this.data.budgetAllocations.filter(a => a && Object.keys(a.percents || {}).length > 0);
     }
     await this.save();
     this.renderPage(this.currentPage);

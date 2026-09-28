@@ -31,8 +31,9 @@
     const start = atMidnight(options && options.startDate || new Date()) || atMidnight(new Date());
     const days = Math.max(1, Math.min(365, Number(options && options.days) || 30));
     const end = addDays(start, days - 1);
-    const accountIds = new Set((options && options.accountIds || []).filter(Boolean));
-    const accounts = (profile.accounts || []).filter(a => !accountIds.size || accountIds.has(a.id));
+    const hasAccountFilter = !!(options && Array.isArray(options.accountIds));
+    const accountIds = new Set(hasAccountFilter ? options.accountIds.filter(Boolean) : []);
+    const accounts = (profile.accounts || []).filter(a => !hasAccountFilter || accountIds.has(a.id));
     const balances = {};
     const warnings = [];
     const events = [];

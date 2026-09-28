@@ -14,17 +14,21 @@ Object.assign(window.BlackBook, {
     if (btn._bound) return;
     btn._bound = true;
     btn.addEventListener('click', async () => {
-      if (!window.showOpenFilePicker) {
-        alert('Linking a local file requires a Chromium-based browser with File System Access support.');
-        return;
-      }
+      btn.disabled = true;
       try {
-        const [handle] = await window.showOpenFilePicker({ multiple: false });
-        if (!handle) return;
-        pendingInvHandle = handle;
-        document.getElementById('invoice-file-name').textContent = handle.name + ' (linked local file)';
-      } catch (e) {
-        if (e.name !== 'AbortError') alert('Could not select the invoice file: ' + e.message);
+        const response = await fetch('/api/invoice-file/pick', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ profile: this.profile || '' })
+        });
+        const result = await response.json();
+        if (!response.ok) throw new Error(result.error || 'The file picker could not open.');
+        if (result.cancelled) return;
+        pendingInvHandle = { kind: 'local-path', name: result.fileName, path: result.filePath };
+        document.getElementById('invoice-file-name').textContent = result.fileName + ' (linked)';
+      } catch (error) {
+        alert(error.message || 'Could not select the invoice file.');
+      } finally {
+        btn.disabled = false;
       }
     });
   },
@@ -33,6 +37,7 @@ Object.assign(window.BlackBook, {
     const el = document.getElementById('page-invoices');
     if (!el) return;
     if (!this.data.invoices) this.data.invoices = [];
+    if (!this.data.invoiceTemplates) this.data.invoiceTemplates = [];
     const offToday = this.vy() !== new Date().getFullYear();
     let html = '<div class="month-picker">' +
       '<span class="mp-year"><button class="mp-year-btn" onclick="BlackBook.shiftYear(-1)">&#9664;</button><span class="mp-year-label">' + this.vy() + '</span><button class="mp-year-btn" onclick="BlackBook.shiftYear(1)">&#9654;</button></span>' +
@@ -70,7 +75,13 @@ Object.assign(window.BlackBook, {
   invPaid(inv) { return Math.min(this.invTotal(inv), Math.abs(inv.amountPaid || 0)); },
   invRemaining(inv) { return Math.round((this.invTotal(inv) - this.invPaid(inv)) * 100) / 100; },
   invIsPaid(inv) { return this.invTotal(inv) > 0 && this.invRemaining(inv) <= 0.009; },
-  invOverdue(inv) { return !this.invIsPaid(inv) && !!inv.dueDate && inv.dueDate < this.today(); },
+  invoicePaidDate(inv) {
+    if (!inv) return '';
+    if (inv.paidDate) return inv.paidDate;
+    if (!this.invIsPaid(inv)) return '';
+    const dates = (inv.payments || []).map(payment => payment && payment.date).filter(Boolean).sort();
+    return dates.length ? dates[dates.length - 1] : '';
+  },
   invBase(inv) { return Math.abs(this.toBase(this.invTotal(inv), inv.currency || this.baseCurrency() || 'RSD')); },
   parseInvNumber(inv) {
     const num = (inv && inv.number || '').trim();
@@ -93,24 +104,24 @@ Object.assign(window.BlackBook, {
 
   invoicesSummaryHtml() {
     const year = this.vy();
-    let owedMe = 0, iOwe = 0, overdueCnt = 0, overdueAmt = 0;
+    let owedMe = 0, iOwe = 0, paidTotal = 0;
     for (const v of this.data.invoices) {
       if (this.invYear(v) !== year) continue;
       const rem = this.invRemaining(v);
-      if (rem <= 0.009) continue;
-      const remBase = Math.abs(this.toBase(rem, v.currency || this.baseCurrency() || 'RSD'));
-      if (v.dir === 'out') owedMe += remBase; else iOwe += remBase;
-      if (this.invOverdue(v)) { overdueCnt++; overdueAmt += remBase; }
+      const currency = v.currency || this.baseCurrency() || 'RSD';
+      const remBase = Math.abs(this.toBase(rem, currency));
+      if (rem > 0.009) { if (v.dir === 'out') owedMe += remBase; else iOwe += remBase; }
+      paidTotal += Math.abs(this.toBase(this.invPaid(v), currency));
     }
     const f = this._invFilter || 'all';
     const filterLabel = f === 'out' ? 'INCOMES' : f === 'in' ? 'EXPENSES' : 'ALL';
     return '<div class="month-summary">' +
       '<div class="month-summary-item"><span class="month-summary-label">INCOME</span><span class="month-summary-value amount-positive">' + this.fmtBase(owedMe) + '</span></div>' +
       '<div class="month-summary-item"><span class="month-summary-label">EXPENSE</span><span class="month-summary-value amount-negative">' + this.fmtBase(iOwe) + '</span></div>' +
-      '<div class="month-summary-item"><span class="month-summary-label">OVERDUE</span><span class="month-summary-value ' + (overdueCnt ? 'amount-negative' : '') + '">' + (overdueCnt ? overdueCnt + ' &middot; ' + this.fmtBase(overdueAmt) : this.fmtBase(0)) + '</span></div>' +
+      '<div class="month-summary-item"><span class="month-summary-label">PAID</span><span class="month-summary-value amount-positive">' + this.fmtBase(paidTotal) + '</span></div>' +
       '<span style="flex:1;"></span>' +
       '<span style="display:flex;gap:4px;align-items:center;">' +
-      '<button class="btn btn-sm btn-secondary inv-filter-cycle" onclick="BlackBook.cycleInvoiceFilter()" title="Cycle filter: Incomes → Expenses → All" style="min-width:100px;text-align:center;">' + filterLabel + '</button>' +
+      '<button class="btn btn-sm btn-secondary page-control inv-filter-cycle" onclick="BlackBook.cycleInvoiceFilter()" title="Cycle filter: Incomes → Expenses → All" style="min-width:100px;text-align:center;">' + filterLabel + '</button>' +
       '</span></div>';
   },
 
@@ -137,7 +148,7 @@ Object.assign(window.BlackBook, {
 
   invoiceCardHtml(v) {
     const total = this.invTotal(v), paid = this.invPaid(v);
-    const isPaid = this.invIsPaid(v), overdue = this.invOverdue(v);
+    const isPaid = this.invIsPaid(v);
     const cur = v.currency || this.baseCurrency() || 'RSD';
     const dirColor = v.dir === 'out' ? 'var(--income)' : 'var(--expense)';
     const expanded = this._expandedInvoices[v.id];
@@ -160,9 +171,8 @@ Object.assign(window.BlackBook, {
       }
       html += '<div class="inv-lines-box">' + linesHtml + '</div>';
       html += '<div class="bill-meta-line" style="display:block;margin-top:6px;">' +
-        'ISSUED ' + (v.date || '?') +
-        ' &middot; <span class="' + (overdue ? 'amount-negative" title="Overdue"' : '"') + '>DUE ' + (v.dueDate || '-') + '</span>' +
-        (overdue ? ' &middot; <span class="amount-negative">OVERDUE</span>' : '') +
+        'ISSUED ' + (this.fmtDateInput(v.date || '') || '?') +
+        ' &middot; PAID ' + (isPaid ? (this.fmtDateInput(this.invoicePaidDate(v)) || '-') : '-') +
         (v.note ? ' &middot; ' + this.escapeHtml(v.note) : '') + '</div>';
     }
     html += '</div>';
@@ -232,6 +242,106 @@ Object.assign(window.BlackBook, {
     this._setInvDir(cur);
   },
 
+  invoiceTemplateDraftFromForm() {
+    const lines = [...document.querySelectorAll('#inv-lines .inv-line')].map(row => ({
+      desc: row.querySelector('.inv-line-desc').value.trim(),
+      qty: row.querySelector('.inv-line-qty').value.trim(),
+      price: row.querySelector('.inv-line-price').value.trim()
+    })).filter(line => line.desc || line.qty || line.price);
+    return {
+      dir: document.getElementById('invoice-dir').value,
+      party: document.getElementById('invoice-party').value.trim(),
+      currency: document.getElementById('invoice-currency').value,
+      categoryId: document.getElementById('invoice-category').value || null,
+      note: document.getElementById('invoice-note').value.trim(),
+      lines: lines
+    };
+  },
+
+  refreshInvoiceTemplateControls(selectedId) {
+    const select = document.getElementById('invoice-template-select');
+    if (!select) return;
+    const templates = this.data.invoiceTemplates || [];
+    const current = selectedId || select.value;
+    select.innerHTML = '<option value="">' + (templates.length ? 'Choose a template...' : 'No saved templates') + '</option>' +
+      templates.map(template => '<option value="' + this.escapeHtml(template.id) + '">' + this.escapeHtml(template.name) + '</option>').join('');
+    select.value = templates.some(template => template.id === current) ? current : '';
+    this.updateInvoiceTemplateButtons();
+  },
+
+  updateInvoiceTemplateButtons() {
+    const selected = !!(document.getElementById('invoice-template-select') || {}).value;
+    const use = document.getElementById('invoice-template-use');
+    const del = document.getElementById('invoice-template-delete');
+    if (use) use.disabled = !selected;
+    if (del) del.disabled = !selected;
+  },
+
+  applyInvoiceTemplate() {
+    const id = (document.getElementById('invoice-template-select') || {}).value;
+    const template = (this.data.invoiceTemplates || []).find(item => item.id === id);
+    if (!template) return;
+    this._setInvDir(template.dir === 'in' ? 'in' : 'out');
+    document.getElementById('invoice-party').value = template.party || '';
+    document.getElementById('invoice-currency').value = template.currency || this.baseCurrency();
+    document.getElementById('invoice-note').value = template.note || '';
+    const catInput = document.getElementById('invoice-category-input');
+    const catHidden = document.getElementById('invoice-category');
+    const available = this.categoriesAvailableOn(this.today());
+    const category = available.find(item => item.id === template.categoryId) ||
+      available.find(item => item.name.toLowerCase() === 'invoice') || available[0];
+    if (catInput && catHidden) {
+      catHidden.value = category ? category.id : '';
+      catInput.value = category ? category.name.toUpperCase() : '';
+      this.initCategoryPicker('invoice-category-input', 'invoice-category', 'invoice-category-dropdown');
+    }
+    document.getElementById('inv-lines').innerHTML = (template.lines && template.lines.length ? template.lines : [{ desc: '', qty: '1', price: '' }])
+      .map(line => this._invLineRow(line.desc, line.qty, line.price)).join('');
+    if (!document.getElementById('invoice-id').value) {
+      document.getElementById('invoice-date').value = this.fmtDateInput(this.today());
+      document.getElementById('invoice-paid-date').value = '';
+      this._resetInvoiceFileUI('');
+    }
+    this._bindInvLineEvents();
+    this._recalcInvTotal();
+  },
+
+  openInvoiceTemplateSave() {
+    const draft = this.invoiceTemplateDraftFromForm();
+    if (!draft.party) { alert('Enter a party before saving an invoice template.'); return; }
+    if (!draft.lines.length) { alert('Add at least one line item before saving an invoice template.'); return; }
+    this._invoiceTemplateDraft = draft;
+    document.getElementById('invoice-template-name').value = draft.party;
+    this.openModal('invoice-template-modal');
+    setTimeout(() => document.getElementById('invoice-template-name').focus(), 50);
+  },
+
+  async saveInvoiceTemplate() {
+    const name = document.getElementById('invoice-template-name').value.trim();
+    if (!name) { alert('Enter a template name.'); return; }
+    const draft = this._invoiceTemplateDraft;
+    if (!draft) return;
+    if (!this.data.invoiceTemplates) this.data.invoiceTemplates = [];
+    const existing = this.data.invoiceTemplates.find(item => item.name.toLocaleLowerCase() === name.toLocaleLowerCase());
+    if (existing && !(await this.confirmModal({ title: 'Replace Template', message: 'A template named "' + name + '" already exists. Replace it?', confirmText: 'Replace' }))) return;
+    if (existing) Object.assign(existing, draft, { name: name });
+    else this.data.invoiceTemplates.push({ id: 'invoice-template-' + Date.now(), name: name, ...draft });
+    await this.save();
+    this.refreshInvoiceTemplateControls(existing && existing.id);
+    this.closeModal('invoice-template-modal');
+    this._invoiceTemplateDraft = null;
+  },
+
+  async deleteInvoiceTemplate() {
+    const id = (document.getElementById('invoice-template-select') || {}).value;
+    const template = (this.data.invoiceTemplates || []).find(item => item.id === id);
+    if (!template) return;
+    if (!(await this.confirmModal({ title: 'Delete Template', message: 'Delete the saved invoice template "' + template.name + '"?', confirmText: 'Delete' }))) return;
+    this.data.invoiceTemplates = this.data.invoiceTemplates.filter(item => item.id !== id);
+    await this.save();
+    this.refreshInvoiceTemplateControls();
+  },
+
   openNewInvoice() {
     this._resetInvoiceFileUI('');
     this._bindInvoiceFilePicker();
@@ -247,8 +357,7 @@ Object.assign(window.BlackBook, {
     }
     document.getElementById('invoice-number').value = String(maxSeq + 1).padStart(3, '0') + ' / ' + year;
     document.getElementById('invoice-date').value = this.fmtDateInput(this.today());
-    const in14 = new Date(Date.now() + 14 * 86400000);
-    document.getElementById('invoice-due').value = this.fmtDateInput(in14.toISOString().slice(0, 10));
+    document.getElementById('invoice-paid-date').value = '';
     document.getElementById('invoice-currency').value = this.baseCurrency();
     document.getElementById('invoice-note').value = '';
     const catInput = document.getElementById('invoice-category-input');
@@ -258,11 +367,13 @@ Object.assign(window.BlackBook, {
       catInput.value = '';
       this.initCategoryPicker('invoice-category-input', 'invoice-category', 'invoice-category-dropdown');
     }
-    const invoiceCat = this.data.categories.find(c => c.name.toLowerCase() === 'invoice');
-    const defCat = invoiceCat ? invoiceCat.id : (this.data.settings.defaultCategoryId || (this.data.categories[0] && this.data.categories[0].id));
+    const availableCats = this.categoriesAvailableOn(this.today());
+    const invoiceCat = availableCats.find(c => c.name.toLowerCase() === 'invoice');
+    const defCat = invoiceCat ? invoiceCat.id : (availableCats.some(c => c.id === this.data.settings.defaultCategoryId) ? this.data.settings.defaultCategoryId : availableCats[0]?.id);
     if (defCat) { catHidden.value = defCat; catInput.value = this.data.categories.find(c => c.id === defCat)?.name?.toUpperCase() || ''; }
     document.getElementById('inv-lines').innerHTML = this._invLineRow('', '', '');
     document.getElementById('invoice-modal-title').textContent = 'New Invoice';
+    this.refreshInvoiceTemplateControls();
     this._bindInvLineEvents();
     this._recalcInvTotal();
     this.bindInvoiceForm();
@@ -280,7 +391,7 @@ Object.assign(window.BlackBook, {
     document.getElementById('invoice-party').value = v.party || '';
     document.getElementById('invoice-number').value = v.number || '';
     document.getElementById('invoice-date').value = this.fmtDateInput(v.date || '');
-    document.getElementById('invoice-due').value = this.fmtDateInput(v.dueDate || '');
+    document.getElementById('invoice-paid-date').value = this.fmtDateInput(v.paidDate || this.invoicePaidDate(v));
     document.getElementById('invoice-currency').value = v.currency || this.baseCurrency() || 'RSD';
     document.getElementById('invoice-note').value = v.note || '';
     const catInput = document.getElementById('invoice-category-input');
@@ -293,6 +404,7 @@ Object.assign(window.BlackBook, {
     const lines = (v.lines && v.lines.length) ? v.lines : [{ desc: '', qty: '', price: '' }];
     document.getElementById('inv-lines').innerHTML = lines.map(l => this._invLineRow(l.desc, l.qty, l.price)).join('');
     document.getElementById('invoice-modal-title').textContent = 'Edit Invoice';
+    this.refreshInvoiceTemplateControls();
     this._bindInvLineEvents();
     this._recalcInvTotal();
     this.bindInvoiceForm();
@@ -318,9 +430,12 @@ Object.assign(window.BlackBook, {
       });
       if (!lines.length) { alert('Add at least one line item.'); return; }
       const invDate = this.parseDateInput(document.getElementById('invoice-date').value) || this.today();
-      const invDue = this.parseDateInput(document.getElementById('invoice-due').value);
-      if (document.getElementById('invoice-due').value.trim() && !invDue) { alert('Enter a valid due date (DD/MM/YYYY).'); return; }
-      const data = { dir: document.getElementById('invoice-dir').value, party: party, number: document.getElementById('invoice-number').value.trim(), date: invDate, dueDate: invDue || '', currency: document.getElementById('invoice-currency').value, note: document.getElementById('invoice-note').value.trim(), lines: lines, categoryId: document.getElementById('invoice-category').value || null };
+      const paidDateText = document.getElementById('invoice-paid-date').value.trim();
+      const paidDate = this.parseDateInput(paidDateText);
+      if (paidDateText && !paidDate) { alert('Enter a valid paid date (DD/MM/YYYY).'); return; }
+      const data = { dir: document.getElementById('invoice-dir').value, party: party, number: document.getElementById('invoice-number').value.trim(), date: invDate, paidDate: paidDate || '', currency: document.getElementById('invoice-currency').value, note: document.getElementById('invoice-note').value.trim(), lines: lines, categoryId: document.getElementById('invoice-category').value || null };
+      const original = id ? this.data.invoices.find(item => item.id === id) : null;
+      if (!this.categorySelectionAllowed(data.categoryId, invDate, original && original.categoryId)) { alert('That category was archived for this date. Choose another category.'); return; }
       let invId = id;
       if (!invId) {
         invId = 'inv-' + Date.now();
@@ -328,6 +443,7 @@ Object.assign(window.BlackBook, {
       }
       if (pendingInvHandle) {
         data.fileName = pendingInvHandle.name;
+        data.filePath = pendingInvHandle.path;
       }
       if (!this.data.invoices) this.data.invoices = [];
       if (id) {
@@ -344,15 +460,23 @@ Object.assign(window.BlackBook, {
               if (!ok) return;
             }
           }
-          if (pendingInvHandle && !(await this._invFilePut(invId, pendingInvHandle))) {
+          if (pendingInvHandle && pendingInvHandle.kind !== 'local-path' && !(await this._invFilePut(invId, pendingInvHandle))) {
             alert('Could not save the local file link in this browser. The invoice was not saved.');
             return;
+          }
+          if (this.invIsPaid(v) && data.paidDate && data.paidDate !== this.invoicePaidDate(v)) {
+            const finalPayment = (v.payments || []).slice().sort((a, b) => (a.seq || 0) - (b.seq || 0) || String(a.date || '').localeCompare(String(b.date || ''))).pop();
+            if (finalPayment) {
+              finalPayment.date = data.paidDate;
+              const linkedTx = this.data.transactions.find(tx => tx.id === finalPayment.txId);
+              if (linkedTx) linkedTx.date = data.paidDate;
+            }
           }
           Object.assign(v, data);
           if (data.fileName) delete v.fileData;
         }
       } else {
-        if (pendingInvHandle && !(await this._invFilePut(invId, pendingInvHandle))) {
+        if (pendingInvHandle && pendingInvHandle.kind !== 'local-path' && !(await this._invFilePut(invId, pendingInvHandle))) {
           alert('Could not save the local file link in this browser. The invoice was not saved.');
           return;
         }
@@ -389,19 +513,11 @@ Object.assign(window.BlackBook, {
       this.data.transactions = this.data.transactions.filter(t => !String(t.pairId || '').startsWith(prefix));
       v.payments = [];
       v.amountPaid = 0;
+      v.paidDate = '';
     } else {
-      const remaining = this.invRemaining(v);
-      if (remaining <= 0.009) return;
-      const accountId = this.data.settings.defaultAccountId || (this.data.accounts[0] && this.data.accounts[0].id);
-      const categoryId = v.categoryId || this.invoiceCategory().id;
-      const date = this.today();
-      const type = v.dir === 'out' ? 'income' : 'expense';
-      const pairId = 'inv-' + v.id + '-p1';
-      const txId = 'tx-' + pairId;
-      const cur = v.currency || this.baseCurrency() || 'RSD';
-      this.data.transactions.unshift({ id: txId, type: type, amount: type === 'income' ? remaining : -remaining, currency: cur, accountId: accountId || null, categoryId: categoryId, date: date, note: 'Invoice ' + (v.number ? '#' + v.number + ' ' : '') + (v.party || ''), pairId: pairId });
-      v.payments = [{ date: date, amount: remaining, accountId: accountId || null, categoryId: categoryId, txId: txId }];
-      v.amountPaid = remaining;
+      if (this.invRemaining(v) <= 0.009) return;
+      this.openInvPayModal(id);
+      return;
     }
     await this.save();
     this.renderPage(this.currentPage === 'invoices' ? 'invoices' : this.currentPage);
@@ -418,11 +534,17 @@ Object.assign(window.BlackBook, {
   openInvPayModal(id) {
     const v = this.data.invoices.find(x => x.id === id);
     if (!v || this.invIsPaid(v)) return;
+    const previousPaymentDate = (v.payments || []).map(payment => payment && payment.date).filter(Boolean).sort().pop();
+    const payDate = v.paidDate || previousPaymentDate || v.date || this.today();
     document.getElementById('ipay-id').value = id;
     document.getElementById('ipay-amount').value = this.invRemaining(v).toFixed(2);
-    document.getElementById('ipay-account').innerHTML = this.visibleAccounts().map(a => '<option value="' + a.id + '"' + (a.currency === (v.currency || this.baseCurrency() || 'RSD') ? ' selected' : '') + '>' + this.escapeHtml(a.name) + ' (' + a.currency + ')</option>').join('');
-    document.getElementById('ipay-category').innerHTML = this.sortedCategories().map(c => '<option value="' + c.id + '">' + this.escapeHtml(c.name) + '</option>').join('');
-    document.getElementById('ipay-date').value = this.fmtDateInput(this.today());
+    const payAccount = this.visibleAccounts().find(a => a.id === this.data.settings.defaultAccountId) ||
+      this.visibleAccounts().find(a => a.currency === (v.currency || this.baseCurrency() || 'RSD')) || this.visibleAccounts()[0];
+    document.getElementById('ipay-account').innerHTML = this.visibleAccounts().map(a => '<option value="' + this.escapeHtml(a.id) + '"' + (payAccount && a.id === payAccount.id ? ' selected' : '') + '>' + this.escapeHtml(a.name) + ' (' + this.escapeHtml(a.currency) + ')</option>').join('');
+    const categories = this.categoriesAvailableOn(payDate, v.categoryId);
+    const payCategory = categories.find(c => c.id === v.categoryId) || categories.find(c => c.name.toLowerCase() === 'invoice') || categories[0];
+    document.getElementById('ipay-category').innerHTML = categories.map(c => '<option value="' + this.escapeHtml(c.id) + '"' + (payCategory && c.id === payCategory.id ? ' selected' : '') + '>' + this.escapeHtml(c.name) + '</option>').join('');
+    document.getElementById('ipay-date').value = this.fmtDateInput(payDate);
     document.getElementById('invoice-pay-title').textContent = 'Payment \u2014 ' + (v.party || 'invoice') + ' #' + (v.number || '-');
     this.bindInvPayForm();
     this.openModal('invoice-pay-modal');
@@ -441,7 +563,8 @@ Object.assign(window.BlackBook, {
       if (!(amt > 0)) { alert('Enter a valid amount.'); return; }
       const remaining = this.invRemaining(v);
       if (amt > remaining) amt = remaining;
-      const payDate = this.parseDateInput(document.getElementById('ipay-date').value) || this.today();
+      const payDate = this.parseDateInput(document.getElementById('ipay-date').value);
+      if (!payDate) { alert('Enter a valid paid date (DD/MM/YYYY).'); return; }
       await this.applyInvoicePayment(v, amt, document.getElementById('ipay-account').value, document.getElementById('ipay-category').value, payDate);
       this.closeModal('invoice-pay-modal');
       this.renderPage(this.currentPage === 'invoices' ? 'invoices' : this.currentPage);
@@ -469,6 +592,7 @@ Object.assign(window.BlackBook, {
     this.data.transactions.unshift({ id: txId, type: type, amount: type === 'income' ? amt : -amt, currency: cur, accountId: accountId || null, categoryId: categoryId || null, date: date, note: 'Invoice ' + (v.number ? '#' + v.number + ' ' : '') + (v.party || ''), pairId: pairId });
     v.payments.push({ date: date, amount: amt, accountId: accountId || null, categoryId: categoryId || null, txId: txId, seq: seqN });
     v.amountPaid = Math.round(((v.amountPaid || 0) + amt) * 100) / 100;
+    v.paidDate = this.invIsPaid(v) ? date : '';
     await this.save();
   },
 
@@ -482,6 +606,7 @@ Object.assign(window.BlackBook, {
     if (v.payments) v.payments.splice(idx, 1);
     const amt = pay ? (pay.amount || 0) : 0;
     v.amountPaid = Math.max(0, Math.round(((v.amountPaid || 0) - amt) * 100) / 100);
+    v.paidDate = this.invIsPaid(v) ? this.invoicePaidDate(v) : '';
   },
 
 });

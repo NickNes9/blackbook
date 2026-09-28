@@ -2,6 +2,7 @@ window.UpdateUi = {
   version: '0.0.0',
   status: null,
   _polling: false,
+  _dismissed: false,
 
   async init() {
     await this.refresh(true);
@@ -32,20 +33,26 @@ window.UpdateUi = {
   },
 
   renderBanner() {
-    const el = document.getElementById('update-banner');
+    const el = document.getElementById('update-notice');
     if (!el) return;
     const s = this.status;
-    if (!s || !s.updateAvailable || !s.latest) { el.classList.add('hidden'); return; }
+    if (this._dismissed || !s || !s.updateAvailable || s.reason !== 'available' || !s.latest) { el.classList.add('hidden'); return; }
     el.innerHTML =
-      '<span class="update-banner-text">BLACK BOOK v' + this.esc(s.latest.version) + ' IS AVAILABLE</span>' +
-      '<button class="btn btn-sm btn-primary" onclick="UpdateUi.updateNow()">UPDATE NOW</button>' +
-      '<button class="btn btn-sm btn-secondary" onclick="UpdateUi.dismissBanner()">LATER</button>';
+      '<button class="update-notice-main" onclick="UpdateUi.openUpdates()" title="Open About & Updates"><span class="update-notice-long">UPDATE AVAILABLE · </span><span class="update-notice-short">UPDATE </span>v' + this.esc(s.latest.version) + '</button>' +
+      '<button class="update-notice-dismiss" onclick="UpdateUi.dismissBanner()" title="Later" aria-label="Dismiss update notice for this run">×</button>';
     el.classList.remove('hidden');
   },
 
   dismissBanner() {
-    const el = document.getElementById('update-banner');
+    this._dismissed = true;
+    const el = document.getElementById('update-notice');
     if (el) el.classList.add('hidden');
+  },
+
+  openUpdates() {
+    window.BlackBook.navigateTo('settings');
+    const section = document.getElementById('settings-updates');
+    if (section) section.scrollIntoView({ block: 'center' });
   },
 
   async checkNow() {
@@ -61,9 +68,6 @@ window.UpdateUi = {
   },
 
   async updateNow() {
-    const banner = document.getElementById('update-banner');
-    const button = banner ? banner.querySelector('.btn-primary') : null;
-    if (button) { button.disabled = true; button.textContent = 'UPDATING…'; }
     try {
       const resp = await fetch('/api/updates/apply', { method: 'POST', cache: 'no-store' });
       const result = await resp.json();
@@ -77,7 +81,6 @@ window.UpdateUi = {
       this.pollForRestart();
     } catch (e) {
       alert('Could not reach the server to install the update: ' + e.message);
-      if (button) { button.disabled = false; button.textContent = 'UPDATE NOW'; }
     }
   },
 

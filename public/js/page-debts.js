@@ -125,7 +125,7 @@ Object.assign(window.BlackBook, {
       '<div class="month-summary-item"><span class="month-summary-label">NET</span><span class="month-summary-value ' + (net >= 0 ? 'amount-positive' : 'amount-negative') + '">' + this.fmtBase(net) + '</span></div>' +
       '<span style="flex:1;"></span>' +
       '<span style="display:flex;gap:4px;align-items:center;">' +
-      '<button class="btn btn-sm btn-secondary debt-filter-cycle" onclick="BlackBook.cycleDebtFilter()" title="Cycle filter: Owed → I Owe → All" style="min-width:100px;text-align:center;">' + filterLabel + '</button>' +
+      '<button class="btn btn-sm btn-secondary page-control debt-filter-cycle" onclick="BlackBook.cycleDebtFilter()" title="Cycle filter: Owed → I Owe → All" style="min-width:100px;text-align:center;">' + filterLabel + '</button>' +
       '</span></div>';
   },
 
@@ -190,7 +190,7 @@ Object.assign(window.BlackBook, {
       catHidden.value = '';
       catInput.value = '';
       this.initCategoryPicker('debt-category-input', 'debt-category', 'debt-category-dropdown');
-      const defCat = this.data.settings.defaultCategoryId;
+      const defCat = this.categoriesAvailableOn(this.today()).some(c => c.id === this.data.settings.defaultCategoryId) ? this.data.settings.defaultCategoryId : null;
       if (defCat) { catHidden.value = defCat; catInput.value = this.data.categories.find(c => c.id === defCat)?.name?.toUpperCase() || ''; }
     }
     document.getElementById('debt-modal-title').textContent = 'New Debt';
@@ -242,6 +242,8 @@ Object.assign(window.BlackBook, {
       const debtDue = this.parseDateInput(document.getElementById('debt-due').value);
       if (document.getElementById('debt-due').value.trim() && !debtDue) { alert('Enter a valid due date (DD/MM/YYYY).'); return; }
       const data = { person: person, type: document.getElementById('debt-type').value, amount: amount, currency: document.getElementById('debt-currency').value, date: debtDate, dueDate: debtDue || '', amountPaid: amountPaid, note: document.getElementById('debt-note').value.trim(), categoryId: document.getElementById('debt-category').value || null,  };
+      const original = id ? this.data.debts.find(item => item.id === id) : null;
+      if (!this.categorySelectionAllowed(data.categoryId, debtDate, original && original.categoryId)) { alert('That category was archived for this date. Choose another category.'); return; }
       if (!this.data.debts) this.data.debts = [];
       if (id) {
         const d = this.data.debts.find(x => x.id === id);

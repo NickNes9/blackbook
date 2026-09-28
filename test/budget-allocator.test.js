@@ -57,6 +57,12 @@ test('monthlyView without allocation mirrors base budgets', () => {
   assert.equal(view.leftover, null);
 });
 
+test('monthlyView ignores removed categories in individual limits when a roster is supplied', () => {
+  const view = monthlyView([{ categoryId: 'a', amount: 100 }, { categoryId: 'removed', amount: 500 }], [], '2026-01', ['a']);
+  assert.deepEqual(view.limits, { a: 100 });
+  assert.equal(view.total, 100);
+});
+
 test('monthlyView allocates percentages and leaves the rest unassigned', () => {
   const budgets = [{ categoryId: 'rent', amount: 300 }];
   const allocations = [{ month: '2026-03', amount: 1000, percents: { groceries: 25, rent: 20, car: 15 } }];
@@ -67,7 +73,7 @@ test('monthlyView allocates percentages and leaves the rest unassigned', () => {
   assert.equal(rentSlice.percent, 20);
   assert.equal(rentSlice.value, 200);
   assert.deepEqual(view.limits, { groceries: 250, rent: 200, car: 150 });
-  assert.equal(view.total, 600);
+  assert.equal(view.total, 1000);
   assert.deepEqual(view.leftover, { percent: 40, value: 400 });
 });
 
@@ -76,26 +82,27 @@ test('monthlyView rounds fractional percentage values', () => {
   const view = monthlyView([], allocations, '2026-01');
   assert.equal(view.limits.a, 16.67);
   assert.equal(view.limits.b, 33.33);
-  assert.equal(view.total, 50);
+  assert.equal(view.total, 100);
   assert.deepEqual(view.leftover, { percent: 50, value: 50 });
 });
 
-test('monthlyView caps leftover at zero when percentages exceed 100', () => {
+test('monthlyView caps legacy over-allocation at the plan total', () => {
   const allocations = [{ month: '2026-01', amount: 1000, percents: { a: 60, b: 50 } }];
   const view = monthlyView([], allocations, '2026-01');
   assert.equal(view.leftover, null);
   assert.equal(view.limits.a, 600);
-  assert.equal(view.limits.b, 500);
-  assert.equal(view.total, 1100);
+  assert.equal(view.limits.b, 400);
+  assert.equal(view.total, 1000);
 });
 
-test('monthlyView treats a zero-percent category as off, keeping its base budget', () => {
+test('monthlyView pauses individual limits while an allocation is active', () => {
   const budgets = [{ categoryId: 'b', amount: 120 }];
   const allocations = [{ month: '2026-01', amount: 1000, percents: { a: 50, b: 0 } }];
   const view = monthlyView(budgets, allocations, '2026-01');
   assert.equal(view.slices.length, 1);
   assert.equal(view.slices[0].categoryId, 'a');
-  assert.equal(view.limits.b, 120);
+  assert.equal(view.limits.b, undefined);
+  assert.equal(view.total, 1000);
   assert.deepEqual(view.leftover, { percent: 50, value: 500 });
 });
 
@@ -163,17 +170,29 @@ test('setShare caps a single slice at 100', () => {
   assert.deepEqual(toMap(out), { a: 100 });
 });
 
+test('editing an amount preserves cent-level accuracy for a large total', () => {
+  const { setShareFromAmount } = globalThis.BudgetAllocator;
+  const active = setShareFromAmount(activeOf({ rent: 20, food: 30 }), 0, 25000, 120000);
+  assert.equal(round2(120000 * active[0].pct / 100), 25000);
+  assert.equal(round2(active[1].pct), 30);
+});
+
 test('toggleActive adds the first category at 100', () => {
   const { toggleActive } = globalThis.BudgetAllocator;
   const out = toggleActive([], 'a');
   assert.deepEqual(toMap(out), { a: 100 });
 });
 
-test('toggleActive adds a category with an equal share and rescales others', () => {
+test('toggleActive preserves existing shares and assigns available space', () => {
   const { toggleActive } = globalThis.BudgetAllocator;
-  const out = toggleActive(activeOf({ a: 50, b: 50 }), 'c');
-  assert.deepEqual(toMap(out), { a: 33.33, b: 33.33, c: 33.34 });
+  const out = toggleActive(activeOf({ a: 50, b: 40 }), 'c');
+  assert.deepEqual(toMap(out), { a: 50, b: 40, c: 10 });
   assert.equal(shareTotals(out).used, 100);
+});
+
+test('toggleActive leaves existing shares intact when no space is available', () => {
+  const { toggleActive } = globalThis.BudgetAllocator;
+  assert.deepEqual(toMap(toggleActive(activeOf({ a: 50, b: 50 }), 'c')), { a: 50, b: 50, c: 0 });
 });
 
 test('toggleActive removes an already-active category', () => {
@@ -213,4 +232,19 @@ test('monthlyView drops shares for categories not in the roster when categoryIds
   assert.equal(view.slices[0].categoryId, 'a');
   assert.equal(view.limits.ghost, undefined);
   assert.deepEqual(view.leftover, { percent: 50, value: 500 });
+});
+
+test('a carried allocation share for a fully archived category becomes unassigned', () => {
+  const view = monthlyView([], [{ month: '2026-08', amount: 1000, percents: { active: 60, archived: 40 } }], '2026-10', ['active']);
+  assert.equal(view.total, 1000);
+  assert.deepEqual(view.limits, { active: 600 });
+  assert.equal(view.leftover.value, 400);
+});
+
+test('a fully unassigned saved plan keeps its total and pauses individual limits', () => {
+  const view = monthlyView([{ categoryId: 'food', amount: 500 }],
+    [{ month: '2026-09', amount: 1200, percents: {} }], '2026-10', ['food']);
+  assert.equal(view.total, 1200);
+  assert.deepEqual(view.limits, {});
+  assert.deepEqual(view.leftover, { percent: 100, value: 1200 });
 });
