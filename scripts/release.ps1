@@ -29,10 +29,27 @@ if (Test-Path $LockPath) {
   [System.IO.File]::WriteAllText($LockPath, $LockText, $Utf8NoBom)
 }
 Write-Host "Bumped $OldVersion -> $Version in package.json + package-lock.json"
+$ReadmePath = Join-Path $Root 'README.md'
+$ReadmeText = [System.IO.File]::ReadAllText($ReadmePath)
+$ReadmeText = $ReadmeText.Replace("releases/download/v$OldVersion/black-book-v$OldVersion-", "releases/download/v$Version/black-book-v$Version-")
+$ReadmeText = $ReadmeText.Replace("Black Book $OldVersion", "Black Book $Version")
+[System.IO.File]::WriteAllText($ReadmePath, $ReadmeText, $Utf8NoBom)
 
 # Refuse to package a build that fails its restored release gates.
+node scripts/provision-runtime.mjs "$Root"
+if ($LASTEXITCODE -ne 0) { throw 'Bundled runtime preparation failed; release cancelled.' }
+$Compiler = Join-Path $env:WINDIR 'Microsoft.NET\Framework64\v4.0.30319\csc.exe'
+$LauncherPath = Join-Path $Root 'launcher.cs'
+$LauncherText = [System.IO.File]::ReadAllText($LauncherPath)
+$LauncherText = $LauncherText -replace 'AssemblyVersion\("[0-9.]+"\)', "AssemblyVersion(`"$Version.0`")"
+$LauncherText = $LauncherText -replace 'AssemblyFileVersion\("[0-9.]+"\)', "AssemblyFileVersion(`"$Version.0`")"
+[System.IO.File]::WriteAllText($LauncherPath, $LauncherText, $Utf8NoBom)
+& $Compiler /nologo /target:winexe '/out:Black Book.exe' /win32icon:bb.ico /reference:System.Windows.Forms.dll launcher.cs
+if ($LASTEXITCODE -ne 0) { throw 'Windows launcher compilation failed; release cancelled.' }
 npm run check
 if ($LASTEXITCODE -ne 0) { throw 'Syntax checks failed; release cancelled.' }
+npm run check:runtime
+if ($LASTEXITCODE -ne 0) { throw 'Portable runtime checks failed; release cancelled.' }
 npm test
 if ($LASTEXITCODE -ne 0) { throw 'Tests failed; release cancelled.' }
 
@@ -44,6 +61,8 @@ $ZipBase = "black-book-v$Version"
 Write-Host "Building zips (scripts/zip.mjs)..."
 node scripts/zip.mjs "$Root" "$Version"
 if ($LASTEXITCODE -ne 0) { throw "zip.mjs failed with exit code $LASTEXITCODE" }
+node scripts/smoke-portable.mjs (Join-Path $Dist "$ZipBase-win.zip")
+if ($LASTEXITCODE -ne 0) { throw 'Portable Windows launch failed; release cancelled.' }
 
 $PlatZips = @()
 $Checksums = @()

@@ -5,6 +5,7 @@
 import { mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { zipSync } from 'fflate';
+import { RUNTIME_SPECS, runtimeFilename } from './runtime-spec.mjs';
 
 const [root, version] = process.argv.slice(2);
 if (!root || !version) {
@@ -60,6 +61,14 @@ const encoder = new TextEncoder();
 
 for (const plat of ['win', 'linux', 'mac']) {
   const data = {};
+  const runtimeNames = ['version.txt', 'LICENSE.txt', ...RUNTIME_SPECS.filter(spec => spec.platform === plat).map(spec => runtimeFilename(spec.target))];
+  for (const name of runtimeNames) {
+    const bytes = readFileSync(join(root, 'runtime-build', plat, name));
+    if (!bytes.length) throw new Error('Cannot package an empty runtime file: ' + name);
+    data['runtime/' + name] = name.startsWith('node-') && plat !== 'win'
+      ? [new Uint8Array(bytes), { os: 3, attrs: 0o755 << 16 }]
+      : new Uint8Array(bytes);
+  }
   for (const [arc, info] of entryMap) {
     if (PER_PLATFORM_EXCLUDE[plat].has(info.top)) continue;
     const buf = readFileSync(info.full);

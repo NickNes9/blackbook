@@ -8,6 +8,8 @@ Your finances, on your computer. Black Book is a free personal finance app for t
 
 [Download the latest release](https://github.com/NickNes9/blackbook/releases/latest) · [Report a problem](https://github.com/NickNes9/blackbook/issues) · [Full feature guide](functions.txt)
 
+[Download Windows](https://github.com/NickNes9/blackbook/releases/download/v0.9.5/black-book-v0.9.5-win.zip) · [Download macOS](https://github.com/NickNes9/blackbook/releases/download/v0.9.5/black-book-v0.9.5-mac.zip) · [Download Linux](https://github.com/NickNes9/blackbook/releases/download/v0.9.5/black-book-v0.9.5-linux.zip)
+
 ## What you can do
 
 - **See the whole picture.** View income, expenses, net income, and end-of-month balances. Filter transactions by account, category, month, or type, with charts that follow your selection.
@@ -25,19 +27,23 @@ Amount fields accept simple math such as `100-5*2-10`. You can select transactio
 
 ## Get started
 
-Download the ZIP for your operating system from the [latest release](https://github.com/NickNes9/blackbook/releases/latest), extract it, and open its launcher. [Node.js](https://nodejs.org/) must be installed.
+Download the ZIP for your operating system from the [latest release](https://github.com/NickNes9/blackbook/releases/latest), extract the entire folder, and open its launcher. Everything needed is included; no Node.js installation or terminal setup is required.
 
 | System | Launcher |
 | --- | --- |
-| Windows | `Black Book.exe` |
-| macOS | `Black Book.command` |
-| Linux | `Black Book.sh` |
+| Windows 10/11 (64-bit Intel/AMD) | `Black Book.exe` |
+| macOS (Intel or Apple silicon) | `Black Book.command` |
+| Linux (64-bit Intel/AMD) | `Black Book.sh` |
 
 The app opens in your browser and runs on your computer. Windows builds are tested; macOS and Linux packages are available but have not been tested on those systems.
+
+Black Book is portable. Keep the whole extracted folder on your computer or a writable flash drive; profiles, backups, and updates stay inside it. Use the included **Stop Black Book** launcher before unplugging or moving the drive. Each operating system uses its own download.
 
 Updates appear in the top notification bar and can be installed from Settings. Your existing profile data is preserved when updating.
 
 ### Install from the command line
+
+For a source installation, install [Node.js](https://nodejs.org/) first. Release downloads already include it.
 
 ```sh
 git clone https://github.com/NickNes9/blackbook.git
@@ -117,3 +123,4 @@ These changes were included in 0.9.5; there was no separate 0.9.4 download.
 ---
 
 Created by Nikola Nešić · Black Book 0.9.5
+- Portable downloads include the runtime: extract and open, with no separate Node.js installation. Each launcher opens its own installation; an empty installation prompts you to create a profile.

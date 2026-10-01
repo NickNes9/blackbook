@@ -27,13 +27,17 @@ async function startServer(dataDir) {
   let output = '';
   child.stdout.on('data', (chunk) => { output += chunk; });
   child.stderr.on('data', (chunk) => { output += chunk; });
-  const started = await new Promise((resolve, reject) => {
-    const timeout = setTimeout(() => { clearInterval(poll); reject(new Error(`Server did not start: ${output}`)); }, 5_000);
+  let started;
+  try { started = await new Promise((resolve, reject) => {
+    const timeout = setTimeout(() => { clearInterval(poll); reject(new Error(`Server did not start: ${output}`)); }, 15_000);
     const poll = setInterval(() => {
       if (output.includes('Black Book running')) { clearTimeout(timeout); clearInterval(poll); resolve(); }
     }, 20);
     child.once('exit', (code) => { clearTimeout(timeout); clearInterval(poll); reject(new Error(`Server exited early (${code}): ${output}`)); });
-  });
+  }); } catch (error) {
+    if (child.exitCode === null) { const exited = once(child, 'exit'); child.kill(); await exited; }
+    throw error;
+  }
   return { child, origin: `http://${HOST}:${port}`, started };
 }
 

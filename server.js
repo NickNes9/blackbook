@@ -42,7 +42,8 @@ const DEFAULT_DATA = {
 const store = createProfileStore({ profilesDir: PROFILES_DIR, legacyDataFile: LEGACY_DATA_FILE, defaultData: DEFAULT_DATA });
 const app = express();
 const unlocked = new Map();
-app.get('/api/instance', (req, res) => res.json({ appName: 'Black Book', instanceId: INSTANCE_ID }));
+const startedAt = Date.now();
+app.get('/api/instance', (req, res) => res.json({ appName: 'Black Book', instanceId: INSTANCE_ID, pid: process.pid, startedAt, runtimeVersion: process.versions.node }));
 
 app.use(express.json({ limit: '50mb' }));
 app.use((error, req, res, next) => {
@@ -435,7 +436,7 @@ function tryListen() {
   server.listen(ports[listenCursor], HOST);
 }
 function writePid() {
-  try { writeFileSync(PID_FILE, JSON.stringify({ pid: process.pid, startedAt: Date.now() }), 'utf8'); } catch (error) { logger('[black-book] Could not write PID file:', error.message); }
+  try { writeFileSync(PID_FILE, JSON.stringify({ pid: process.pid, startedAt }), 'utf8'); } catch (error) { logger('[black-book] Could not write PID file:', error.message); }
 }
 function clearPid() {
   try {

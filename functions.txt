@@ -4,6 +4,10 @@ BLACK BOOK - USER CAPABILITIES
 Personal finance tracking app. Everything below is what the user can do
 in the front-end.
 
+Release downloads are portable: extract the entire folder and open its launcher.
+Node.js is bundled. Profiles, backups and updates stay in the app folder.
+Use the included Stop Black Book launcher before moving or unplugging a drive.
+
 ----------------------------------------------------------------------
 GLOBAL / ALL PAGES
 ----------------------------------------------------------------------

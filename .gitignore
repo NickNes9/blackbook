@@ -1,5 +1,6 @@
 # Personal financial data — never upload
 profiles/
+[Pp][Rr][Oo][Ff][Ii][Ll][Ee][Ss]/
 data.json
 data.json.bak
 Black Book.xlsx
@@ -7,6 +8,8 @@ import/
 
 # Dependencies
 node_modules/
+runtime-build/
+runtime/
 
 # Local tooling / logs
 .superpowers/
