@@ -29,10 +29,27 @@ window.BlackBook = {
     this.enhancePasswordFields();
     let response;
     try {
+      const profilesResponse = await fetch('/api/profiles');
+      const profilesInfo = await profilesResponse.json();
+      if (!profilesResponse.ok) throw new Error(profilesInfo.error || 'Could not list profiles.');
+      const profiles = profilesInfo.profiles || [];
+      if (this.profile && !profiles.some(p => p.name === this.profile)) {
+        this.profile = '';
+        localStorage.removeItem('mb_profile');
+      }
+      this._firstRun = !profiles.length;
       response = await fetch('/api/load' + (this.profile ? '?profile=' + encodeURIComponent(this.profile) : ''));
+      if (response.status !== 401) {
+        const loaded = await response.json();
+        if (!response.ok || !Array.isArray(loaded.accounts) || !Array.isArray(loaded.transactions) || !Array.isArray(loaded.categories)) {
+          throw new Error(loaded.error || 'The server returned an invalid profile.');
+        }
+        this.data = loaded;
+      }
     } catch (e) {
+      this.applyTheme();
       document.getElementById('page-overview').innerHTML =
-        '<div class="empty-state"><div class="empty-state-title">LOADING FAILED</div><div class="empty-state-text">Could not load data from the Black Book server. Reopen the app (Black Book.exe) or retry below.</div>' +
+        '<div class="empty-state"><div class="empty-state-title">LOADING FAILED</div><div class="empty-state-text">' + this.escapeHtml(e.message || 'Could not load data from the Black Book server.') + ' Your existing files have not been changed. Check the profile folder permissions, then retry.</div>' +
         '<div style="margin-top:14px;"><button class="btn btn-primary" onclick="location.reload()">RETRY</button></div></div>';
       return;
     }
@@ -40,7 +57,6 @@ window.BlackBook = {
       this.showUnlockOverlay(this.profile);
       return;
     }
-    this.data = await response.json();
     if (!this.data.bills) this.data.bills = [];
     if (!this.data.billPayments) this.data.billPayments = [];
     if (!this.data.savingsGoals) this.data.savingsGoals = [];
@@ -197,6 +213,10 @@ this.connectWebSocket();
     this.initChartResize();
     this.resetUndoHistory();
     this.navigateTo('overview');
+    if (this._firstRun && !this.data.accounts.length && !this.data.transactions.length) {
+      this.navigateTo('settings');
+      this.createProfile();
+    }
   },
 
   bindNav() {

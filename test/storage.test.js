@@ -1,11 +1,25 @@
 import assert from 'node:assert/strict';
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
 import { createProfileStore, safeProfileName, StorageError } from '../lib/storage.js';
 
 const defaults = { accounts: [], settings: { baseCurrency: 'RSD' } };
+
+test('a moved profile folder is recovered without touching the moved data', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'black-book-moved-'));
+  try {
+    const profilesDir = join(dir, 'profiles');
+    const moved = join(dir, 'moved');
+    const store = createProfileStore({ profilesDir, defaultData: defaults });
+    store.write('Private', { marker: 'keep' });
+    renameSync(profilesDir, moved);
+    assert.deepEqual(store.list(), []);
+    assert.deepEqual(store.read(''), defaults);
+    assert.equal(JSON.parse(readFileSync(join(moved, 'Private.json'), 'utf8')).marker, 'keep');
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
 
 function withStore(fn) {
   const dir = mkdtempSync(join(tmpdir(), 'black-book-test-'));

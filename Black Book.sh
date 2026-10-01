@@ -1,46 +1,8 @@
 #!/usr/bin/env bash
-# Black Book launcher for Linux - double-click (or run) to start the app.
-# Server output goes to Server.log in this folder. Stop it with "Stop Black Book.sh".
 set -u
 cd "$(dirname "$0")"
-
-PORTS=(9597 9999 9877 9653 9441 9227 8819)
-
-port_open() {
-  (exec 3<>/dev/tcp/127.0.0.1/"$1") >/dev/null 2>&1 || return 1
-  exec 3>&- 3<&-
-  return 0
-}
-
-first_up() {
-  local p
-  for p in "${PORTS[@]}"; do
-    if port_open "$p"; then echo "$p"; return 0; fi
-  done
-  return 1
-}
-
-if running=$(first_up); then
-  xdg-open "http://localhost:$running" >/dev/null 2>&1 || true
-  exit 0
-fi
-
 if ! command -v node >/dev/null 2>&1; then
-  echo "Black Book needs Node.js, but 'node' was not found."
-  echo "Install it from https://nodejs.org and run this launcher again."
-  read -r -p "Press Enter to close... " _ || true
+  echo "Black Book needs Node.js. Install it from https://nodejs.org and try again."
   exit 1
 fi
-
-nohup node server.js >> Server.log 2>&1 &
-echo "Starting Black Book (pid $!)... logs in Server.log"
-
-bound=""
-for ((i = 0; i < 60; i++)); do
-  bound=$(first_up || true)
-  if [ -n "$bound" ]; then break; fi
-  sleep 0.3
-done
-if [ -z "$bound" ]; then bound=9597; fi
-xdg-open "http://localhost:$bound" >/dev/null 2>&1 || true
-exit 0
+node lib/launch.js

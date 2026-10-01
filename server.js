@@ -4,7 +4,7 @@ import { readFileSync, realpathSync, statSync, unlinkSync, writeFileSync } from 
 import http from 'node:http';
 import { basename, isAbsolute, join } from 'node:path';
 import { WebSocketServer } from 'ws';
-import { APP_DIR, HOST, LEGACY_DATA_FILE, PID_FILE, PROFILES_DIR, preferredPorts } from './lib/server-config.js';
+import { APP_DIR, HOST, INSTANCE_ID, LEGACY_DATA_FILE, PID_FILE, PROFILES_DIR, preferredPorts } from './lib/server-config.js';
 import { createProfileStore, isImportableProfile, isProfileDocument, StorageError } from './lib/storage.js';
 import { decryptEnvelope, deriveKey, encryptWithKey, encryptProfileDoc } from './lib/crypto.js';
 import { createUpdater, UpdateError } from './lib/updater.js';
@@ -42,6 +42,7 @@ const DEFAULT_DATA = {
 const store = createProfileStore({ profilesDir: PROFILES_DIR, legacyDataFile: LEGACY_DATA_FILE, defaultData: DEFAULT_DATA });
 const app = express();
 const unlocked = new Map();
+app.get('/api/instance', (req, res) => res.json({ appName: 'Black Book', instanceId: INSTANCE_ID }));
 
 app.use(express.json({ limit: '50mb' }));
 app.use((error, req, res, next) => {
