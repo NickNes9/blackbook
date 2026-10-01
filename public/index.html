@@ -8,6 +8,7 @@
   <script>try { var t = localStorage.getItem('bb-theme'); if (t === 'light') document.documentElement.setAttribute('data-theme', 'light'); } catch (e) {}</script>
   <link rel="stylesheet" href="/vendor/hack/hack.css">
   <link rel="stylesheet" href="/style.css">
+  <link rel="stylesheet" href="/health.css">
 </head>
 <body>
   <header class="app-header">
@@ -715,13 +716,6 @@
     <button id="footer-graph-toggle" class="btn btn-sm btn-secondary footer-graph-toggle hidden" type="button"></button>
   </footer>
 
-  <div id="update-overlay" class="update-overlay hidden">
-    <div class="update-overlay-box">
-      <div class="update-overlay-title">UPDATE INSTALLED</div>
-      <div class="update-overlay-text" id="update-overlay-text">Reconnecting to the new version…</div>
-    </div>
-  </div>
-
   <div id="unlock-overlay" class="unlock-overlay hidden">
     <div class="unlock-box">
       <svg width="36" height="36" viewBox="0 0 24 24" aria-hidden="true" style="margin-bottom:12px;"><circle cx="12" cy="12" r="11" fill="#161616" stroke="#3f3f46" stroke-width="1"/><path d="M6.5 8.2 L17.5 8.2 L12 16.8 Z" fill="#e8e6e2"/></svg>
@@ -756,7 +750,10 @@
   <script src="/js/category-availability.js"></script>
   <script src="/js/budget-allocator.js"></script>
 <script src="/js/forecast-engine.js"></script>
+  <div class="modal hidden" id="data-health-modal" role="dialog" aria-modal="true" aria-labelledby="data-health-title"><div class="modal-backdrop"></div><div class="modal-content"><div class="modal-header"><h2 id="data-health-title">Data Health</h2><button type="button" class="modal-close" onclick="BlackBook.closeModal('data-health-modal')" aria-label="Close data health">&times;</button></div><div id="data-health-results"></div></div></div>
+  <script src="/js/data-health.js"></script>
   <script src="/js/core.js"></script>
+  <script src="/js/health-ui.js"></script>
   <script src="/js/updates-ui.js"></script>
   <script src="/js/page-overview.js"></script>
   <script src="/js/page-forecast.js"></script>

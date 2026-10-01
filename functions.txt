@@ -137,6 +137,8 @@ BILLS
   amounts and currency symbols where available; full values remain
   available on hover.
 - 12-month graph "BILLS BY MONTH" per bill, plus a monthly bill total.
+- Selected-year bill breakdown donut beside the monthly lines. It follows
+  the same bill filters and shows amounts and percentages on hover.
 - Repair / re-link bill payments to their transactions automatically.
 - Sort the bills grid; monthly totals are summarized per month.
 - Graph resize + show/hide like other pages.
@@ -337,7 +339,16 @@ Appearance / behavior:
 - Space-bar/Enter-driven dialogs and pre-filled forms.
 - Attention bar can be shown/hidden.
 
+Data health:
+- Settings > Data > CHECK DATA runs a read-only check for broken links,
+  duplicate IDs, possible duplicate transactions, and missing account rates.
+- Broken references show a red link icon next to affected records; click
+  it to review the report. Checks never modify or repair financial data.
+
 Updates:
+- Updates match checksums by platform filename and validate archive paths
+  and core files. Unrelated files are preserved; failed writes roll back.
+  Unchanged files skip installation. Downloads still use full ZIPs.
 - Check for / install app updates (header notice, manual check button, and a
   restart flow). During an update the UI shows install status.
 

@@ -1,6 +1,6 @@
 import express from 'express';
 import { spawn } from 'node:child_process';
-import { existsSync, readFileSync, realpathSync, statSync, unlinkSync, writeFileSync } from 'node:fs';
+import { readFileSync, realpathSync, statSync, unlinkSync, writeFileSync } from 'node:fs';
 import http from 'node:http';
 import { basename, isAbsolute, join } from 'node:path';
 import { WebSocketServer } from 'ws';
@@ -21,7 +21,6 @@ for (const stream of [process.stdout, process.stderr]) {
 
 const PORT = Number(process.env.PORT) || 9597;
 const RATE_TIMEOUT_MS = 8_000;
-const IDLE_SHUTDOWN_MS = 600_000;
 const OZ_TO_GRAM = 31.1034768;
 const DEFAULT_DATA = {
   accounts: [],
@@ -42,7 +41,6 @@ const DEFAULT_DATA = {
 
 const store = createProfileStore({ profilesDir: PROFILES_DIR, legacyDataFile: LEGACY_DATA_FILE, defaultData: DEFAULT_DATA });
 const app = express();
-let lastRequest = Date.now();
 const unlocked = new Map();
 
 app.use(express.json({ limit: '50mb' }));
@@ -50,7 +48,6 @@ app.use((error, req, res, next) => {
   if (error instanceof SyntaxError && 'body' in error) return res.status(400).json({ error: 'Request body must be valid JSON' });
   return next(error);
 });
-app.use((req, res, next) => { lastRequest = Date.now(); next(); });
 app.use((req, res, next) => {
   res.setHeader('Content-Security-Policy', "default-src 'self'; base-uri 'self'; connect-src 'self'; font-src 'self' data:; img-src 'self' data: blob:; object-src 'none'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'");
   next();
@@ -381,11 +378,30 @@ app.get('/api/updates/status', async (req, res) => {
 });
 
 app.post('/api/updates/apply', async (req, res) => {
+  const sendProgress = (event) => {
+    if (res.writableEnded || res.destroyed) return;
+    if (!res.headersSent) {
+      res.status(200).set({
+        'Content-Type': 'application/x-ndjson; charset=utf-8',
+        'Cache-Control': 'no-cache, no-transform',
+        'X-Accel-Buffering': 'no'
+      });
+      res.flushHeaders();
+    }
+    try { res.write(JSON.stringify(event) + '\n'); } catch (_) { }
+  };
   try {
-    const result = await updater.applyUpdate();
-    res.json(result);
+    const result = await updater.applyUpdate({ onProgress: sendProgress });
+    sendProgress({ type: 'complete', ...result });
+    res.end();
     setTimeout(scheduleRestart, 250);
   } catch (error) {
+    if (res.headersSent) {
+      if (!(error instanceof UpdateError)) logger('[update] Apply failed:', error?.message);
+      sendProgress({ type: 'error', error: error instanceof UpdateError ? error.message : 'Update failed. Please try again.' });
+      res.end();
+      return;
+    }
     if (error instanceof UpdateError) return res.status(error.status).json({ error: error.message });
     logger('[update] Apply failed:', error?.message);
     return res.status(500).json({ error: 'Update failed: ' + (error?.message || 'unknown error') });
@@ -443,12 +459,10 @@ process.once('exit', clearPid);
 tryListen();
 
 const wss = new WebSocketServer({ server });
-let shutdownTimer = null;
 let disconnectLockTimer = null;
 const clientsConnected = () => wss.clients.size > 0;
 wss.on('error', (error) => { if (!['EADDRINUSE', 'EACCES'].includes(error.code)) logger('[black-book] WebSocket error:', error.message); });
 wss.on('connection', (ws) => {
-  if (shutdownTimer && clientsConnected()) { clearTimeout(shutdownTimer); shutdownTimer = null; logger('Browser connected. Idle shutdown cancelled.'); }
   if (disconnectLockTimer) { clearTimeout(disconnectLockTimer); disconnectLockTimer = null; }
   if (!updatesCache) refreshUpdateCache();
   ws.on('close', () => {
@@ -459,17 +473,5 @@ wss.on('connection', (ws) => {
       if (clientsConnected()) return;
       if (unlocked.size > 0) { unlocked.clear(); logger('No browser connected. Profile unlocks cleared.'); }
     }, 2000);
-    scheduleShutdown();
   });
 });
-function scheduleShutdown() {
-  if (shutdownTimer) return;
-  logger('Browser disconnected. Will auto-exit after an idle period unless it reconnects or activity resumes...');
-  shutdownTimer = setTimeout(() => {
-    shutdownTimer = null;
-    if (clientsConnected()) return;
-    if (Date.now() - lastRequest < IDLE_SHUTDOWN_MS) return scheduleShutdown();
-    logger(`Idle for ${IDLE_SHUTDOWN_MS / 1000}s with no browser. Exiting.`);
-    process.exit(0);
-  }, IDLE_SHUTDOWN_MS);
-}

@@ -14,8 +14,8 @@ function bumpPatch(version) {
 }
 const NEW_VERSION = bumpPatch(currentVersion());
 
-function makeRelease(version, { count = 1 } = {}) {
-  const name = 'black-book-v' + version + '-win.zip';
+function makeRelease(version, { count = 1, suffix = 'win' } = {}) {
+  const name = 'black-book-v' + version + '-' + suffix + '.zip';
   const assets = [
     { name: 'checksums.sha256', size: 64, browser_download_url: 'https://example/test/checksums.sha256' },
     { name, size: 5000, browser_download_url: 'https://example/test/' + name }
@@ -36,7 +36,14 @@ function makeFixture() {
 
 function makeZip(entries) {
   const files = {};
-  for (const [name, content] of Object.entries(entries)) files[name] = strToU8(content);
+  const payload = {
+    'server.js': 'console.log("server");',
+    'package.json': JSON.stringify({ version: NEW_VERSION }),
+    'lib/updater.js': '// updater',
+    'public/index.html': '<!doctype html><title>Black Book</title>',
+    ...entries
+  };
+  for (const [name, content] of Object.entries(payload)) files[name] = strToU8(content);
   return Buffer.from(zipSync(files));
 }
 
@@ -46,7 +53,7 @@ function sha(buffer) {
 
 function makeUpdater(dir, { zip, release, checksumText, bufferImpl, platformName = 'win32' } = {}) {
   const resolvedZip = zip || makeZip({ 'public/js/core.js': 'NEW CORE' });
-  const resolvedRelease = release || makeRelease(NEW_VERSION);
+  const resolvedRelease = release || makeRelease(NEW_VERSION, { suffix: { win32: 'win', darwin: 'mac', linux: 'linux' }[platformName] });
   const zipAsset = (resolvedRelease && resolvedRelease.assets || []).find((a) => /[-\w]+\.zip$/i.test(a.name));
   if (zipAsset) zipAsset.size = resolvedZip.length;
   const resolvedChecksum = checksumText || (sha(resolvedZip) + '  ' + (zipAsset ? zipAsset.name : 'black-book-v' + NEW_VERSION + '-win.zip') + '\n');
@@ -114,7 +121,7 @@ test('checkForUpdate does not crash when the remote is unreachable', async () =>
   } finally { cleanup(dir); }
 });
 
-test('applyUpdate swaps code, removes stale files, preserves user data and writes a backup', async () => {
+test('applyUpdate swaps code, preserves unrelated files and user data and writes a backup', async () => {
   const dir = makeFixture();
   try {
     const zip = makeZip({ 'public/js/core.js': 'NEW CORE', 'lib/new-file.js': 'NEW FILE' });
@@ -124,7 +131,7 @@ test('applyUpdate swaps code, removes stale files, preserves user data and write
     assert.equal(result.toVersion, NEW_VERSION);
     assert.equal(readFileSync(join(dir, 'public/js/core.js'), 'utf8'), 'NEW CORE');
     assert.equal(readFileSync(join(dir, 'lib/new-file.js'), 'utf8'), 'NEW FILE');
-    assert.equal(existsSync(join(dir, 'old-file.txt')), false, 'stale top-level file should be removed');
+    assert.equal(readFileSync(join(dir, 'old-file.txt'), 'utf8'), 'STALE', 'files outside the archive should be preserved');
     assert.equal(readFileSync(join(dir, 'profiles/Me/data.json'), 'utf8'), '{"keep":true}');
     const backup = readdirSync(join(dir, 'updates')).find((n) => n.startsWith('backup-'));
     assert.ok(backup, 'backup dir should exist');

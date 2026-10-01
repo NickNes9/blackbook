@@ -35,10 +35,11 @@ test('linked transaction navigation sets the transaction month and requests an e
   assert.equal(navigatedTo, 'overview');
 });
 
-test('linked transaction actions are omitted for missing transactions and target the exact ID otherwise', () => {
+test('missing linked transactions show a warning and valid links target the exact ID', () => {
   const app = loadApp();
   app.data = { transactions: [{ id: 'tx-one' }] };
-  assert.equal(app.linkedTransactionButton('missing'), '');
+  assert.match(app.linkedTransactionButton('missing'), /health-link/);
+  assert.equal(app.linkedTransactionButton(null), '');
   const button = app.linkedTransactionButton('tx-one');
   assert.match(button, /data-tx-id="tx-one"/);
   assert.match(button, /openLinkedTransaction\(this\.dataset\.txId\)/);
@@ -91,7 +92,7 @@ test('installment progress markers are 2px wide and use the app background color
 
 test('installment plan progress shows the boundaries and links a paid installment to its own transaction', () => {
   const app = loadApp(cards);
-  const tx = { id: 'payment-1', pairId: 'inst-plan-1-s1', date: '2026-01-15' };
+  const tx = { id: 'payment-1', pairId: 'inst-plan-1-s1', date: '2026-01-15', amount: -25, type: 'expense' };
   app.data = { transactions: [tx] };
   app.cardColor = () => '#123456';
   app.instCard = () => ({ id: 'card-1' });
@@ -149,5 +150,5 @@ test('linked payment actions are wired into savings, debt, invoice, and bill his
   assert.match(invoices, /this\.linkedTransactionButton\(tx\.id\)/);
   assert.match(bills, /this\.linkedTransactionButton\(paid\.txId\)/);
   assert.match(cards, /inst-progress-marker/);
-  assert.match(cards, /this\.linkedTransactionButton\(paymentTx\.id\)/);
+  assert.match(cards, /paymentTxs\.map\(item => this\.linkedTransactionButton\(item\.id\)\)/);
 });

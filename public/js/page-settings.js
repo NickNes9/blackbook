@@ -12,6 +12,15 @@ Object.assign(window.BlackBook, {
     this.syncDateInputHints();
   },
 
+  showSettingsCategoryTooltip(anchor) {
+    if (!anchor || !anchor.dataset.tooltip) return;
+    this.showDonutTooltip(
+      { canvas: anchor },
+      { opacity: 1, caretX: anchor.clientWidth / 2, caretY: 0 },
+      anchor.dataset.tooltip
+    );
+  },
+
   organizeSettingsSections(el) {
     const sections = new Map(Array.from(el.querySelectorAll('.settings-section')).map(section => [
       section.querySelector('.settings-section-title').textContent.trim().split(' · ')[0], section
@@ -1027,7 +1036,7 @@ Object.assign(window.BlackBook, {
       const canDown = arrIdx < this.data.accounts.length - 1;
       accountsList += '<div class="settings-row">' +
         '<span class="row-swatch" style="background:' + this.accountColor(a) + ';"></span>' +
-        '<div class="settings-row-name-wrap"><span class="settings-row-name">' + this.escapeHtml(a.name) + '</span>' + (a.description ? '<span class="settings-row-desc">' + this.escapeHtml(a.description) + '</span>' : '') + '</div>' +
+        '<div class="settings-row-name-wrap"><span class="settings-row-name">' + this.escapeHtml(a.name) + this.healthMarker('accounts', a.id) + '</span>' + (a.description ? '<span class="settings-row-desc">' + this.escapeHtml(a.description) + '</span>' : '') + '</div>' +
         '<span class="settings-row-meta">' + a.currency + ' &middot; ' + typeLabel + '</span>' +
         '<span class="settings-row-order">' +
         '<button type="button" class="btn btn-sm btn-secondary" ' + (canUp ? 'onclick="BlackBook.moveAccount(\x27' + a.id + '\x27,-1)"' : 'disabled') + ' title="Move up">&#9650;</button>' +
@@ -1039,7 +1048,7 @@ Object.assign(window.BlackBook, {
     for (const c of (this.data.creditCards || [])) {
       accountsList += '<div class="settings-row">' +
         '<span class="row-swatch" style="background:' + this.cardColor(c) + ';"></span>' +
-        '<span class="settings-row-name">' + this.escapeHtml(c.name) + '</span>' +
+        '<span class="settings-row-name">' + this.escapeHtml(c.name) + this.healthMarker('creditCards', c.id) + '</span>' +
         '<span class="settings-row-meta">CREDIT CARD &middot; INT ' + (c.ratePct != null ? c.ratePct : 5) + '%</span>' +
         '<button class="btn btn-sm btn-secondary" onclick="BlackBook.openEditAccount(\x27card:' + c.id + '\x27)">EDIT</button>' +
         '<button class="btn btn-sm btn-danger btn-icon" title="Delete card" onclick="BlackBook.deleteCard(\x27' + c.id + '\x27)">' + this.xIcon() + '</button></div>';
@@ -1049,13 +1058,27 @@ Object.assign(window.BlackBook, {
     let categoriesList = '';
     const sortedCats = this.data.categories.slice().sort((a, b) => a.name.localeCompare(b.name));
     for (const c of sortedCats) {
-      const txCount = this.data.transactions.filter(t => t.categoryId === c.id).length;
+      const categoryTx = this.data.transactions.filter(t => t.categoryId === c.id);
+      const txCount = categoryTx.length;
+      let spent = 0, income = 0, transfers = 0;
+      for (const tx of categoryTx) {
+        const amount = Math.abs(this.toBase(Math.abs(Number(tx.amount) || 0), tx.currency || this.baseCurrency()));
+        if (tx.type === 'income') income += amount;
+        else if (tx.type === 'transfer') transfers += amount;
+        else spent += amount;
+      }
+      const categoryTotal = spent + income + transfers;
+      const compactTotal = new Intl.NumberFormat('en-US', { notation: 'compact', maximumFractionDigits: 1 }).format(categoryTotal);
+      const tooltipLines = [txCount + ' transaction' + (txCount === 1 ? '' : 's'), 'Spent: ' + this.fmtBase(spent)];
+      if (income > 0) tooltipLines.push('Income: ' + this.fmtBase(income));
+      if (transfers > 0) tooltipLines.push('Transfers: ' + this.fmtBase(transfers));
       const isProtected = c.name.toLowerCase() === 'transfer' || c.name.toLowerCase() === 'uncategorized' || c.name.toLowerCase() === 'invoice' || c.name.toLowerCase() === 'debt';
       const archived = CategoryAvailability.archivedOn(c, this.today());
+      const categoryTooltip = this.escapeHtml(tooltipLines.join('\n'));
       categoriesList += '<div class="settings-row' + (archived ? ' category-archived' : '') + '">' +
         '<span class="row-swatch" style="background:' + this.categoryColor(c) + ';"></span>' +
-        '<span class="settings-row-name">' + this.escapeHtml(c.name) + '</span>' +
-        '<span class="settings-row-meta">' + txCount + ' transaction' + (txCount === 1 ? '' : 's') + (archived ? ' · ARCHIVED' : '') + '</span>' +
+        '<span class="settings-row-name">' + this.escapeHtml(c.name) + this.healthMarker('creditCards', c.id) + '</span>' +
+        '<span class="settings-row-meta settings-category-total" tabindex="0" role="note" data-tooltip="' + categoryTooltip + '" onmouseenter="BlackBook.showSettingsCategoryTooltip(this)" onmouseleave="BlackBook.hideDonutTooltip()" onfocus="BlackBook.showSettingsCategoryTooltip(this)" onblur="BlackBook.hideDonutTooltip()">' + txCount + 'TX · ' + this.escapeHtml(compactTotal) + ' ' + this.escapeHtml(this.baseCurrency()) + (archived ? ' · ARCHIVED' : '') + '</span>' +
         '<button class="btn btn-sm btn-secondary" onclick="BlackBook.openEditCategory(\x27' + c.id + '\x27)">EDIT</button>' +
         (isProtected ? '' : '<button class="btn btn-sm btn-secondary" onclick="BlackBook.' + (archived ? 'restoreCategory' : 'archiveCategory') + '(\x27' + c.id + '\x27)">' + (archived ? 'RESTORE' : 'ARCHIVE') + '</button>') +
         (isProtected ? '<button class="btn btn-sm btn-danger btn-icon" onclick="BlackBook.deleteCategory(\x27' + c.id + '\x27)" disabled style="opacity:0.5;cursor:not-allowed;" title="Protected category">' + this.xIcon() + '</button>' : '<button class="btn btn-sm btn-danger btn-icon" title="Delete category" onclick="BlackBook.deleteCategory(\x27' + c.id + '\x27)">' + this.xIcon() + '</button>') + '</div>';
@@ -1122,7 +1145,7 @@ Object.assign(window.BlackBook, {
       '<input type="file" id="settings-import-file" accept=".json" style="display:none;">' +
 '<button class="btn btn-secondary" id="settings-import-csv-btn">IMPORT CSV/XLSX</button>' +
       '<input type="file" id="settings-import-csv-file" accept=".csv,.txt,.xlsx,.xls,text/csv,text/plain,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel" style="display:none;">' +
-      '</div></div>' +
+      this.healthSummaryHtml() + '</div></div>' +
       '<div class="settings-section">' +
       '<div class="settings-section-header"><span class="settings-section-title">ABOUT &amp; UPDATES</span></div>' +
       '<div id="settings-updates"></div></div>' +

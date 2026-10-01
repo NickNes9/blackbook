@@ -2326,6 +2326,8 @@ select:disabled {
   white-space: nowrap;
   flex-shrink: 0;
 }
+.settings-category-total { cursor:help; }
+.settings-category-total:focus-visible { outline:1px solid var(--accent); outline-offset:2px; }
 
 .settings-row-order {
   display: inline-flex;
@@ -2728,6 +2730,9 @@ h1, h2, h3 {
 
 /* Sticky corner (BILL) sits above month headers when scrolling sideways */
 .bills-grid-head:first-child { z-index: 40; }
+
+/* Keep the TOTAL label above its sticky values, not an unrelated month. */
+.bills-grid-head:nth-child(14) { right: 0; z-index: 35; }
 
 /* First column sticky for all rows */
 .bills-grid > :nth-child(14n + 1) {
@@ -3273,18 +3278,32 @@ h1, h2, h3 {
 .header-center:has(.app-toast:not(.hidden)) .update-notice,
 .header-center:has(.app-toast:not(.hidden)) .attention-bar { display:none; }
 .update-notice { display:flex; align-items:center; flex:0 0 auto; border:1px solid var(--accent); background:var(--surface-raised); white-space:nowrap; }
+.update-notice.is-progress { flex:0 1 320px; width:min(320px, 34vw); min-width:180px; padding:6px 9px; white-space:normal; }
 .update-notice.hidden { display:none; }
 .update-notice-main, .update-notice-dismiss { border:0; background:none; color:var(--accent); font:inherit; font-size:10px; cursor:pointer; }
 .update-notice-main { padding:5px 7px; }
 .update-notice-dismiss { padding:4px 6px; border-left:1px solid var(--divider); }
 .update-notice-main:hover, .update-notice-dismiss:hover { background:var(--surface-hover); }
 .update-notice-short { display:none; }
+.update-notice-progress, .update-settings-progress { min-width:0; display:grid; grid-template-columns:minmax(0,1fr) auto; align-items:center; gap:4px 10px; }
+.update-notice-progress { width:100%; }
+.update-notice-progress-title { color:var(--accent); font-size:10px; font-weight:700; letter-spacing:.3px; }
+.update-notice-progress-detail, .update-notice-progress-stage { color:var(--text-muted); font-size:10px; white-space:nowrap; }
+.update-notice-progress-stage { grid-column:1 / -1; }
+.update-notice-progress-bar { grid-column:1 / -1; position:relative; height:4px; overflow:hidden; background:var(--surface-hover); }
+.update-notice-progress-bar span { display:block; height:100%; background:var(--accent); transition:width .18s linear; }
+.update-notice-progress-bar.is-indeterminate span { width:34%; animation:update-progress-move 1.1s ease-in-out infinite alternate; }
+.update-settings-progress { margin-top:10px; padding:9px 10px; border:1px solid var(--divider); background:var(--surface-raised); }
+@keyframes update-progress-move { from { transform:translateX(0); } to { transform:translateX(190%); } }
 @media (max-width:760px) {
   .header-center:has(.update-notice:not(.hidden)) .attention-bar { display:none; }
 }
 @media (max-width:520px) {
   .app-header:has(.update-notice:not(.hidden)) { grid-template-columns:minmax(0,1fr) max-content 74px; }
   .header-center:has(.update-notice:not(.hidden)) { display:flex; justify-content:center; }
+  .app-header:has(.update-notice.is-progress) { grid-template-columns:minmax(0,1fr) minmax(150px,240px) 74px; }
+  .header-center:has(.update-notice.is-progress) { display:flex; justify-content:center; }
+  .update-notice.is-progress { width:min(240px, calc(100vw - 142px)); min-width:150px; padding:5px 7px; }
   .app-header:has(.app-toast:not(.hidden)) { grid-template-columns:minmax(0,1fr) minmax(0,1fr) 74px; }
   .header-center:has(.app-toast:not(.hidden)) { display:flex; justify-content:center; }
   .update-notice-long { display:none; }
@@ -3298,46 +3317,6 @@ h1, h2, h3 {
   line-height: 1.4;
 }
 
-.update-overlay {
-  position: fixed;
-  inset: 0;
-  z-index: 900;
-  background: rgba(0,0,0,0.55);
-  backdrop-filter: blur(2px);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-.update-overlay.hidden { display: none; }
-.update-overlay-box {
-  background: var(--block, #111113);
-  border: 1px solid var(--line, rgba(255,255,255,0.1));
-  border-radius: 12px;
-  padding: 28px 32px;
-  min-width: 280px;
-  max-width: 460px;
-  text-align: center;
-  box-shadow: 0 20px 60px rgba(0,0,0,0.45);
-}
-.update-overlay-title {
-  font-size: 16px;
-  font-weight: 700;
-  letter-spacing: 1px;
-  color: var(--income);
-  margin-bottom: 10px;
-}
-.update-overlay-text { font-size: 13px; color: var(--text-muted); line-height: 1.5; }
-.update-overlay-text::after {
-  content: '';
-  display: inline-block;
-  width: 3px;
-  height: 13px;
-  margin-left: 4px;
-  vertical-align: -2px;
-  background: var(--text-muted);
-  animation: updater-blink 1s steps(2) infinite;
-}
-@keyframes updater-blink { 0% { opacity: 1; } 50% { opacity: 0; } }
 .unlock-overlay {
   position: fixed;
   inset: 0;

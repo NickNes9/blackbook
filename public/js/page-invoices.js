@@ -154,7 +154,7 @@ Object.assign(window.BlackBook, {
     const expanded = this._expandedInvoices[v.id];
     let html = '<div class="savings-card invoice-card' + this.focusRecordHtml('invoice', v.id) + '"' + (isPaid ? ' style="opacity:0.55;"' : '') + '>';
     html += '<div class="savings-header">' +
-      '<span class="savings-name"><span class="cat-dot" style="background:' + dirColor + ';"></span> ' + this.escapeHtml(v.party || '?') +
+      '<span class="savings-name"><span class="cat-dot" style="background:' + dirColor + ';"></span> ' + this.escapeHtml(v.party || '?') + this.healthMarker('invoices', v.id) +
       ' <span class="inv-number">#' + this.escapeHtml(v.number || '-') + '</span></span>' +
       '<span class="savings-actions">' +
       ((v.payments || []).some(payment => payment.txId && (this.data.transactions || []).some(tx => tx.id === payment.txId)) ? '<button class="btn btn-sm btn-secondary" onclick="BlackBook.openInvoicePayments(\x27' + v.id + '\x27)" title="Open the latest linked payment">LINK</button>' : '') +

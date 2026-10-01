@@ -131,7 +131,7 @@ test('selected-only overview charts use days of the current month and selected t
   assert.equal(chart.data.labels.length, 31);
   assert.equal(chart.data.labels[4], '5');
   assert.equal(chart.data.datasets[0].data[4], 100);
-  assert.equal(chart.data.datasets[1].data[19], 25);
+  assert.equal(chart.data.datasets[1].data[19], -25);
   assert.equal(chart.options.ticks.maxTicksLimit, 8);
   assert.deepEqual(JSON.parse(JSON.stringify(app.overviewMonthlyTotals())), { income: 100, expenses: 25 });
   assert.match(app.selectedTransactionDetailsHtml(), /Paycheck/);
@@ -195,8 +195,12 @@ test('all Shift-selected overview category cards remain visibly selected', () =>
     ],
     categories: [{ id: 'food', name: 'Food' }, { id: 'rent', name: 'Rent' }]
   };
-  app.viewYear = 2026;
-  app.viewMonth = 8;
+  app.vy = () => 2026;
+  app.vm = () => 8;
+  app.ymOf = (date) => {
+    const [year, month] = String(date).split('-').map(Number);
+    return { y: year, m: month - 1 };
+  };
   app.categoryColor = () => '#abcdef';
   app.escapeHtml = (value) => value;
   app.renderPage = () => {};

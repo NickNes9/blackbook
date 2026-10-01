@@ -60,7 +60,7 @@ Object.assign(window.BlackBook, {
     const barClass = pct < 80 ? 'under' : pct <= 100 ? 'warning' : 'over';
     let html = '<div class="savings-card' + this.focusRecordHtml('savings', goal.id) + '">' +
       '<div class="savings-header">' +
-      '<span class="savings-name">' + this.escapeHtml(goal.name) + '</span>' +
+      '<span class="savings-name">' + this.escapeHtml(goal.name) + this.healthMarker('savingsGoals', goal.id) + '</span>' +
       '<span class="savings-actions">' +
       ((goal.entries || []).some(entry => this.savingsTransactionForEntry(entry)) ? '<button class="btn btn-sm btn-secondary" onclick="BlackBook.openSavingsEntries(\x27' + goal.id + '\x27)" title="Open the latest linked transaction">LINK</button>' : '') +
       '<button class="btn btn-sm btn-primary" onclick="BlackBook.openNewSavingsEntry(\x27' + goal.id + '\x27)">+ ADD</button>' +

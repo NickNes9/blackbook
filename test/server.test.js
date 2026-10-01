@@ -49,6 +49,7 @@ test('server is loopback-only and preserves the API profile document contract', 
 
     const initial = await fetch(server.origin + '/api/load').then((response) => response.json());
     assert.deepEqual(initial.accounts, []);
+    assert.deepEqual((await fetch(server.origin + '/api/profiles').then((response) => response.json())).profiles, [], 'fresh startup should not create a sample profile');
     const profile = { ...initial, futureField: { kept: true }, transactions: [{ id: 'history-1', amount: -42 }] };
     const saved = await fetch(server.origin + '/api/save', {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(profile)
@@ -186,7 +187,7 @@ test('setPassword/changePassword/removePassword flows work end to end', async ()
     });
     assert.equal(setPw.status, 200);
     assert.equal((await fetch(origin + '/api/load?profile=First')).status, 200, 'setPassword keeps profile unlocked');
-    assert.equal((await fetch(origin + '/api/profiles').then((r) => r.json())).profiles[0].hasPassword, true);
+    assert.equal((await fetch(origin + '/api/profiles').then((r) => r.json())).profiles.find(p => p.name === 'First').hasPassword, true);
     const enveloped = JSON.parse(readFileSync(join(dataDir, 'profiles', 'First.json'), 'utf8'));
     assert.equal(enveloped.enc, 'aes-256-gcm');
     assert.ok(!String(enveloped.data).includes('HIDDEN-MARKER-ACCT'));
@@ -226,7 +227,7 @@ test('setPassword/changePassword/removePassword flows work end to end', async ()
       body: JSON.stringify({ action: 'removePassword', name: 'First', currentPassword: 'two' })
     });
     assert.equal(remove.status, 200);
-    assert.equal((await fetch(origin + '/api/profiles').then((r) => r.json())).profiles[0].hasPassword, false);
+    assert.equal((await fetch(origin + '/api/profiles').then((r) => r.json())).profiles.find(p => p.name === 'First').hasPassword, false);
     const plain = JSON.parse(readFileSync(join(dataDir, 'profiles', 'First.json'), 'utf8'));
     assert.equal(plain.futureField.kept, true);
     assert.equal((await fetch(origin + '/api/load?profile=First')).status, 200);
