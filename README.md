@@ -1,152 +1,119 @@
 # BLACK BOOK
 
-A local-first personal finance console. Terminal aesthetic with light/dark themes, fully keyboard-driven, single Node.js server with flat-file storage — no cloud, no accounts, your data stays on your machine.
+Your finances, on your computer. Black Book is a free personal finance app for tracking accounts, spending, bills, budgets, and savings, with a terminal-inspired interface and light and dark themes.
 
-## What's new in 0.9.5
+![Black Book Overview showing accounts, transactions, category filters, and spending charts](screenshots/overview.webp)
 
-- Bills has a compact selected-year donut beside its line graph, using the same filters and floating tooltips. Resized graph panels keep their height when categories or filters are toggled across Overview, Budget, Bills, and Forecast.
-- Settings → Data → CHECK DATA reports broken references, duplicate identifiers, possible duplicate transactions, and missing account exchange rates without changing records. Red link icons flag broken references on affected items.
-- Updates verify the checksum belonging to the exact platform download, reject protected/unsafe paths and incomplete archives, preserve unrelated files, skip unchanged files, and restore touched files if installation fails. Downloads are still full ZIPs; differential downloads are not implemented yet.
-- Restored packaging and automated checks. Windows clean-package installation, save/reload, verified update and restart are tested on disposable data. Linux/macOS packages are generated but not runtime-tested on those systems.
-- Release validation: `npm run check`, `npm test`, `npm run release -- -Version 0.9.5`, then `node scripts/smoke-release.mjs dist/0.9.5/black-book-v0.9.5-win.zip`.
+*The screenshot shows illustrative data. New installations start empty.*
 
-## Features
+[Download the latest release](https://github.com/NickNes9/blackbook/releases/latest) · [Report a problem](https://github.com/NickNes9/blackbook/issues) · [Full feature guide](functions.txt)
 
-- **Accounts** — cash/bank accounts, multiple currencies (RSD base + EUR/USD/XAU auto-fetched rates with manual override), auto-assigned colors; the account form shows card terms only for credit cards and foreign fee only for non-base currencies
-- **Transactions** — quick-entry popup (`A`) with a remembered +/− income/expense button (an explicitly typed sign overrides it), transfers between accounts (`T`), click a row to bulk-select, bulk edit/delete/merge, date scroll-wheel stepping
-- **Budgets** — per-category monthly limits or a whole-budget allocation from a chosen month onward; a compact donut sits beside the spending graph, while a modal edits category shares and the allocation total, with a Reset Plan action for 100% unassigned funds
-- **Bills** — yearly payment grid (sticky header, zebra rows, per-bill TOTAL) with pay-from-any-account/card, custom amounts per month (right-click a cell), AUTO mode marks the current month paid automatically and creates linked transactions, year selector + TODAY navigation, `H` toggles the graph; narrow cells use compact amounts and currency symbols
-- **Savings goals** — target tracking, deposit/withdraw history, progress bars, command-palette deposits (`dep goal 500`)
-- **Credit cards** — installment plans with interest baked into the debt (100 @ 5% = 105; first installment carries the interest), partial payments that accumulate toward each slot, amount-weighted progress markers, edit plans, advance credit
-- **Debts / Invoices** — OWED · I OWE and INCOMES · EXPENSES · ALL filters inline with the period controls; debts carry a category; invoices support line items and links to existing local files (openable from the card)
-- **Overview** — metric panels, category breakdown bar, end-of-month balance, and category cards that support Shift-click multi-selection; month filters drive both the income-vs-expenses graph and transaction list. `H` hides the graph, and the income/expense donut has a clickable center percentage.
-- **Forecast** — a separate 30/60/90-day cash timeline and balance graph using current balances, unpaid scheduled bills, remaining card-installment slots, and optional recurring income/expenses; colored account chips and missing-rate warnings keep projections explicit. Unpaid invoices and open personal debts remain on their own pages rather than entering the projection.
-- **Attention bar** — the header shows up to three highest-priority items (urgent first, then nearest date), with a `+N MORE` summary and a per-profile hide option.
-- **Categories** — picker everywhere (transactions, debts, invoices, purchases), auto-created during import, palette of theme-aware colors; archive a category from a chosen date without hiding its earlier transactions
-- **Import / Export** — Settings → Data contains exports, imports, and Import Rules together. IMPORT JSON previews counts and makes a dated pre-import backup before replacing a profile. IMPORT CSV/XLSX stages valid rows, applies reusable description-to-category rules, and warns about likely duplicates before anything is saved.
-- **Themes** — dark (default) and light, device-level toggle in Settings; customizable highlight, income and expense colors used across UI *and* charts; all native dropdowns themed to match
-- **Chart details** — graph values use floating tooltips above the hovered point or slice, clamped to the screen so they stay readable instead of being clipped by panels. Charts redraw without a delayed blank or entrance animation when data changes.
-- **Exchange rates** — one row per currency, with compact action icons on narrow screens instead of wrapped controls or sideways scrolling.
-- **Responsive layout** — navigation becomes a slide-out menu, accounts abbreviate early, and months stay on one line (full names → JAN/FEB → numbers). Monetary labels use compact values such as 70k in tight spaces, with exact amounts available on hover; entry fields and stored amounts stay exact. Budget text keeps its normal size and percentages stay centered. Forecast uses the Overview chart style, and hidden charts leave no empty panel.
-- **Math in amount fields** — type chained expressions such as `100-5*2-10`, `(2+3)*4`, or `10,5-2,5` anywhere an amount is accepted
-- **Profiles** — isolated data sets (default + named profiles) stored as separate files; edit the active profile's name and base currency together, or open another profile to edit it; per-profile page visibility
-- **Command palette** — `/` or `Ctrl-K`: search transactions, pages, quick commands (`t 500 cash bank`, `pay electricity`, `bg groceries 20000`, `csv`, …)
+## What you can do
 
-## What's new in 0.9.5
+- **See the whole picture.** View income, expenses, net income, and end-of-month balances. Filter transactions by account, category, month, or type, with charts that follow your selection.
+- **Manage accounts and currencies.** Track cash and bank accounts, move money between them, and convert balances into your profile's chosen currency.
+- **Stay on top of bills.** See a year of payments at a glance, record payments manually or automatically, and follow each payment to its transaction.
+- **Plan your budget.** Set category limits or allocate a monthly total by percentage, with a donut chart showing where your money goes.
+- **Track credit cards.** Manage purchases, installments, credit limits, and partial payments that accumulate until an installment is paid.
+- **Build savings.** Set goals and follow progress through deposit and withdrawal histories.
+- **Keep debts and invoices organized.** Track money owed, record repayments, reuse invoice templates, and link invoices to files on your computer.
+- **Look ahead.** Project account balances over 30, 60, or 90 days using scheduled bills, installments, and recurring transactions.
+- **Bring your history with you.** Import CSV, Excel, or JSON, review possible duplicates, and reuse category import rules. Export your records whenever you need them.
+- **Make it yours.** Use separate profiles, optional profile passwords, custom colors and date formats, and categories that can be archived without losing their history.
 
-- **Session undo and redo** — Ctrl+Z and Ctrl+Shift+Z reverse or restore up to 100 recent transaction, transfer, bill, card, debt, savings, and invoice changes. History is temporary and clears when the session ends; the bottom shortcut bar reflects the current page and selection.
-- **Credit card installments** — partial payments accumulate against an installment and show the paid amount out of its due amount. A slot is marked paid when fully covered, and progress markers follow each installment's actual share of the total.
-- **Linked payment history** — bills, installments, savings, debts, and invoices link payment records to their exact transactions. Deleting a linked transaction updates its payment record and remaining balance.
-- **Dates and graphs** — choose a day-first date format in Settings, including abbreviated month names; transaction dates remain on one line. Expenses plot below zero on the Overview graph, and selected-only charts reflect selected transactions.
-- **Update download progress** — applying an update now shows download progress, verification, installation, and restart in the app's top notification and Settings, followed by an in-app confirmation.
-- **Overview chart filters** — the chart follows the active TYPE, EXPENSES, or INCOME filter, showing both series for TYPE and only the matching series for the other filters.
-- **Responsive account filters** — the selected account tile uses less padding and width on narrow layouts while retaining its full label.
+Amount fields accept simple math such as `100-5*2-10`. You can select transactions to edit, delete, or merge them together, and undo or redo up to 100 recent supported financial changes during the current session.
 
-## What's new in 0.9.4
+## Get started
 
-No standalone v0.9.4 release was published. The version sequence moved from 0.9.3 to 0.9.5; the published changes are documented in the 0.9.5 notes above.
+Download the ZIP for your operating system from the [latest release](https://github.com/NickNes9/blackbook/releases/latest), extract it, and open its launcher. [Node.js](https://nodejs.org/) must be installed.
 
-## What's new in 0.9.3
+| System | Launcher |
+| --- | --- |
+| Windows | `Black Book.exe` |
+| macOS | `Black Book.command` |
+| Linux | `Black Book.sh` |
 
-- **Overview filtering and transactions** — Shift-click category cards to show several categories together, including transfers; normal click isolates one, and removing the final selection restores ALL. The selected month now shows its end-of-month balance. E/Delete act on selected transactions first, otherwise on the hovered row; merge completion appears in the top bar.
-- **Budgets and categories** — edit allocation shares in a roomier modal with a live donut and Reset Plan; unassigned funds remain visible. Category archiving takes effect from its archive date while older transactions and earlier months remain accessible. Budget and Bills total graph lines start hidden.
-- **Invoices** — save reusable invoice templates, record a paid date separately from issue date, and date the linked transaction to the actual payment. Local file links open in the computer's default app without storing file contents in the profile.
-- **UI and reliability** — chart tooltips float above data points without being clipped, graphs no longer flash on redraw, forecast account controls and compact bill amounts fit narrow screens, and the startup update notice appears in the top-center header. Amount expressions now handle multiple comma decimals.
-- **Bills** — manual and automatic payments now match existing expenses in the correct month, using the paid amount; ambiguous matches remain separate, and linking never rewrites a transaction's amount.
+The app opens in your browser and runs on your computer. Windows builds are tested; macOS and Linux packages are available but have not been tested on those systems.
 
-## What's new in 0.9.2
+Updates appear in the top notification bar and can be installed from Settings. Your existing profile data is preserved when updating.
 
-- Reconciliation controls are parked on the local `local/reconciliation-parked-20260926` branch; existing reconciliation fields remain in profile JSON for compatibility.
-- JSON restore previews its contents and saves the previous profile under `profiles/BACKUPS/profile-<name>/` before replacement.
-- Chart.js, the Hack font, and SheetJS spreadsheet import are bundled locally for offline use. SheetJS is vendored from its official 0.20.3 standalone build.
-- Budget allocation plans distribute a monthly total by category percentages and carry forward until changed.
-- Link an invoice with the computer's native file picker. Black Book stores only the original file path and name; its INVOICE button opens that file in the system's default app. The file is never copied into Black Book, and Firefox works because file selection and opening are handled by the local app.
+### Install from the command line
 
-## What's new in 0.9.1
+```sh
+git clone https://github.com/NickNes9/blackbook.git
+cd blackbook
+npm install
+npm start
+```
 
-- **Profile passwords** — optionally encrypt any profile at rest with AES-256-GCM (uses `node:crypto`). Lock the default profile or any named profile from Settings; the browser prompts for the password on every launch. Removing or changing a password requires the current password. A forgotten password cannot be recovered from an encrypted profile. Show/hide eye-toggle on all password fields.
-- **Overview filter toggle** — the INCOME / EXPENSES chips on Overview have been replaced by a single TYPE toggle (TYPE → EXPENSES → INCOME cycle).
-- **Budget graph chrome** — the budget page now matches Overview / Bills with an orange accent line, "SPEND BY CATEGORY" title bar, and the `overview-line-panel` class so all four chart pages look consistent. Filter chips sit between the orange line and the graph title. Over-100% category percentages turn red.
-- **Default port 9597** — the server and launchers use `9597` first, then `9999` as the secondary port before trying the remaining fallback ports.
-- **Functions doc** — a comprehensive user-facing capabilities document (`functions.txt`) now lives in the repo root, covering every page, modal, keyboard shortcut, and command-palette command.
+Open [localhost:9597](http://localhost:9597). If that port is busy, the app tries `9999` and then other available ports.
 
-## What's new in 0.9.0
+## Your data
 
-- **Automatic updates** — Black Book checks GitHub Releases on each launch and shows an “UPDATE AVAILABLE · vX.Y.Z” card in the top-center header when one is available; applying an update shows live download progress and verification/install/restart status in the same theme-aware notification style, then confirms the new version after reload. Downloads are SHA-256 verified, never touch your `profiles/`, and restart on the same port; the header card can be dismissed for the current run, and manual checking remains in Settings.
-- **Forecast** — a separate 30/60/90-day cash timeline and balance graph using current balances, unpaid scheduled bills, remaining card-installment slots, and optional recurring income/expenses; account filters, missing-rate warnings, and a red/green balance chart keep projections explicit.
-- **Responsive layout** — navigation becomes a slide-out menu, accounts abbreviate early, and months stay on one line; monetary labels use compact values such as 70k in tight spaces while stored amounts stay exact.
-- **Two-line bills amounts** — each bill shows both years' amounts, clicking the header toggles the chart view, and forecast warnings surface above the grid.
-- **Safer local storage** — profile saves are atomic and preserve the previous version as a `.bak` recovery copy; invalid or corrupted data is reported without being overwritten.
-- **Local-only server** — Black Book listens only on this computer, and its stop script no longer terminates unrelated Node programs.
-- **Reliable amount entry** — normal values, decimal commas, and math expressions such as `50+20*3` work again under the app's security safeguards.
-- **Searchable categories** — type in any category field to filter choices, then press Enter or click a result to select it.
+No online account is required. Profiles are saved locally in the `profiles` folder, which is excluded from the repository and release downloads. You can export JSON backups or CSV records from Settings; the app also keeps the previous saved file and makes a backup before replacing a profile through JSON import.
 
-## Keyboard
+Optional profile passwords encrypt your saved data. Keep a backup and remember your password: a forgotten password cannot be recovered. Invoice file links point to the original file on your computer; the app does not copy the file into your profile.
+
+Charts, fonts, and spreadsheet importing are bundled for offline use. Refreshing exchange rates and downloading updates require an internet connection.
+
+## Useful shortcuts
 
 | Key | Action |
-|---|---|
-| `A` | New transaction |
-| `T` | Transfer |
-| `D` | Jump to today |
-| `E` | Edit selected transactions, or the hovered transaction when none are selected |
-| `Delete` | Delete selected transactions, or the hovered transaction when none are selected |
-| `Ctrl+Z` | Undo the latest supported financial change (session only) |
-| `Ctrl+Shift+Z` | Redo the latest undone change (session only) |
-| `H` | Show/hide graph (Overview, Bills, Budget, Forecast) |
-| `←` / `→` | Previous / next month (year on Bills & Savings) |
-| `1–8` | Switch pages |
-| `Tab` | Cycle account filter (overview) |
-| `Esc` | Close modal / palette |
-| `/` | Command palette |
+| --- | --- |
+| `A` / `T` | Add a transaction / transfer |
+| `E` / `Delete` | Edit / delete selected transactions, or the hovered row |
+| `Ctrl+Z` / `Ctrl+Shift+Z` | Undo / redo |
+| `H` | Show or hide the graph |
+| `/` or `Ctrl+K` | Open the command palette |
+| `Esc` | Close a dialog |
 
-## Run
+The shortcut bar at the bottom shows the actions available on the current page.
 
-```bash
-npm install
-node server.js
-```
+## What's new
 
-Open http://localhost:9597 (or `http://localhost:9999` if the primary port is busy) — or just run the launcher that matches your OS:
-- **Windows** — `Black Book.exe` starts the server hidden and opens your browser; `Stop Black Book.bat` shuts down that Black Book server only.
-- **Linux** — double-click `Black Book.sh` (or run it from a terminal); `Stop Black Book.sh` stops it. The script needs `node` on the PATH.
-- **macOS** — double-click `Black Book.command` opens it in Terminal; `Stop Black Book.command` stops it. The script needs `node` on the PATH.
+### 0.9.5
 
-## Data & privacy
+- Bills now has a donut chart alongside its line graph. Graphs keep their resized height when filters or categories change.
+- **Check Data** identifies broken links, duplicate IDs, possible duplicate transactions, and missing exchange rates, with links to the affected records.
+- Updates show download and installation progress, verify the download, and restore changed files if installation fails.
+- Overview's category breakdown and graph follow the Type, Income, and Expenses filter. Account tiles fit narrow screens more reliably.
 
-All data lives in `profiles/*.json` next to `server.js` (`profiles/data.json` = default profile). This folder is **gitignored** — code backups never contain your finances. Each successful save first retains the immediately previous file as `.bak`; JSON import also creates a dated copy under `profiles/BACKUPS/profile-<name>/`. For portable profile data use Settings → EXPORT JSON / EXPORT CSV. Invoice links store only a local file path and name; invoice files are not copied into Black Book or included in a JSON export. Older browser-stored attachments remain readable and are likewise not included, unless a legacy profile already contains inline `fileData`.
+### 0.9.4
 
-## Local-only operation
+These changes were included in 0.9.5; there was no separate 0.9.4 download.
 
-Black Book binds to `127.0.0.1`, so it is available only on this computer. It deliberately has no network hosting or login mode.
+- Session undo and redo cover supported transactions, transfers, bills, credit cards, debts, savings, and invoice changes. Keyboard hints follow the page and selection.
+- Partial installment payments accumulate toward the amount due, with progress markers sized to each installment.
+- Payment histories link to their exact transactions, and deleting a linked transaction updates its payment record.
+- Custom date formats stay on one line. Overview expenses plot below zero, and charts reflect selected transactions.
 
-## Verification
+### 0.9.3
 
-```bash
-npm run check
-npm test
-```
+- Shift-click category cards to combine filters. Overview shows the selected month's closing balance, and selected transactions can be edited, deleted, or merged.
+- Budget allocation uses a roomier editor with a live donut and Reset Plan. Categories can be archived from a chosen date while earlier history stays visible.
+- Invoices support reusable templates, separate issue and paid dates, and local file links that open in your default app.
+- Chart tooltips stay readable, amount fields support chained calculations and decimal commas, and bill payments match existing expenses in the correct month.
 
-The tests use temporary fixture profiles and do not access your `profiles/` directory.
+### 0.9.2
 
-## Updates & releases
+- Allocate a monthly budget across categories by percentage and carry the plan forward until changed.
+- JSON import previews the contents and backs up the existing profile before replacement.
+- Charts, fonts, and spreadsheet importing work offline.
+- Invoice links use the computer's file picker and open the original file, including when using Firefox.
 
-The app self-updates from GitHub Releases. It looks for `black-book-vX.Y.Z-{win,linux,mac}.zip` assets plus a `checksums.sha256` asset, verifies the download before replacing code, and never touches `profiles/`, `import/`, `node_modules/`, or your data files. Release archives use an explicit runtime-file allowlist, so unexpected local files are not packaged.
+### 0.9.1
 
-To publish a release from a checkout of this repo:
+- Optional profile passwords encrypt saved data, with password changes and removal protected by the current password.
+- Overview cycles through Type, Expenses, and Income with one filter button.
+- Budget charts share the other pages' design, and the app uses port `9597` first, with `9999` as a fallback.
 
-```bash
-npm run release -- -Version 0.9.5   # builds dist\0.9.5\*.zip + checksums
-gh release create v0.9.5 --title "v0.9.5" --notes "<changelog>" dist\0.9.5\black-book-v0.9.5-win.zip dist\0.9.5\black-book-v0.9.5-linux.zip dist\0.9.5\black-book-v0.9.5-mac.zip dist\0.9.5\checksums.sha256
-```
+### 0.9.0
 
-Windows users keep using `Black Book.exe`; Linux/macOS users keep using `Black Book.sh` / `Black Book.command`. Updates ship each platform's launcher and re-apply the executable bit automatically. Applied updates keep the previous code under `updates/backup-<version>/` for rollback.
-
-## Capabilities
-
-Every user-facing feature — pages, modals, buttons, keyboard shortcuts, command-palette commands, and Settings — is documented in [`functions.txt`](functions.txt) in the repo root. It is maintained alongside the code whenever behavior changes.
+- Automatic update checks and a Forecast page for upcoming balances.
+- Responsive layouts with compact account names and amounts on narrow screens.
+- Safer saving preserves the previous file, while the app remains accessible only on your computer.
+- Reliable amount calculations and searchable category pickers.
 
 ---
 
-**BLACK BOOK v0.9.5**
-
-Created by Nikola Nešić
+Created by Nikola Nešić · Black Book 0.9.5
