@@ -35,10 +35,12 @@ A local-first personal finance console. Terminal aesthetic with light/dark theme
 
 ## What's new in 0.9.5
 
-- **Session undo and redo** — Ctrl+Z and Ctrl+Shift+Z reverse or restore recent transaction, transfer, bill, card, debt, savings, and invoice changes. History is temporary, limited to 100 recent changes, and clears when the session ends; the bottom shortcut bar reflects the current page and selection.
-- **Credit card installments** — partial payments accumulate against the selected installment and display the paid amount out of its due amount. A slot is marked paid when its full amount is covered, and the progress markers follow each installment's actual share of the total.
-- **Linked payment history** — bill, installment, savings, debt, and invoice payment records link to their exact transactions. Deleting a linked transaction updates its payment record and remaining balance.
-- **Dates and graphs** — choose a day-first date format in Settings, including abbreviated month names; transaction dates remain on one line. Expenses plot below zero on the Overview graph, and selected-only charts reflect the selected transactions.
+- **Session undo and redo** — Ctrl+Z and Ctrl+Shift+Z reverse or restore up to 100 recent transaction, transfer, bill, card, debt, savings, and invoice changes. History is temporary and clears when the session ends; the bottom shortcut bar reflects the current page and selection.
+- **Credit card installments** — partial payments accumulate against an installment and show the paid amount out of its due amount. A slot is marked paid when fully covered, and progress markers follow each installment's actual share of the total.
+- **Linked payment history** — bills, installments, savings, debts, and invoices link payment records to their exact transactions. Deleting a linked transaction updates its payment record and remaining balance.
+- **Dates and graphs** — choose a day-first date format in Settings, including abbreviated month names; transaction dates remain on one line. Expenses plot below zero on the Overview graph, and selected-only charts reflect selected transactions.
+- **Update download progress** — applying an update now shows download progress, verification, installation, and restart in the app's top notification and Settings, followed by an in-app confirmation.
+- **Overview chart filters** — the chart follows the active TYPE, EXPENSES, or INCOME filter, showing both series for TYPE and only the matching series for the other filters.
 - **Responsive account filters** — the selected account tile uses less padding and width on narrow layouts while retaining its full label.
 
 ## What's new in 0.9.4
