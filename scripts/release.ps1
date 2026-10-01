@@ -30,6 +30,12 @@ if (Test-Path $LockPath) {
 }
 Write-Host "Bumped $OldVersion -> $Version in package.json + package-lock.json"
 
+# Refuse to package a build that fails its restored release gates.
+npm run check
+if ($LASTEXITCODE -ne 0) { throw 'Syntax checks failed; release cancelled.' }
+npm test
+if ($LASTEXITCODE -ne 0) { throw 'Tests failed; release cancelled.' }
+
 # --- Assemble the payload (everything in the repo except user data / junk) ---
 # Excludes, per-platform launcher selection and +x bits live in scripts/zip.mjs.
 $Dist = Join-Path $Root "dist\$Version"

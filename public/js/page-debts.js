@@ -186,7 +186,7 @@ Object.assign(window.BlackBook, {
     const payments = this.debtPayments(d);
     let html = '<div class="savings-card debt-card' + this.focusRecordHtml('debt', d.id) + '"' + (settled ? ' style="opacity:0.55;"' : '') + '>';
     html += '<div class="savings-header">' +
-      '<span class="savings-name"><span class="cat-dot" style="background:' + dotColor + ';"></span> ' + this.escapeHtml(d.person) + '</span>' +
+      '<span class="savings-name"><span class="cat-dot" style="background:' + dotColor + ';"></span> ' + this.escapeHtml(d.person) + this.healthMarker('debts', d.id) + '</span>' +
       '<span class="savings-actions">' +
       '<span class="debt-badge" style="background:' + typeColor + ';color:var(--on-fill);">' + (d.type === 'in' ? 'OWED' : 'OWE') + '</span>' +
       (settled ? '<button class="btn btn-sm btn-danger" onclick="BlackBook.toggleDebtPayment(\x27' + d.id + '\x27)" title="Unpay last payment">UNPAY</button>' : '<button class="btn btn-sm btn-primary" onclick="BlackBook.openDebtPayModal(\x27' + d.id + '\x27)">+ PAY</button>') +

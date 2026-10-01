@@ -12,6 +12,7 @@ Object.assign(window.BlackBook, {
   renderBudget() {
     const el = document.getElementById('page-budget');
     if (!el) return;
+    const chartHeights = this.captureChartPanelHeights(el);
     this.hideDonutTooltip();
     if (this.budgetChart) { this.budgetChart.destroy(); this.budgetChart = null; }
     if (this.budgetDonutChart) { this.budgetDonutChart.destroy(); this.budgetDonutChart = null; }
@@ -26,10 +27,11 @@ Object.assign(window.BlackBook, {
         ? ''
         : '<div class="list-sep"></div>' +
           this.budgetChipsHtml() +
-          '<div class="overview-charts budget-charts">' +
+      '<div class="overview-charts budget-charts">' +
           '<div class="chart-panel budget-donut-panel"><div class="chart-head-row"><span class="chart-title-text">BUDGET ALLOCATION</span></div>' +
           '<div class="budget-donut-wrap"><canvas id="budget-donut-chart" aria-label="Budget allocation"></canvas></div></div>' +
           '<div class="chart-panel overview-line-panel"><div class="chart-head-row"><span class="chart-title-text">SPEND BY CATEGORY</span></div><canvas id="budget-chart"></canvas></div></div>');
+    this.restoreChartPanelHeights(el, chartHeights);
     if (!hideGraph) {
       this.renderBudgetChart();
       this.renderBudgetDonut();

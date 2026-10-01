@@ -25,8 +25,10 @@ Object.assign(window.BlackBook, {
   renderBills() {
     const el = document.getElementById('page-bills');
     if (!el) return;
+    const chartHeights = this.captureChartPanelHeights(el);
     this.hideDonutTooltip();
     if (this.billsChart) { this.billsChart.destroy(); this.billsChart = null; }
+    if (this.billsPieChart) { this.billsPieChart.destroy(); this.billsPieChart = null; }
     this.repairBillPayments();
     const hideGraph = !!(this.data.settings && this.data.settings.hideBillsGraph);
     const offToday = this.vy() !== new Date().getFullYear();
@@ -42,8 +44,9 @@ Object.assign(window.BlackBook, {
       (hideGraph
         ? ''
         : '<div class="list-sep"></div>' + this.billsChipsHtml() +
-          '<div class="overview-charts"><div class="chart-panel overview-line-panel"><div class="chart-head-row"><span class="chart-title-text">BILLS BY MONTH</span></div><canvas id="bills-chart"></canvas></div></div>');
-    if (!hideGraph) this.renderBillsChart();
+          '<div class="overview-charts with-donut"><div class="chart-panel donut-panel"><div class="chart-head-row"><span id="bills-donut-title" class="chart-title-text">THIS YEAR</span></div><div class="budget-donut-wrap"><canvas id="bills-donut-chart" aria-label="Yearly bill breakdown"></canvas></div></div><div class="chart-panel overview-line-panel"><div class="chart-head-row"><span class="chart-title-text">BILLS BY MONTH</span></div><canvas id="bills-chart"></canvas></div></div>');
+    this.restoreChartPanelHeights(el, chartHeights);
+    if (!hideGraph) { this.renderBillsChart(); this.renderBillsDonut(); }
     this.finishFocus('bill');
   },
 
@@ -119,7 +122,7 @@ billsGridHtml() {
         yearHasPaid = true;
       }
       html += '<div class="bill-cell-label' + alt + (bill.active ? '' : ' inactive') + this.focusRecordHtml('bill', bill.id) + '">' +
-        '<span class="bill-name-line"><span class="cat-dot" style="background:' + color + ';"></span><span class="bill-name-text">' + this.escapeHtml(bill.name) + '</span><span class="bill-due-day">' + this.ordinalDay(bill.dueDay) + '</span></span>' +
+        '<span class="bill-name-line"><span class="cat-dot" style="background:' + color + ';"></span><span class="bill-name-text">' + this.escapeHtml(bill.name) + this.healthMarker('bills', bill.id) + '</span><span class="bill-due-day">' + this.ordinalDay(bill.dueDay) + '</span></span>' +
         '<span class="bill-actions-mini">' +
         '<button class="btn btn-sm ' + (bill.autopay ? 'btn-primary' : 'btn-muted') + '" onclick="BlackBook.toggleBillAutopay(\x27' + bill.id + '\x27)" title="Auto-mark upcoming months as paid">' + (bill.autopay ? 'AUTO' : 'MAN') + '</button>' +
         '<button class="btn btn-sm btn-secondary" onclick="BlackBook.openEditBill(\x27' + bill.id + '\x27)">EDIT</button>' +
@@ -454,7 +457,7 @@ billsGridHtml() {
     if (this._billsTotalOn === true) {
       const hc = this.data.settings.highlightColor || '#fa8c3c';
       datasets.push({
-        label: 'TOTAL',
+        label: 'TOTAL', _total: true,
         data: months.map(mk => {
           let s = 0;
           for (const b of this.data.bills) {
@@ -493,7 +496,7 @@ billsGridHtml() {
         pointRadius: 2
       });
     }
-    const activeBills = this.data.bills.filter(b => b.active);
+    const activeBills = this.data.bills.filter(b => b.active !== false);
     for (const bill of activeBills) {
       datasets.push({
         label: bill.name,
@@ -548,6 +551,37 @@ billsGridHtml() {
           y: { ticks: { color: '#555555', font: { size: 11 }, maxTicksLimit: 5 }, grid: { color: '#141414' } }
         }
       }
+    });
+  },
+
+  renderBillsDonut() {
+    if (this.billsPieChart) this.billsPieChart.destroy();
+    const canvas = document.getElementById('bills-donut-chart');
+    if (!canvas || !this.billsChart) return;
+    const series = this.billsChart.data.datasets.filter(d => !d._total);
+    const monthly = this._billsDonutPeriod === 'month';
+    const monthIndex = this.vm();
+    const values = series.map(d => monthly
+      ? Math.abs(Number(d.data[monthIndex]) || 0)
+      : d.data.reduce((sum, value) => sum + Math.abs(Number(value) || 0), 0));
+    const total = values.reduce((sum, value) => sum + value, 0);
+    const empty = total <= 0;
+    const labels = series.map(d => d.label);
+    const monthNames = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
+    const title = monthly ? monthNames[monthIndex] + ' ' + this.vy() : 'THIS YEAR';
+    const titleEl = document.getElementById('bills-donut-title');
+    if (titleEl) titleEl.textContent = title;
+    canvas.setAttribute('aria-label', (monthly ? 'Monthly' : 'Yearly') + ' bill breakdown. Click to show ' + (monthly ? 'year' : 'month'));
+    this.billsPieChart = new Chart(canvas.getContext('2d'), {
+      type: 'doughnut',
+      data: { labels: empty ? ['No bills'] : labels, datasets: [{ data: empty ? [1] : values, backgroundColor: empty ? ['#454545'] : series.map(d => d.backgroundColor), borderColor: 'rgba(0,0,0,0)', borderWidth: 1 }] },
+      options: { responsive: true, maintainAspectRatio: false, cutout: '67%', animation: false,
+        onClick: () => { this._billsDonutPeriod = monthly ? 'year' : 'month'; this.renderBillsDonut(); },
+        plugins: { legend: { display: false }, tooltip: { enabled: false, external: ({ chart, tooltip }) => {
+          const point = tooltip.dataPoints && tooltip.dataPoints[0];
+          const index = point && point.dataIndex;
+          this.showDonutTooltip(chart, tooltip, !empty && index != null ? labels[index] + ': ' + this.fmtBase(values[index]) + ' · ' + this.round2(values[index] / total * 100) + '%' : '');
+        } } } }
     });
   },
 

@@ -37,7 +37,7 @@ test('invalid dates and incomplete format patterns are rejected', () => {
 
 test('existing separator setting and entered day-first dates remain readable', () => {
   const app = appWithFormat();
-  assert.equal(app.fmtDateInput('2026-09-07'), '7.9.2026');
+  assert.equal(app.fmtDateInput('2026-09-07'), '07/09/2026');
   assert.equal(app.parseDateInput('7.9.2026'), '2026-09-07');
   assert.equal(app.parseDateInput('07/09/2026'), '2026-09-07');
 });

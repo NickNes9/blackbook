@@ -144,7 +144,7 @@ planBlockHtml(inst) {
     const tx = this.instPurchaseTx(inst);
     let html = '<div class="plan-card' + this.focusRecordHtml('card', inst.id) + '"' + (closed ? ' style="opacity:0.55;"' : '') + '>';
     html += '<div class="savings-header">' +
-      '<span class="savings-name">' + this.escapeHtml(inst.name) + '</span>' +
+      '<span class="savings-name">' + this.escapeHtml(inst.name) + this.healthMarker('installments', inst.id) + '</span>' +
       '<span class="savings-actions">' +
       (tx ? '<button class="btn btn-sm btn-secondary" onclick="BlackBook.openCardPlanTxs(\x27' + inst.id + '\x27)" title="View this plan\u2019s transactions">LINK</button>' : '') +
       '<span class="inst-count-badge"' + (closed ? ' style="border-color:' + color + ';color:var(--on-fill);background:' + color + ';"' : '') + '>' + paidCount + '/' + inst.months + ' PAID</span>' +

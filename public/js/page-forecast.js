@@ -12,6 +12,7 @@
     renderForecast() {
       const el = document.getElementById('page-forecast');
       if (!el || !window.ForecastEngine) return;
+      const chartHeights = this.captureChartPanelHeights(el);
       this.hideDonutTooltip();
       if (this.forecastChart) { this.forecastChart.destroy(); this.forecastChart = null; }
       const result = this.forecastResult();
@@ -34,6 +35,7 @@
         (hideGraph
           ? ''
           : '<div class="list-sep"></div><div class="overview-charts"><div class="chart-panel overview-line-panel"><div class="chart-head-row"><span class="chart-title-text">PROJECTED CASH BALANCE</span></div><canvas id="forecast-chart"></canvas></div></div>');
+      this.restoreChartPanelHeights(el, chartHeights);
       if (!hideGraph) this.renderForecastChart(result);
     },
 

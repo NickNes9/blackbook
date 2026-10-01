@@ -126,6 +126,7 @@ this.connectWebSocket();
     document.querySelector('#debt-modal .modal-backdrop').addEventListener('click', () => this.closeModal('debt-modal'));
     document.querySelector('#debt-pay-modal .modal-backdrop').addEventListener('click', () => this.closeModal('debt-pay-modal'));
     document.querySelector('#bill-pay-modal .modal-backdrop').addEventListener('click', () => this.closeModal('bill-pay-modal'));
+    document.querySelector('#data-health-modal .modal-backdrop').addEventListener('click', () => this.closeModal('data-health-modal'));
 
     const headerInput = document.getElementById('header-command-input');
     if (headerInput) {
@@ -211,7 +212,10 @@ this.connectWebSocket();
       const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
       const ws = new WebSocket(protocol + '//' + location.host);
       this._ws = ws;
-      ws.onopen = () => { this._wsRetry = 0; };
+      ws.onopen = () => {
+        this._wsRetry = 0;
+        if (this._saveRetryProfile === this.profile && this.data) this.save(this._saveRetryOptions || {});
+      };
       ws.onclose = () => {
         this._ws = null;
         if (this._updating && window.UpdateUi) { UpdateUi.onServerGone(); return; }
@@ -419,6 +423,7 @@ this.connectWebSocket();
     if (this.overviewPieChart) { this.overviewPieChart.destroy(); this.overviewPieChart = null; }
     if (this.overviewLineChart) { this.overviewLineChart.destroy(); this.overviewLineChart = null; }
     if (this.billsChart) { this.billsChart.destroy(); this.billsChart = null; }
+    if (this.billsPieChart) { this.billsPieChart.destroy(); this.billsPieChart = null; }
     if (this.savingsChart) { this.savingsChart.destroy(); this.savingsChart = null; }
     if (this.forecastChart) { this.forecastChart.destroy(); this.forecastChart = null; }
     this.currentPage = page;
@@ -478,6 +483,7 @@ this.connectWebSocket();
 
   renderPage(page) {
     try {
+      if (this.refreshDataHealth) this.refreshDataHealth();
       this.hideDonutTooltip();
       if (page === 'overview') this.renderOverview();
       else if (page === 'forecast') this.renderForecast();
@@ -580,6 +586,10 @@ this.connectWebSocket();
     const label = ind.querySelector('.save-label');
     const dot = ind.querySelector('.save-dot');
     if (label) label.textContent = state === 'saving' ? 'SAVING\u2026' : state === 'failed' ? 'UNSAVED' : 'SAVED';
+    ind.title = state === 'failed' ? 'Changes have not been saved. Click to retry.' : 'Save status';
+    ind.onclick = state === 'failed' ? () => this.save(this._saveRetryOptions || {}) : null;
+    ind.tabIndex = state === 'failed' ? 0 : -1;
+    ind.onkeydown = state === 'failed' ? event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); this.save(this._saveRetryOptions || {}); } } : null;
   },
 
   resetUndoHistory() {
@@ -672,6 +682,10 @@ this.connectWebSocket();
         const response = await fetch('/api/save', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(profile ? { profile, data: payload } : payload) });
         if (!response.ok) throw new Error((await response.json().catch(() => ({}))).error || 'Save failed');
         this._lastSaveSuccess = Math.max(this._lastSaveSuccess || 0, sequence);
+        if (this._saveRetryProfile === profile && sequence >= (this._lastSaveFailure || 0)) {
+          this._saveRetryProfile = null;
+          this._saveRetryOptions = null;
+        }
         if (this.profile === profile && this._undoHistory) {
           if (this._undoReady && delta && !options.historyReplay) {
             if (options.undoable) this._undoHistory.push({ label: options.label || 'Financial change', delta });
@@ -683,6 +697,8 @@ this.connectWebSocket();
         return true;
       } catch (error) {
         this._lastSaveFailure = Math.max(this._lastSaveFailure || 0, sequence);
+        this._saveRetryProfile = profile;
+        this._saveRetryOptions = options;
         console.error('Save failed:', error);
         return false;
       } finally {
@@ -2279,9 +2295,11 @@ this.connectWebSocket();
     return '<svg class="transaction-link-icon" viewBox="0 0 874 870" aria-hidden="true" focusable="false" xmlns="http://www.w3.org/2000/svg" style="fill-rule:evenodd;clip-rule:evenodd;stroke-linejoin:round;stroke-miterlimit:2;"><g transform="matrix(1,0,0,1,36,40)"><path fill="currentColor" d="M584.703,352.703C585.861,351.553 663.384,274.104 666.173,271.191C681.687,254.99 691.281,228.812 692.092,212.466C696.216,129.287 621.859,91.139 565.435,107.273C531.042,117.107 522.14,133.437 451.297,203.293C421.428,232.747 369.415,215.489 365.936,171.454C363.816,144.624 381.91,131.315 411.112,102.112C452.445,60.779 488.069,16.578 564.528,5.718C721.175,-16.531 843.543,146.221 771.056,293.293C754.189,327.516 741.51,337.254 638.889,439.891C591.862,486.925 568.933,514.468 522.571,531.689C401.562,576.636 313.371,495.179 303.392,478.573C271.143,424.905 339.028,375.939 380.327,415.681C386.432,421.556 425.982,459.613 483.516,439.546C509.557,430.463 511.85,425.541 584.703,352.703Z"/></g><g transform="matrix(1,0,0,1,36,40)"><path fill="currentColor" d="M211.297,443.297C121.841,532.797 120.282,532.235 111.46,553.484C78.109,633.819 155.256,718.172 241.322,685.056C262.665,676.843 268.466,668.953 333.702,603.702C340.165,597.239 367.238,562.414 407.297,585.851C417.874,592.039 451.18,627.426 411.889,666.891C338.33,740.776 328.976,750.143 312.679,759.814C294.869,770.383 275.67,783.532 229.519,790.608C163.409,800.744 108.451,768.262 99.28,762.841C9.628,709.853 -26.722,584.517 33.124,488.253C49.354,462.147 50.464,462.777 186.111,327.109C207.403,305.814 247.968,257.758 332.496,251.424C402.422,246.183 452.113,281.915 460.78,288.147C471.877,296.127 515.535,323.63 496.084,366.294C487.047,386.116 450.773,413.558 413.172,377.844C378.797,345.194 316.387,338.267 273.777,380.777C268.771,385.771 237.093,417.374 211.297,443.297Z"/></g></svg>';
   },
 
+  healthMarker() { return ''; },
+
   linkedTransactionButton(txId) {
     const tx = (this.data.transactions || []).find(item => item && item.id === txId);
-    if (!tx) return '';
+    if (!tx) return txId ? '<button type="button" class="health-link" aria-label="Missing linked transaction" title="This linked transaction is missing" onclick="event.stopPropagation();BlackBook.openDataHealth()">' + this.transactionLinkIcon() + '</button>' : '';
     return '<button type="button" class="btn btn-sm btn-secondary linked-tx-action" data-tx-id="' + this.escapeHtml(tx.id) + '" onclick="event.stopPropagation();BlackBook.openLinkedTransaction(this.dataset.txId)" title="Open this transaction" aria-label="Open linked transaction">' + this.transactionLinkIcon() + '</button>';
   },
 
@@ -2298,6 +2316,31 @@ this.connectWebSocket();
     this._linkedTransactionFocusId = tx.id;
     this._bulkSel = new Set([tx.id]);
     this._bulkOnly = false;
+    this.navigateTo('overview');
+  },
+
+  openDataHealthTransactions(txIds) {
+    const requested = new Set((txIds || []).filter(Boolean));
+    const transactions = (this.data.transactions || []).filter(tx => tx && requested.has(tx.id));
+    if (!transactions.length) return;
+    this.closeModal('data-health-modal');
+    const firstDated = transactions.find(tx => tx.date);
+    if (firstDated) {
+      const { y, m } = this.ymOf(firstDated.date);
+      if (!isNaN(y) && !isNaN(m)) {
+        if (!this._pageView) this._pageView = {};
+        if (!this._pageView.overview) this._pageView.overview = { y, m };
+        this._pageView.overview.y = y;
+        this._pageView.overview.m = m;
+      }
+    }
+    this.selectedAccount = null;
+    this.selectedCategories = null;
+    this._ovInc = true;
+    this._ovExp = true;
+    this._bulkSel = new Set(transactions.map(tx => tx.id));
+    this._bulkOnly = true;
+    this._linkedTransactionFocusId = null;
     this.navigateTo('overview');
   },
 
@@ -2483,6 +2526,24 @@ this.connectWebSocket();
     }
     if (this._bulkSel && this._bulkSel.size && this._bulkOnly) txs = txs.filter(t => this._bulkSel.has(t.id));
     return txs;
+  },
+
+  captureChartPanelHeights(pageEl) {
+    if (!pageEl) return [];
+    return Array.from(pageEl.querySelectorAll('.chart-panel, .chart-panel-full')).map((panel, index) => ({
+      key: panel.id || Array.from(panel.classList).filter(name => name !== 'chart-panel' && name !== 'chart-panel-full' && name !== 'chart-panel-resizing').sort().join('.') || String(index),
+      height: panel.style.height
+    }));
+  },
+
+  restoreChartPanelHeights(pageEl, heights) {
+    if (!pageEl || !heights || !heights.length) return;
+    const panels = Array.from(pageEl.querySelectorAll('.chart-panel, .chart-panel-full'));
+    panels.forEach((panel, index) => {
+      const key = panel.id || Array.from(panel.classList).filter(name => name !== 'chart-panel' && name !== 'chart-panel-full' && name !== 'chart-panel-resizing').sort().join('.') || String(index);
+      const saved = heights.find(item => item.key === key && item.height);
+      if (saved) panel.style.height = saved.height;
+    });
   },
 
   initChartResize() {

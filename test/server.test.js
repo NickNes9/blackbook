@@ -99,7 +99,7 @@ test('password-protected profiles are encrypted at rest and locked after restart
       body: JSON.stringify({ action: 'create', name: 'Vault', password: 's3cret' })
     });
     assert.equal(created.status, 200);
-    assert.deepEqual((await fetch(origin + '/api/profiles').then((r) => r.json())).profiles, [{ name: 'Vault', hasPassword: true }]);
+    assert.deepEqual((await fetch(origin + '/api/profiles').then((r) => r.json())).profiles.filter(p => p.name !== 'Demo'), [{ name: 'Vault', hasPassword: true }]);
     assert.equal((await fetch(origin + '/api/load?profile=Vault')).status, 200, 'new profile auto-unlocks');
 
     const unlockedDoc = (await fetch(origin + '/api/load?profile=Vault').then((r) => r.json()));
@@ -186,7 +186,7 @@ test('setPassword/changePassword/removePassword flows work end to end', async ()
     });
     assert.equal(setPw.status, 200);
     assert.equal((await fetch(origin + '/api/load?profile=First')).status, 200, 'setPassword keeps profile unlocked');
-    assert.equal((await fetch(origin + '/api/profiles').then((r) => r.json())).profiles[0].hasPassword, true);
+    assert.equal((await fetch(origin + '/api/profiles').then((r) => r.json())).profiles.find(p => p.name === 'First').hasPassword, true);
     const enveloped = JSON.parse(readFileSync(join(dataDir, 'profiles', 'First.json'), 'utf8'));
     assert.equal(enveloped.enc, 'aes-256-gcm');
     assert.ok(!String(enveloped.data).includes('HIDDEN-MARKER-ACCT'));
@@ -226,7 +226,7 @@ test('setPassword/changePassword/removePassword flows work end to end', async ()
       body: JSON.stringify({ action: 'removePassword', name: 'First', currentPassword: 'two' })
     });
     assert.equal(remove.status, 200);
-    assert.equal((await fetch(origin + '/api/profiles').then((r) => r.json())).profiles[0].hasPassword, false);
+    assert.equal((await fetch(origin + '/api/profiles').then((r) => r.json())).profiles.find(p => p.name === 'First').hasPassword, false);
     const plain = JSON.parse(readFileSync(join(dataDir, 'profiles', 'First.json'), 'utf8'));
     assert.equal(plain.futureField.kept, true);
     assert.equal((await fetch(origin + '/api/load?profile=First')).status, 200);
@@ -255,7 +255,7 @@ test('rename and delete move or clean auth entries', async () => {
       body: JSON.stringify({ action: 'rename', name: 'Old', newName: 'New' })
     });
     assert.equal(renamed.status, 200);
-    assert.deepEqual((await fetch(origin + '/api/profiles').then((r) => r.json())).profiles, [{ name: 'New', hasPassword: true }]);
+    assert.deepEqual((await fetch(origin + '/api/profiles').then((r) => r.json())).profiles.filter(p => p.name !== 'Demo'), [{ name: 'New', hasPassword: true }]);
 
     child.kill();
     await once(child, 'exit');
@@ -284,7 +284,7 @@ test('rename and delete move or clean auth entries', async () => {
     });
     assert.equal(deleteOld.status, 200);
     const list = (await fetch(server.origin + '/api/profiles').then((r) => r.json())).profiles;
-    assert.deepEqual(list, []);
+    assert.deepEqual(list.filter(p => p.name !== 'Demo'), []);
     assert.deepEqual(JSON.parse(readFileSync(join(dataDir, 'profiles', 'auth'), 'utf8')), {}, 'auth entry cleaned on delete');
   } finally {
     if (child && !child.killed) child.kill();
