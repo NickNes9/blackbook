@@ -46,19 +46,19 @@ Object.assign(window.BlackBook, {
 
   budgetChipsHtml() {
     const limits = this.monthlyBudgetView().limits;
+    const spend = this.budgetMonthlySpend();
     const budgetMap = Object.fromEntries(this.data.budgets.map(b => [b.categoryId, b]));
     let html = '<div class="cat-filter">';
     const hc = this.data.settings.highlightColor || '#fa8c3c';
     const totOn = this._budgetTotalOn === true;
     html += '<div class="cat-filter-chip' + (totOn ? ' selected' : '') + '" style="--cc:' + hc + ';' + (totOn ? 'background:' + hc + ';color:var(--on-fill);' : '') + '" onclick="BlackBook.toggleBudgetTotal()" title="Monthly total spent line \u00b7 click to toggle">' +
       '<span style="' + (totOn ? '' : 'opacity:0.5;') + '">TOTAL</span></div>';
-    for (const cat of this.categoriesVisibleInMonth(this.budgetAllocationMonth())) {
-      if (cat.name.toLowerCase() === 'transfer') continue;
+    for (const cat of this.budgetCategoriesWithSpend(spend)) {
       const color = this.categoryColor(cat);
       const b = budgetMap[cat.id];
       const on = !(this._budgetCatOff && this._budgetCatOff[cat.id]);
       const name = b && b.name ? b.name : cat.name;
-      html += '<div class="cat-filter-chip' + (on ? ' selected' : '') + '" style="--cc:' + color + ';' + (on ? 'background:' + color + ';color:var(--on-fill);' : '') + (on ? '' : 'opacity:0.55;') + '" onclick="BlackBook.toggleBudgetCat(\x27' + cat.id + '\x27)" title="' + this.escapeHtml(name) + (limits[cat.id] != null ? ' \u00b7 ' + this.fmtBase(limits[cat.id]) : ' \u00b7 NO LIMIT') + ' \u00b7 click to show/hide in graph">' + this.escapeHtml(name) + '</div>';
+      html += '<div class="cat-filter-chip' + (on ? ' selected' : '') + '" style="--cc:' + color + ';' + (on ? 'background:' + color + ';color:var(--on-fill);' : '') + (on ? '' : 'opacity:0.55;') + '" onclick="BlackBook.toggleBudgetCat(\x27' + cat.id + '\x27, event)" title="' + this.escapeHtml(name) + (limits[cat.id] != null ? ' \u00b7 ' + this.fmtBase(limits[cat.id]) : ' \u00b7 NO LIMIT') + ' \u00b7 click: toggle · Shift-click: toggle while keeping other selections · Alt-click: isolate">' + this.escapeHtml(name) + '</div>';
     }
     return html + '</div>';
   },
@@ -68,9 +68,14 @@ Object.assign(window.BlackBook, {
     this.renderBudget();
   },
 
-  toggleBudgetCat(catId) {
+  toggleBudgetCat(catId, ev) {
     if (!this._budgetCatOff) this._budgetCatOff = {};
-    this._budgetCatOff[catId] = !this._budgetCatOff[catId];
+    if (ev && ev.altKey) {
+      const visible = this.budgetCategoriesWithSpend();
+      this._budgetCatOff = Object.fromEntries(visible.map(cat => [cat.id, cat.id !== catId]));
+    } else {
+      this._budgetCatOff[catId] = !this._budgetCatOff[catId];
+    }
     this.renderBudget();
   },
 
@@ -86,12 +91,19 @@ Object.assign(window.BlackBook, {
       if (tx.type !== 'expense' || this.isTransfer(tx)) continue;
       const mk = String(tx.date || '').slice(0, 7);
       if (!totalSet.has(mk)) continue;
-      const rsd = Math.abs(this.toBase(tx.amount, tx.currency));
+      const rsd = Math.abs(this.transactionToBase(tx));
       if (!byCat[tx.categoryId]) byCat[tx.categoryId] = {};
       byCat[tx.categoryId][mk] = (byCat[tx.categoryId][mk] || 0) + rsd;
       total[mk] += rsd;
     }
     return { months: months, byCat: byCat, total: total };
+  },
+
+  budgetCategoriesWithSpend(spend = this.budgetMonthlySpend()) {
+    return this.categoriesVisibleInMonth(this.budgetAllocationMonth()).filter(cat => {
+      if (cat.name.toLowerCase() === 'transfer') return false;
+      return Object.values(spend.byCat[cat.id] || {}).some(amount => amount > 0);
+    });
   },
 
   renderBudgetChart() {
@@ -110,11 +122,12 @@ Object.assign(window.BlackBook, {
         backgroundColor: hc,
         fill: false,
         tension: 0.3,
+        cubicInterpolationMode: 'monotone',
         borderWidth: 2.5,
         pointRadius: 2
       });
     }
-    for (const cat of this.categoriesVisibleInMonth(this.budgetAllocationMonth())) {
+    for (const cat of this.budgetCategoriesWithSpend(spend)) {
       if (this._budgetCatOff && this._budgetCatOff[cat.id]) continue;
       const b = this.data.budgets.find(x => x.categoryId === cat.id);
       const per = spend.byCat[cat.id] || {};
@@ -125,6 +138,7 @@ Object.assign(window.BlackBook, {
         backgroundColor: this.categoryColor(cat),
         fill: false,
         tension: 0.3,
+        cubicInterpolationMode: 'monotone',
         borderWidth: 2,
         pointRadius: 3
       });
@@ -227,7 +241,7 @@ Object.assign(window.BlackBook, {
       if (tx.type !== 'expense') continue;
       if ((!planActive && !budgetedIds.has(tx.categoryId)) || this.isTransfer(tx)) continue;
       const { y, m } = this.ymOf(tx.date);
-      if (y === year && m === month) { used += Math.abs(this.toBase(tx.amount, tx.currency)); }
+      if (y === year && m === month) { used += Math.abs(this.transactionToBase(tx)); }
     }
     const totalRemaining = totalBudgeted - used;
     return '<div class="month-summary budget-summary">' +
@@ -261,7 +275,7 @@ Object.assign(window.BlackBook, {
       if (tx.type !== 'expense' && tx.type !== 'income') continue;
       const { y, m } = this.ymOf(tx.date);
       if (y !== year || m !== month) continue;
-      const val = this.toBase(tx.amount, tx.currency);
+      const val = this.transactionToBase(tx);
       if (tx.type === 'income') {
         if (val > 0) catIncome[tx.categoryId] = (catIncome[tx.categoryId] || 0) + val;
       } else {

@@ -1,5 +1,23 @@
 (function () {
 Object.assign(window.BlackBook, {
+  transferSettlementFieldsChanged(existing, proposed) {
+    const effectiveOld = {
+      ...existing,
+      amountIn: existing.amountIn == null ? existing.amount : existing.amountIn,
+      currencyIn: existing.currencyIn || existing.currency
+    };
+    return ['fromAccountId', 'toAccountId', 'amount', 'amountIn', 'currency', 'currencyIn', 'date']
+      .some(key => effectiveOld[key] !== proposed[key]);
+  },
+
+  transactionSettlementFieldsChanged(existing, proposed) {
+    const optional = new Set(['accountId', 'cardId', 'nativeAmount', 'nativeCurrency']);
+    return ['date', 'type', 'amount', 'currency', 'accountId', 'cardId', 'nativeAmount', 'nativeCurrency']
+      .some(key => optional.has(key)
+        ? (existing[key] ?? null) !== (proposed[key] ?? null)
+        : existing[key] !== proposed[key]);
+  },
+
   accountSelectOptions(selectedVal) {
     const opts = this.visibleAccounts().map(a => '<option value="' + a.id + '"' + (a.id === selectedVal ? ' selected' : '') + '>' + this.escapeHtml(a.name) + (a.currency && a.currency !== this.baseCurrency() ? ' (' + a.currency + ')' : '') + '</option>');
     for (const c of (this.data.creditCards || [])) {
@@ -8,7 +26,14 @@ Object.assign(window.BlackBook, {
     return opts.join('');
   },
 
+  recurringCategoryFor(note, source) {
+    const normalize = value => String(value || '').toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim().replace(/\s+/g, ' ');
+    const rule = (this.data.recurringRules || []).find(item => item && item.active !== false && item.action === 'category' && item.categoryId && item.match && normalize(note).includes(normalize(item.match)) && (!item.source || item.source === source));
+    return rule ? rule.categoryId : null;
+  },
+
   openNewTransaction(targetId) {
+    this._txDualCurrencyEdit = null;
     const usable = this.visibleAccounts().length + (this.data.creditCards || []).length;
     if (!usable) { alert('Create an account first — use CREATE FIRST ACCOUNT on the overview, or Settings → Accounts → + ADD.'); return; }
     document.getElementById('tx-id').value = '';
@@ -19,11 +44,17 @@ Object.assign(window.BlackBook, {
     const cardPrefill = targetId && String(targetId).startsWith('card:') ? targetId : null;
     const defaultAccountId = targetId || this.selectedAccount || '';
     const accSelect = document.getElementById('tx-account');
-    accSelect.innerHTML = (defaultAccountId ? '' : '<option value="">-- SELECT ACCOUNT --</option>') + (this.accountSelectOptions(defaultAccountId) || '<option value="">no accounts</option>');
-    const selAcc = cardPrefill ? null : this.data.accounts.find(a => a.id === defaultAccountId);
+    accSelect.innerHTML = (defaultAccountId ? '' : '<option value="">— SELECT ACCOUNT —</option>') + (this.accountSelectOptions(defaultAccountId) || '<option value="">no accounts</option>');
+    const selAcc = cardPrefill ? (this.cardById(String(cardPrefill).slice(5)) || null) : this.data.accounts.find(a => a.id === defaultAccountId);
     document.getElementById('tx-currency').value = selAcc ? (selAcc.currency || this.baseCurrency() || 'RSD') : this.baseCurrency();
     document.getElementById('tx-currency-select').value = selAcc ? (selAcc.currency || this.baseCurrency() || 'RSD') : this.baseCurrency();
+    document.getElementById('tx-currency-select').disabled = false;
     document.getElementById('tx-native-amount').value = '';
+    const secondaryCurrency = document.getElementById('tx-native-currency-select');
+    secondaryCurrency.value = document.getElementById('tx-currency-select').value;
+    this.syncCustomSelect('tx-currency-select');
+    this.syncCustomSelect(secondaryCurrency);
+    document.getElementById('tx-native-row').dataset.enabled = 'false';
     document.getElementById('tx-fee-amount').value = '';
     document.getElementById('tx-preview').textContent = '';
     this.updateTxNativeRow();
@@ -75,20 +106,37 @@ Object.assign(window.BlackBook, {
     this._quickEntryExtrasBound = true;
     document.getElementById('tx-account').addEventListener('change', (e) => {
       const v = String(e.target.value);
-      if (v.startsWith('card:')) {
-        document.getElementById('tx-currency').value = this.baseCurrency();
-        document.getElementById('tx-currency-select').value = this.baseCurrency();
+      const secondary = document.getElementById('tx-native-currency-select');
+      const followsAccount = secondary.value === document.getElementById('tx-currency-select').value;
+      const dualEdit = this._txDualCurrencyEdit && this._txDualCurrencyEdit.txId === document.getElementById('tx-id').value;
+      if (dualEdit) {
+        this.syncDualTransactionAmounts(v);
       } else {
-        const acc = this.data.accounts.find(a => a.id === v);
-        const cur = acc ? (acc.currency || this.baseCurrency() || 'RSD') : this.baseCurrency();
-        document.getElementById('tx-currency').value = cur;
-        document.getElementById('tx-currency-select').value = cur;
+        if (v.startsWith('card:')) {
+          const card = this.cardById(v.slice(5));
+          const cur = (card && card.currency) || this.baseCurrency();
+          document.getElementById('tx-currency').value = cur;
+          document.getElementById('tx-currency-select').value = cur;
+        } else {
+          const acc = this.data.accounts.find(a => a.id === v);
+          const cur = acc ? (acc.currency || this.baseCurrency() || 'RSD') : this.baseCurrency();
+          document.getElementById('tx-currency').value = cur;
+          document.getElementById('tx-currency-select').value = cur;
+        }
+        this.syncCustomSelect('tx-currency-select');
+        if (followsAccount) { secondary.value = document.getElementById('tx-currency-select').value; this.syncCustomSelect(secondary); }
       }
       this.updateTxNativeRow();
       this.updateTxPreview();
     });
     document.getElementById('tx-currency-select').addEventListener('change', (e) => {
       document.getElementById('tx-currency').value = e.target.value;
+      const secondary = document.getElementById('tx-native-currency-select');
+      this.syncCustomSelect(secondary);
+      this.updateTxNativeRow();
+      this.updateTxPreview();
+    });
+    document.getElementById('tx-native-currency-select').addEventListener('change', (e) => {
       this.updateTxNativeRow();
       this.updateTxPreview();
     });
@@ -98,52 +146,27 @@ Object.assign(window.BlackBook, {
   },
 
   updateTxNativeRow() {
-    const accountVal = document.getElementById('tx-account').value;
-    const cur = document.getElementById('tx-currency-select').value;
     const row = document.getElementById('tx-native-row');
     const feeRow = document.getElementById('tx-fee-row');
-    const label = row ? row.querySelector('label') : null;
-    if (!accountVal || accountVal.startsWith('card:') || cur === this.baseCurrency()) {
-      row.style.display = 'none';
-      if (feeRow) feeRow.style.display = 'none';
-      return;
-    }
-    const acc = this.data.accounts.find(a => a.id === accountVal);
-    const accCur = (acc && acc.currency) || this.baseCurrency();
-    if (accCur !== this.baseCurrency()) { row.style.display = 'none'; if (feeRow) feeRow.style.display = 'none'; return; }
+    const primary = document.getElementById('tx-currency-select').value;
+    const secondary = document.getElementById('tx-native-currency-select').value;
+    const shown = !!(secondary && secondary !== primary);
+    row.dataset.enabled = shown ? 'true' : 'false';
     row.style.display = '';
-    if (feeRow) feeRow.style.display = '';
-    if (label) label.textContent = 'NATIVE AMOUNT (' + cur + ')';
+    const amount = document.getElementById('tx-native-amount');
+    amount.hidden = false;
+    amount.disabled = !shown;
+    amount.required = shown;
+    amount.placeholder = 'AMOUNT';
+    document.getElementById('tx-account-currency').textContent = primary;
+    document.getElementById('tx-amount').placeholder = 'AMOUNT';
+    if (feeRow) feeRow.style.display = 'none';
   },
 
   updateTxPreview() {
     const previewEl = document.getElementById('tx-preview');
     if (!previewEl) return;
-    const accountVal = document.getElementById('tx-account').value;
-    const cur = document.getElementById('tx-currency-select').value;
-    if (!accountVal || accountVal.startsWith('card:') || cur === this.baseCurrency()) { previewEl.textContent = ''; return; }
-    const acc = this.data.accounts.find(a => a.id === accountVal);
-    const accCur = (acc && acc.currency) || this.baseCurrency() || 'RSD';
-    if (accCur !== this.baseCurrency()) { previewEl.textContent = ''; return; }
-    const nativeEl = document.getElementById('tx-native-amount');
-    const nativeVal = nativeEl && nativeEl.value.trim() ? this.evalAmount(nativeEl.value) : null;
-    const amtVal = this.evalAmount(document.getElementById('tx-amount').value);
-    const feeEl = document.getElementById('tx-fee-amount');
-    const manualFee = feeEl && feeEl.value.trim() ? this.evalAmount(feeEl.value) : null;
-    const fee = (acc && acc.foreignFee) || 0;
-    const parts = [];
-    if (amtVal > 0 && fee > 0 && (nativeVal > 0 || manualFee > 0)) {
-      const autoRes = nativeVal > 0 ? this.calcForeignFee(nativeVal, fee, cur) : { feeNative: null, feeBase: 0 };
-      const feeBase = manualFee > 0 ? manualFee : autoRes.feeBase;
-      const total = this.round2(amtVal + feeBase);
-      let feeTxt = 'FEE ' + this.fmtNumber(feeBase) + ' ' + this.baseCurrency();
-      if (manualFee > 0) feeTxt += ' (manual)';
-      else if (autoRes.feeNative != null) feeTxt += ' (' + this.fmtNumber(autoRes.feeNative) + ' ' + cur + ')';
-      parts.push(feeTxt + ' \u2192 ' + this.fmtNumber(total) + ' ' + this.baseCurrency());
-    } else if (nativeVal > 0) {
-      parts.push('\u2248 ' + this.fmtNumber(nativeVal) + ' ' + cur);
-    }
-    previewEl.textContent = parts.join(' \u00b7 ');
+    previewEl.textContent = '';
   },
 
   openTransferModal() {
@@ -171,11 +194,16 @@ Object.assign(window.BlackBook, {
     this._transferSourceIds = null;
     if (!tx || tx.type !== 'transfer') return this.openEditTransaction(txId);
     const vis = this.visibleAccounts();
-    const opts = vis.map(a => '<option value="' + a.id + '">' + this.escapeHtml(a.name) + ' (' + (a.currency || this.baseCurrency() || 'RSD') + ')</option>').join('');
-    document.getElementById('tr-from').innerHTML = opts;
-    document.getElementById('tr-to').innerHTML = opts;
-    document.getElementById('tr-from').value = tx.fromAccountId;
-    document.getElementById('tr-to').value = tx.toAccountId;
+    const hiddenLinked = [tx.fromAccountId, tx.toAccountId].map(id => (this.data.accounts || []).find(account => account.id === id && account.hidden)).filter(Boolean);
+    const options = [...vis, ...hiddenLinked.filter(account => !vis.some(item => item.id === account.id))];
+    const opts = options.map(a => '<option value="' + a.id + '">' + this.escapeHtml(a.name) + (a.hidden ? ' (HIDDEN)' : '') + ' (' + (a.currency || this.baseCurrency() || 'RSD') + ')</option>').join('');
+    const missingOption = '<option value="" selected>— ACCOUNT MISSING —</option>';
+    const fromSelect = document.getElementById('tr-from');
+    const toSelect = document.getElementById('tr-to');
+    fromSelect.innerHTML = (options.some(a => a.id === tx.fromAccountId) ? '' : missingOption) + opts;
+    toSelect.innerHTML = (options.some(a => a.id === tx.toAccountId) ? '' : missingOption) + opts;
+    fromSelect.value = options.some(a => a.id === tx.fromAccountId) ? tx.fromAccountId : '';
+    toSelect.value = options.some(a => a.id === tx.toAccountId) ? tx.toAccountId : '';
     document.getElementById('tr-amount').value = Math.abs(tx.amount);
     document.getElementById('tr-amount-in').value = tx.amountIn != null ? Math.abs(tx.amountIn) : '';
     const noteRaw = tx.note || '';
@@ -286,6 +314,8 @@ Object.assign(window.BlackBook, {
       e.preventDefault();
       const from = document.getElementById('tr-from').value;
       const to = document.getElementById('tr-to').value;
+      if (!from || !to) { alert('An account is missing. Please select both accounts before saving.'); return; }
+      if (from === to) { alert('Choose two different accounts.'); return; }
       const amountOut = this.evalAmount(amtOut.value);
       const amountInRaw = amtIn.value.trim();
       const amountIn = amountInRaw === '' ? null : this.evalAmount(amountInRaw);
@@ -301,10 +331,20 @@ Object.assign(window.BlackBook, {
           let finalAmountIn = amountIn;
           if (finalAmountIn == null || isNaN(finalAmountIn)) finalAmountIn = this.convertBetweenCurrencies(amountOut, curF, curT);
           if (finalAmountIn == null || isNaN(finalAmountIn)) finalAmountIn = amountOut;
+          const nextAmounts = {
+            fromAccountId: from,
+            toAccountId: to,
+            amount: Math.round(Math.abs(amountOut) * 100) / 100,
+            amountIn: Math.round(Math.abs(finalAmountIn) * 100) / 100,
+            currency: curF,
+            currencyIn: curT,
+            date
+          };
+          if (tx.settlements && this.transferSettlementFieldsChanged(tx, nextAmounts)) delete tx.settlements;
           tx.fromAccountId = from;
           tx.toAccountId = to;
-          tx.amount = Math.round(Math.abs(amountOut) * 100) / 100;
-          tx.amountIn = Math.round(Math.abs(finalAmountIn) * 100) / 100;
+          tx.amount = nextAmounts.amount;
+          tx.amountIn = nextAmounts.amountIn;
           tx.currency = curF;
           tx.currencyIn = curT;
           tx.date = date;
@@ -333,24 +373,45 @@ Object.assign(window.BlackBook, {
   },
 
   openEditTransaction(txId) {
+    this._txDualCurrencyEdit = null;
     const tx = this.data.transactions.find(t => t.id === txId);
     if (!tx) return;
     if (tx.type === 'transfer') { this.openEditTransfer(txId); return; }
     document.getElementById('tx-id').value = tx.id;
     document.getElementById('tx-date').value = this.fmtDateInput(tx.date);
     document.getElementById('tx-type').value = tx.type;
-    document.getElementById('tx-amount').value = tx.baseAmount != null ? Math.abs(tx.baseAmount) : Math.abs(tx.amount);
+    document.getElementById('tx-amount').value = Math.abs(tx.amount);
     document.getElementById('tx-amount').dataset.fallbackType = tx.type;
     document.getElementById('tx-amount').oninput = () => this.updateTransactionSign();
     this.updateTransactionSign();
     document.getElementById('tx-currency').value = tx.currency;
-    document.getElementById('tx-currency-select').value = tx.nativeCurrency || tx.currency;
+    document.getElementById('tx-currency-select').value = tx.currency;
+    document.getElementById('tx-currency-select').disabled = false;
     document.getElementById('tx-native-amount').value = tx.nativeAmount != null ? Math.abs(tx.nativeAmount) : '';
+    document.getElementById('tx-native-currency-select').value = tx.nativeCurrency || tx.currency;
+    this.syncCustomSelect('tx-currency-select');
+    this.syncCustomSelect('tx-native-currency-select');
+    document.getElementById('tx-native-row').dataset.enabled = tx.nativeAmount != null && tx.nativeCurrency && tx.nativeCurrency !== tx.currency ? 'true' : 'false';
     document.getElementById('tx-fee-amount').value = tx.feeAmount != null ? Math.abs(tx.feeAmount) : '';
     document.getElementById('tx-note').value = tx.note || '';
-    document.getElementById('tx-account').innerHTML = (tx.cardId
-      ? this.accountSelectOptions('card:' + tx.cardId)
-      : this.accountSelectOptions(tx.accountId));
+    const accountSelect = document.getElementById('tx-account');
+    const selectedAccount = tx.cardId ? 'card:' + tx.cardId : tx.accountId;
+    const accountExists = tx.cardId
+      ? (this.data.creditCards || []).some(card => card.id === tx.cardId)
+      : (this.data.accounts || []).some(account => account.id === tx.accountId);
+    const hiddenAccount = !tx.cardId && accountExists ? (this.data.accounts || []).find(account => account.id === tx.accountId && account.hidden) : null;
+    const accountOptions = this.accountSelectOptions(accountExists ? selectedAccount : '') + (hiddenAccount && !this.visibleAccounts().some(account => account.id === hiddenAccount.id) ? '<option value="' + this.escapeHtml(hiddenAccount.id) + '" selected>' + this.escapeHtml(hiddenAccount.name + ' (HIDDEN)') + '</option>' : '');
+    accountSelect.innerHTML = (accountExists ? '' : '<option value="" selected>— ACCOUNT MISSING —</option>') + accountOptions;
+    accountSelect.value = accountExists ? selectedAccount : '';
+    if (tx.nativeAmount != null && tx.nativeCurrency && tx.nativeCurrency !== tx.currency) {
+      this._txDualCurrencyEdit = {
+        txId: tx.id,
+        primaryCurrency: tx.currency,
+        otherCurrency: tx.nativeCurrency,
+        swapped: false
+      };
+      this.syncDualTransactionAmounts(accountSelect.value);
+    }
     const catInput = document.getElementById('tx-category-input');
     const catHidden = document.getElementById('tx-category');
     if (catInput && catHidden) { catHidden.value = tx.categoryId; const cat = this.data.categories.find(c => c.id === tx.categoryId); catInput.value = cat ? cat.name.toUpperCase() : ''; }
@@ -360,6 +421,34 @@ Object.assign(window.BlackBook, {
     this.bindQuickEntryExtras();
     this.updateTxNativeRow();
     this.updateTxPreview();
+  },
+
+  syncDualTransactionAmounts(accountVal) {
+    const pair = this._txDualCurrencyEdit;
+    if (!pair || pair.txId !== document.getElementById('tx-id').value) return;
+    const amountEl = document.getElementById('tx-amount');
+    const otherAmountEl = document.getElementById('tx-native-amount');
+    const accountId = String(accountVal || '');
+    if (!accountId) return;
+    const account = accountId.startsWith('card:')
+      ? (this.cardById(accountId.slice(5)) || {})
+      : (this.data.accounts || []).find(item => item.id === accountId) || {};
+    const accountCurrency = account.currency || this.baseCurrency();
+    const primarySelect = document.getElementById('tx-currency-select');
+    const secondarySelect = document.getElementById('tx-native-currency-select');
+    if (accountCurrency === secondarySelect.value && accountCurrency !== primarySelect.value) {
+      const amount = amountEl.value;
+      amountEl.value = otherAmountEl.value;
+      otherAmountEl.value = amount;
+      const currency = primarySelect.value;
+      primarySelect.value = secondarySelect.value;
+      secondarySelect.value = currency;
+      this.syncCustomSelect(primarySelect);
+      this.syncCustomSelect(secondarySelect);
+      pair.swapped = !pair.swapped;
+    }
+    amountEl.placeholder = 'AMOUNT (' + primarySelect.value + ')';
+    document.getElementById('tx-currency').value = primarySelect.value;
   },
 
   editHoveredTransaction(txId = this.hoveredTransactionId()) { if (txId) this.openEditTransaction(txId); },
@@ -462,7 +551,12 @@ Object.assign(window.BlackBook, {
   applyTransactionLinkRemove(tx) {
     const bp = this.billPaymentForTx(tx.id);
     if (bp) {
-      this.data.billPayments = this.data.billPayments.filter(p => p !== bp);
+      const remaining = this.billPaymentTransactionIds(bp).filter(id => id !== tx.id);
+      if (!remaining.length) this.data.billPayments = this.data.billPayments.filter(p => p !== bp);
+      else {
+        bp.relatedTxIds = remaining;
+        this.syncBillPaymentTransactions(bp, this.data.bills.find(bill => bill.id === bp.billId));
+      }
     }
     const debt = this.debtForPaymentTx(tx.id);
     if (debt) {
@@ -517,6 +611,10 @@ Object.assign(window.BlackBook, {
 
   openBulkEdit() {
     if (!this._bulkSel || !this._bulkSel.size) return;
+    if (this._bulkSel.size === 1) {
+      this.openEditTransaction(this._bulkSel.values().next().value);
+      return;
+    }
     const catSel = document.getElementById('bulk-category');
     const accSel = document.getElementById('bulk-account');
     catSel.innerHTML = '<option value="">-- keep current --</option>' + this.categoriesAvailableOn(this.today()).map(c => '<option value="' + c.id + '">' + this.escapeHtml(c.name) + '</option>').join('');
@@ -727,48 +825,39 @@ Object.assign(window.BlackBook, {
       const txType = document.getElementById('tx-type').value;
       const accountVal = document.getElementById('tx-account').value;
       if (!accountVal) { alert('Select an account first.'); return; }
-      const txData = { date: txDate, type: txType, amount: txType === 'income' ? rawAmt : -rawAmt, currency: document.getElementById('tx-currency-select').value, accountId: accountVal.startsWith('card:') ? null : accountVal, categoryId: document.getElementById('tx-category').value, note: document.getElementById('tx-note').value };
+      const primaryCurrency = document.getElementById('tx-currency-select').value;
+      const secondaryRow = document.getElementById('tx-native-row');
+      const secondaryInput = document.getElementById('tx-native-amount');
+      const secondaryCurrency = document.getElementById('tx-native-currency-select').value;
+      const hasSecondary = secondaryRow.dataset.enabled === 'true' && secondaryInput.value.trim() !== '';
+      const secondaryParsed = hasSecondary ? this.evalAmount(secondaryInput.value) : null;
+      if (hasSecondary && (!Number.isFinite(secondaryParsed) || secondaryParsed <= 0 || secondaryCurrency === primaryCurrency)) {
+        alert('Enter a valid secondary amount and choose a different currency.'); return;
+      }
+      const polarity = txType === 'income' ? 1 : -1;
+      const txData = { date: txDate, type: txType, amount: polarity * rawAmt, currency: primaryCurrency, accountId: accountVal.startsWith('card:') ? null : accountVal, categoryId: document.getElementById('tx-category').value, note: document.getElementById('tx-note').value };
+      const recurringSource = accountVal.startsWith('card:') ? accountVal : 'account:' + accountVal;
+      const ruleCategory = this.recurringCategoryFor(txData.note, recurringSource);
+      if (ruleCategory && this.categorySelectionAllowed(ruleCategory, txDate, txData.categoryId)) txData.categoryId = ruleCategory;
       const original = id ? this.data.transactions.find(t => t.id === id) : null;
       if (!this.categorySelectionAllowed(txData.categoryId, txDate, original && original.categoryId)) { alert('That category was archived for this date. Choose another category.'); return; }
-      if (!accountVal.startsWith('card:') && txData.currency && txData.currency !== this.baseCurrency()) {
-        const acc = this.data.accounts.find(a => a.id === accountVal);
-        const accCur = (acc && acc.currency) || this.baseCurrency() || 'RSD';
-        if (accCur === this.baseCurrency()) {
-          const nativeEl = document.getElementById('tx-native-amount');
-          const nativeVal = nativeEl && nativeEl.value.trim() ? this.evalAmount(nativeEl.value) : null;
-          const fee = (acc && acc.foreignFee) || 0;
-          if (nativeVal > 0) {
-            txData.nativeAmount = txType === 'income' ? Math.round(nativeVal * 100) / 100 : -Math.round(nativeVal * 100) / 100;
-            txData.nativeCurrency = txData.currency;
-          }
-          const feeEl = document.getElementById('tx-fee-amount');
-          const manualFee = feeEl && feeEl.value.trim() ? this.evalAmount(feeEl.value) : null;
-          if (fee > 0 || manualFee > 0) {
-            let feeBase;
-            if (manualFee != null) {
-              feeBase = this.round2(manualFee);
-            } else {
-              const nativeAbs = nativeVal > 0 ? nativeVal : (this.convertBetweenCurrencies(rawAmt, this.baseCurrency(), txData.currency) || 0);
-              feeBase = this.calcForeignFee(nativeAbs, fee, txData.currency).feeBase;
-            }
-            txData.amount = txType === 'income' ? this.round2(rawAmt + feeBase) : -this.round2(rawAmt + feeBase);
-            txData.baseAmount = rawAmt;
-            txData.feeAmount = feeBase;
-          } else {
-            txData.amount = txType === 'income' ? rawAmt : -rawAmt;
-          }
-          txData.currency = accCur;
-        }
+      if (hasSecondary) {
+        txData.nativeAmount = polarity * Math.round(Math.abs(secondaryParsed) * 100) / 100;
+        txData.nativeCurrency = secondaryCurrency;
       } else {
         delete txData.nativeAmount;
         delete txData.nativeCurrency;
-        delete txData.baseAmount;
-        delete txData.feeAmount;
       }
-      const orig = id ? this.data.transactions.find(t => t.id === id) : null;
-      if (orig && orig.cardId) { txData.cardId = orig.cardId; txData.accountId = null; }
-      else if (accountVal.startsWith('card:')) { txData.cardId = accountVal.slice(5); }
-      if (id) { const tx = this.data.transactions.find(t => t.id === id); if (tx) Object.assign(tx, txData); }
+      if (accountVal.startsWith('card:')) { txData.cardId = accountVal.slice(5); txData.accountId = null; }
+      else { txData.cardId = null; txData.accountId = accountVal; }
+      if (id) {
+        const tx = this.data.transactions.find(t => t.id === id);
+        if (tx) {
+          if (tx.settlements && this.transactionSettlementFieldsChanged(tx, txData)) delete tx.settlements;
+          Object.assign(tx, txData);
+          if (!hasSecondary) { delete tx.nativeAmount; delete tx.nativeCurrency; }
+        }
+      }
       else {
         txData.id = crypto.randomUUID(); this.data.transactions.push(txData);
       }

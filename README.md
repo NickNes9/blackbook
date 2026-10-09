@@ -2,6 +2,12 @@
 
 A local-first personal finance console. Terminal aesthetic with light/dark themes, fully keyboard-driven, single Node.js server with flat-file storage — no cloud, no accounts, your data stays on your machine.
 
+## What's new in 0.9.6 (work in progress)
+
+- **Yearly balances** — compare total balances or individual accounts, see opening/current/change summaries, and review yearly history in a scrollable list.
+- **Smoother charts** — all line graphs use constrained smooth curves that avoid overshooting between data points; rounded negative zero displays as zero.
+- **Recurring review and transfer history** — inspect repeated payments, connect matching entries to bills, and preserve dated partial settlements when viewing balances and forecasts.
+
 ## What's new in 0.9.5
 
 - Bills has a compact selected-year donut beside its line graph, using the same filters and floating tooltips. Resized graph panels keep their height when categories or filters are toggled across Overview, Budget, Bills, and Forecast.
@@ -148,6 +154,6 @@ Every user-facing feature — pages, modals, buttons, keyboard shortcuts, comman
 
 ---
 
-**BLACK BOOK v0.9.5**
+**BLACK BOOK v0.9.6 WIP**
 
 Created by Nikola Nešić

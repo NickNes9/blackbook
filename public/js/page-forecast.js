@@ -28,7 +28,7 @@
         '<button class="btn btn-sm btn-secondary page-control" onclick="BlackBook.openRecurringTemplate()">+ RECURRING</button></div>' +
         '<div class="month-summary"><div class="month-summary-item"><span class="month-summary-label">OPENING</span><span class="month-summary-value">' + this.fmtBase(Object.values(result.openingBalances).reduce((sum, amount) => sum + amount, 0)) + '</span></div><div class="month-summary-item"><span class="month-summary-label">ENDING</span><span class="month-summary-value ' + (final && final.total < 0 ? 'amount-negative' : 'amount-positive') + '">' + this.fmtBase(final ? final.total : 0) + '</span></div><div class="month-summary-item"><span class="month-summary-label">SHORTFALLS</span><span class="month-summary-value ' + (result.shortfalls.length ? 'amount-negative' : 'amount-positive') + '">' + result.shortfalls.length + '</span></div></div>' +
         '<div class="list-sep"></div>' +
-        '<div class="forecast-account-filters">' + accounts.map(account => '<button type="button" class="cat-filter-chip page-control' + (selected.has(account.id) ? ' selected' : '') + '" style="--cc:' + this.accountColor(account) + ';' + (selected.has(account.id) ? 'background:' + this.accountColor(account) + ';color:var(--on-fill);' : 'opacity:.55;') + '" aria-pressed="' + selected.has(account.id) + '" onclick="BlackBook.toggleForecastAccount(\'' + account.id + '\')">' + this.escapeHtml(account.name) + '</button>').join('') + '</div>' +
+        '<div class="forecast-account-filters">' + accounts.map(account => '<button type="button" class="cat-filter-chip page-control' + (selected.has(account.id) ? ' selected' : '') + '" style="--cc:' + this.accountColor(account) + ';' + (selected.has(account.id) ? 'background:' + this.accountColor(account) + ';color:var(--on-fill);' : 'opacity:.55;') + '" aria-pressed="' + selected.has(account.id) + '" onclick="BlackBook.toggleForecastAccount(\'' + account.id + '\', event)" title="Click: toggle · Shift-click: keep multiple selected · Alt-click: isolate">' + this.escapeHtml(account.name) + '</button>').join('') + '</div>' +
         (!selected.size ? '<div class="form-hint">Select an account to see its cash forecast.</div>' : '') +
         this.forecastWarningsHtml(result.warnings) +
         '<div class="page-scroll-wrap"><div class="forecast-list">' + eventRows + '</div></div>' +
@@ -83,6 +83,7 @@
             backgroundColor: expCol,
             fill: { target: 'origin', above: this.hexToRgba(incCol, 0.1), below: this.hexToRgba(expCol, 0.1) },
             tension: 0.3,
+            cubicInterpolationMode: 'monotone',
             segment: { borderColor: (c) => (c.p0.parsed.y < 0 || c.p1.parsed.y < 0 ? expCol : incCol) }
           }]
         },
@@ -91,10 +92,14 @@
     },
 
     setForecastDays(days) { this._forecastDays = days; this.renderForecast(); },
-    toggleForecastAccount(id) {
+    toggleForecastAccount(id, ev) {
       const all = this.visibleAccounts().map(account => account.id);
       const selected = new Set(this._forecastAccountIds == null ? all : this._forecastAccountIds);
-      if (selected.has(id)) selected.delete(id); else selected.add(id);
+      if (ev && ev.altKey) {
+        selected.clear();
+        selected.add(id);
+      } else if (selected.has(id)) selected.delete(id);
+      else selected.add(id);
       this._forecastAccountIds = [...selected]; this.renderForecast();
     },
 

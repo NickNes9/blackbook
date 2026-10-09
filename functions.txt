@@ -63,6 +63,20 @@ OVERVIEW
   and per-category detail; dismiss the panel with an X.
 - Hide accounts from the overview via the panel (hidden accounts keep
   their transactions but stop showing).
+- Open YEARLY BALANCES from the account-management panel to review each
+  year’s START, END, and CHANGE. A selected account shows a native-currency
+  start/end graph above a newest-first, scrollable history. “All accounts”
+  offers TOTAL and ACCOUNTS views: TOTAL combines start/end by year in the
+  profile base currency; ACCOUNTS graphs each selected account’s END in that
+  same currency. Conversion uses current rates and is labeled accordingly;
+  accounts with missing rates are omitted from combined values with a warning.
+  The current-year summary is through today. Hidden and closed accounts remain
+  selectable. In ACCOUNTS view, click a card to toggle it, Shift-click to
+  toggle while preserving other selections, or Alt-click to isolate it.
+- A recorded opening checkpoint is applied before ordinary January 1 activity;
+  the start includes only its designated opening correction. Other January 1
+  transactions remain ordinary activity. Checkpoint status is shown once in
+  the account context, without exposing stored target values.
 - Pick a displayed month/year with the month picker.
 - Monthly summary: income, expenses, and net for the displayed month.
 - Category breakdown bars showing where this month's money went.
@@ -74,7 +88,7 @@ OVERVIEW
     * "Selected (n)" chip to show only bulk-selected rows.
 - Transaction list rows with account stripe, date, category, note,
   action buttons (EDIT / DELETE) and the amount.
-- Sort the list by date or by value, ascending/descending.
+- Sort the list by date, value, or description/name, ascending/descending.
 - Transfers appear as special rows with both amounts (out -> in).
 - Click a row to bulk-select; shift-click selects a range; click outside
   the list to clear; bulk-edit, merge, or delete the selection.
@@ -102,9 +116,18 @@ TRANSACTIONS
   remember the last button choice per profile; a typed leading sign
   overrides it for that entry. Editing starts from the saved type. The
   colored button is square and separated from the amount field.
-- Two-way currency conversion in the transaction modal: enter native +
-  live vs base amounts; foreign fee percentage auto-applies for
-  non-base currency accounts.
+- Transactions can store an exact account-side amount/currency plus an optional
+  exact secondary amount/currency. Editing preserves both entered values rather
+  than reconstructing either side from a changing exchange rate.
+- New transactions show Account, Date, and signed Amount on the first row.
+  Purchase Currency defaults to the account currency; choosing a different
+  currency reveals the exact purchase amount field below.
+- Transaction entry places Account, Category, and Date on the first row, then
+  primary and purchase amounts on identical aligned rows with shared sign
+  buttons. The purchase amount stays visible but disabled until its currency
+  differs from the primary. The primary currency is shown as text; the purchase
+  currency remains selectable. The category
+  picker has a visible CATEGORY label and keeps its previous width.
 - Transfer money between any two accounts (with optional currency
   conversion and note). Note updates as accounts change.
 - Edit any transaction or transfer later.
@@ -132,15 +155,18 @@ BILLS
 - Pick which account a payment is drawn from (and it converts currency
   if needed).
 - Undo/toggle a payment - removes the linked transaction.
-- Toggle bills on/off in the graph (chips), and toggle the TOTAL line.
-- The graph's TOTAL line starts hidden. Narrow bill cells use compact
-  amounts and currency symbols where available; full values remain
-  available on hover.
+- Toggle bills on/off in the graph (chips); Shift-click preserves multiple
+  selections, and Alt-click isolates one bill. Toggle the TOTAL line.
+- The graph's TOTAL line starts hidden. Bill month cells show full amounts
+  whenever the rendered number fits with an 8 px inner margin; only values
+  that cannot fit use compact amounts and currency symbols where available.
+  Full values remain available on hover.
 - 12-month graph "BILLS BY MONTH" per bill, plus a monthly bill total.
 - Selected-year bill breakdown donut beside the monthly lines. It follows
   the same bill filters and shows amounts and percentages on hover.
 - Repair / re-link bill payments to their transactions automatically.
-- Sort the bills grid; monthly totals are summarized per month.
+- Reorder bills with up/down controls; bill order is stored in the profile.
+- Monthly totals are summarized per month.
 - Graph resize + show/hide like other pages.
 
 ----------------------------------------------------------------------
@@ -170,8 +196,11 @@ BUDGET
   percentage in the default text color.
 - Total budgeted vs total spent is summarized for the month.
 - Cards without a budget are still listed so you can add one on the spot.
-- Choose which categories appear in the graph (chips below the graph),
-  and toggle the TOTAL line on/off (hidden by default).
+- Choose which categories appear in the graph (chips below the graph).
+  Click toggles a category, Shift-click toggles while preserving multiple
+  selections, and Alt-click isolates one category.
+  Only categories with spending during the displayed year appear. Toggle
+  the TOTAL line on/off (hidden by default).
 - 12-month "SPEND BY CATEGORY" line graph, draggable to resize. Hovering a
   month shows exact values without needing to hit a tiny point.
 
@@ -260,7 +289,8 @@ FORECAST
 
 - See the forecasted cash balance over the coming months (lines per
   account, plus total).
-- Toggle individual accounts on/off using their colored chips in the forecast.
+- Toggle forecast accounts with their colored chips; Shift-click preserves
+  multiple selections, and Alt-click isolates one account.
 - Graph values appear in a floating tooltip above the chart, consistent
   with the Overview and Budget donuts; the tooltip follows the hovered
   point or slice and stays within the viewport.
@@ -340,10 +370,21 @@ Appearance / behavior:
 - Attention bar can be shown/hidden.
 
 Data health:
-- Settings > Data > CHECK DATA runs a read-only check for broken links,
-  duplicate IDs, possible duplicate transactions, and missing account rates.
-- Broken references show a red link icon next to affected records; click
-  it to review the report. Checks never modify or repair financial data.
+- Settings > Data > CHECK DATA opens Data Tools with CHECK DATA and
+  RECURRING PAYMENTS tabs.
+- Check Data reviews broken links, duplicate IDs, possible duplicate
+  transactions, and missing account rates. Broken transaction account links
+  can be repaired by choosing a replacement account; repairs are undoable and
+  the report refreshes after saving. Existing red link icons still open the
+  report for the affected record.
+- Recurring Payments suggests likely repeated transactions by description,
+  payment source, currency, and cadence. Amounts may vary. Suggestions never
+  change data automatically; selected entries can be reviewed, bulk edited,
+  merged with confirmation, or used to prefill a bill. Expense groups of any
+  detected cadence can become bills; non-annual cadences map to monthly bills.
+- Repeated charges stay separate unless the user explicitly chooses to merge
+  selected entries. Ordinary recurring card charges can become bills paid from
+  that card. Historical charges are not converted to installment plans.
 - New installations include an English-language fictional Demo covering
   every finance page. Existing Demo profiles stay unchanged at startup.
 
@@ -359,9 +400,30 @@ DATA MODEL HIGHLIGHTS (for reference)
 ----------------------------------------------------------------------
 
 - profiles/<name>.json holds everything for a profile.
-- Data keys: accounts, categories, creditCards, transactions,
+- Data keys: accounts, categories, creditCards, transactions, balanceCheckpoints,
   billPayments, budgets, budgetAllocations, savingsGoals, debts, invoices, installments,
-  invoiceTemplates, recurringTemplates, importRules, reconciliations (legacy data preserved), settings.
+  invoiceTemplates, recurringTemplates, importRules, recurringRules,
+  reconciliations (legacy data preserved), settings. Recurring rules can
+  categorize matching transactions or suppress matching recurrence suggestions;
+  rules are saved within that profile. Recurring review also links detected
+  historical payments to existing or newly created bills without creating
+  duplicate transactions. A bill month can aggregate several linked entries,
+  including split payments across accounts/cards and currencies; its displayed
+  total is converted to the profile base currency, while the link opens all
+  contributing transactions selected on Overview. The primary transaction
+  reference remains the largest linked payment. Similar
+  recurring descriptions are grouped and
+  sorted by name; unifying descriptions updates notes only and never combines
+  or removes transaction amounts.
+- Optional balanceCheckpoints record user-provided opening or current balance
+  anchors. Opening corrections are dated January 1 but represent the balance
+  before ordinary activity on that date. Settlement-aware account history
+  keeps one full transfer transaction while applying its validated balance
+  parts on their actual dates; it does not rewrite the transaction’s date or
+  split it into duplicate transfer records.
 - Transactions can be plain, transfers (from/to accounts), bill payments,
   invoice payments, debt payments, savings entries, or installment
   payments - all cross-linked so deletions stay consistent.
+- Transaction entries can preserve an exact original amount and currency
+  alongside the account amount. The original amount stays disabled until its
+  currency differs from the account currency.

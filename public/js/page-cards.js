@@ -374,7 +374,8 @@ planBlockHtml(inst) {
     const sel = document.getElementById('ctx-card');
     if (sel) sel.innerHTML = sorted.map(c => '<option value="' + c.id + '"' + (c.id === card.id ? ' selected' : '') + '>' + this.escapeHtml(c.name) + '</option>').join('');
     document.getElementById('ctx-edit-id').value = tx.id;
-    document.getElementById('ctx-amount').value = Math.abs(tx.amount);
+    const purchaseCurrency = card.currency || this.baseCurrency();
+    document.getElementById('ctx-amount').value = tx.nativeCurrency === purchaseCurrency && tx.nativeAmount != null ? Math.abs(tx.nativeAmount) : this.convertBetweenCurrencies(Math.abs(tx.amount), tx.currency || this.baseCurrency(), purchaseCurrency) ?? '';
     document.getElementById('ctx-date').value = this.fmtDateInput(tx.date);
     document.getElementById('ctx-note').value = tx.note || '';
     document.getElementById('ctx-months').value = String(months);
@@ -408,6 +409,10 @@ planBlockHtml(inst) {
       if (!card) return;
       let amt = this.evalAmount(document.getElementById('ctx-amount').value);
       if (!(amt > 0)) { alert('Enter a valid amount.'); return; }
+      const nativeAmount = amt;
+      const nativeCurrency = card.currency || this.baseCurrency();
+      amt = this.convertBetweenCurrencies(nativeAmount, nativeCurrency, this.baseCurrency());
+      if (!(amt > 0)) { this.showToast('Set an exchange rate for ' + nativeCurrency + ' before saving.'); return; }
       const date = this.parseDateInput(document.getElementById('ctx-date').value) || this.today();
       const note = document.getElementById('ctx-note').value.trim();
       const months = parseInt(document.getElementById('ctx-months').value, 10) || 1;
@@ -420,6 +425,9 @@ planBlockHtml(inst) {
         if (!tx) return;
         const oldAmt = Math.abs(tx.amount);
         tx.amount = -amt;
+        tx.currency = this.baseCurrency();
+        tx.nativeAmount = -nativeAmount;
+        tx.nativeCurrency = nativeCurrency;
         tx.date = date;
         tx.note = note;
         tx.categoryId = categoryId;
@@ -453,7 +461,7 @@ planBlockHtml(inst) {
           tx.installId = plan.id;
         }
       } else {
-        const newTx = { id: crypto.randomUUID(), date: date, type: 'expense', amount: -amt, currency: this.baseCurrency(), accountId: null, cardId: cardId, categoryId: categoryId, note: note };
+        const newTx = { id: crypto.randomUUID(), date: date, type: 'expense', amount: -amt, currency: this.baseCurrency(), nativeAmount: -nativeAmount, nativeCurrency: nativeCurrency, accountId: null, cardId: cardId, categoryId: categoryId, note: note };
         if (months > 1) {
           if (!this.data.installments) this.data.installments = [];
           const { y, m } = this.ymOf(date);

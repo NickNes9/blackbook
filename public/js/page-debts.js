@@ -213,9 +213,7 @@ Object.assign(window.BlackBook, {
     document.getElementById('debt-amount').value = '';
     document.getElementById('debt-currency').value = this.baseCurrency();
     document.getElementById('debt-date').value = this.fmtDateInput(this.today());
-    const in30 = new Date(Date.now() + 30 * 86400000);
-    document.getElementById('debt-due').value = this.fmtDateInput(in30.toISOString().slice(0, 10));
-    document.getElementById('debt-paid').value = '';
+    document.getElementById('debt-paid-date').value = '';
     document.getElementById('debt-note').value = '';
     const catInput = document.getElementById('debt-category-input');
     const catHidden = document.getElementById('debt-category');
@@ -241,8 +239,7 @@ Object.assign(window.BlackBook, {
     document.getElementById('debt-amount').value = d.amount;
     document.getElementById('debt-currency').value = d.currency || this.baseCurrency() || 'RSD';
     document.getElementById('debt-date').value = this.fmtDateInput(d.date || '');
-    document.getElementById('debt-due').value = this.fmtDateInput(d.dueDate || '');
-    document.getElementById('debt-paid').value = d.amountPaid || '';
+    document.getElementById('debt-paid-date').value = this.fmtDateInput(d.paidDate || '');
         document.getElementById('debt-note').value = d.note || '';
     const catInput = document.getElementById('debt-category-input');
     const catHidden = document.getElementById('debt-category');
@@ -269,13 +266,14 @@ Object.assign(window.BlackBook, {
       const parseNum = (v) => { const n = this.evalAmount(v); return isNaN(n) ? 0 : n; };
       const amount = parseNum(document.getElementById('debt-amount').value);
       if (!(amount > 0)) { alert('Enter a valid amount.'); return; }
-      let amountPaid = parseNum(document.getElementById('debt-paid').value) || 0;
+      const original = id ? this.data.debts.find(item => item.id === id) : null;
+      let amountPaid = original ? original.amountPaid || 0 : 0;
       if (amountPaid > amount) amountPaid = amount;
       const debtDate = this.parseDateInput(document.getElementById('debt-date').value) || this.today();
-      const debtDue = this.parseDateInput(document.getElementById('debt-due').value);
-      if (document.getElementById('debt-due').value.trim() && !debtDue) { alert('Enter a valid due date (' + this.dateFormatPattern() + ').'); return; }
-      const data = { person: person, type: document.getElementById('debt-type').value, amount: amount, currency: document.getElementById('debt-currency').value, date: debtDate, dueDate: debtDue || '', amountPaid: amountPaid, note: document.getElementById('debt-note').value.trim(), categoryId: document.getElementById('debt-category').value || null,  };
-      const original = id ? this.data.debts.find(item => item.id === id) : null;
+      const paidDateText = document.getElementById('debt-paid-date').value.trim();
+      const paidDate = this.parseDateInput(paidDateText);
+      if (paidDateText && !paidDate) { this.showToast('Enter a valid paid date (' + this.dateFormatPattern() + ').'); return; }
+      const data = { person: person, type: document.getElementById('debt-type').value, amount: amount, currency: document.getElementById('debt-currency').value, date: debtDate, paidDate: paidDate || '', amountPaid: amountPaid, note: document.getElementById('debt-note').value.trim(), categoryId: document.getElementById('debt-category').value || null };
       if (!this.categorySelectionAllowed(data.categoryId, debtDate, original && original.categoryId)) { alert('That category was archived for this date. Choose another category.'); return; }
       if (!this.data.debts) this.data.debts = [];
       if (id) {
@@ -328,7 +326,7 @@ Object.assign(window.BlackBook, {
       const capLeft = this.debtRemainingNative(d);
       if (amt > capLeft) amt = capLeft;
       if (!(amt > 0)) return;
-      await this.applyDebtPayment(d, amt, this.today());
+      await this.applyDebtPayment(d, amt, d.paidDate || this.today());
       this.closeModal('debt-pay-modal');
       this.renderPage(this.currentPage === 'debts' ? 'debts' : this.currentPage);
     });

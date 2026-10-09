@@ -15,7 +15,8 @@
       const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT);
       const nodes = [];
       while (walker.nextNode()) {
-        if (!walker.currentNode.parentElement.closest('.money-value')) nodes.push(walker.currentNode);
+        // Bill amounts already choose full/compact text using their actual cell width.
+        if (!walker.currentNode.parentElement.closest('.money-value, .bill-amount-full, .bill-amount-short')) nodes.push(walker.currentNode);
       }
       for (const node of nodes) {
         const pattern = bare ? /-?\d[\d,]*(?:\.\d+)?(?:\s+[A-Z]{3})?/g : /-?\d[\d,]*(?:\.\d+)?\s+[A-Z]{3}\b/g;

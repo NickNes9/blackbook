@@ -11,7 +11,7 @@ Object.assign(window.BlackBook, {
       const color = this.billColor(b);
       const on = b.active !== false;
       const amt = b.amount != null ? ' \u00b7 ' + this.fmtAmount(Math.abs(b.amount), b.currency || this.baseCurrency() || 'RSD') : '';
-      html += '<div class="cat-filter-chip' + (on ? ' selected' : '') + '" style="--cc:' + color + ';' + (on ? 'background:' + color + ';color:var(--on-fill);' : '') + (on ? '' : 'opacity:0.55;') + '" onclick="BlackBook.toggleBillActive(\x27' + b.id + '\x27)" title="' + this.escapeHtml(b.name) + amt + ' \u00b7 click to show/hide in graph">' + this.escapeHtml(b.name) + '</div>';
+      html += '<div class="cat-filter-chip' + (on ? ' selected' : '') + '" style="--cc:' + color + ';' + (on ? 'background:' + color + ';color:var(--on-fill);' : '') + (on ? '' : 'opacity:0.55;') + '" onclick="BlackBook.toggleBillActive(\x27' + b.id + '\x27, event)" title="' + this.escapeHtml(b.name) + amt + ' \u00b7 click: toggle · Shift-click: toggle while keeping other selections · Alt-click: isolate">' + this.escapeHtml(b.name) + '</div>';
     }
     html += '<span style="flex:1;"></span>';
     return html + '</div>';
@@ -45,9 +45,53 @@ Object.assign(window.BlackBook, {
         ? ''
         : '<div class="list-sep"></div>' + this.billsChipsHtml() +
           '<div class="overview-charts with-donut"><div class="chart-panel donut-panel"><div class="chart-head-row"><span id="bills-donut-title" class="chart-title-text">THIS YEAR</span></div><div class="budget-donut-wrap"><canvas id="bills-donut-chart" aria-label="Yearly bill breakdown"></canvas></div></div><div class="chart-panel overview-line-panel"><div class="chart-head-row"><span class="chart-title-text">BILLS BY MONTH</span></div><canvas id="bills-chart"></canvas></div></div>');
+    this.observeBillAmountFit(el);
     this.restoreChartPanelHeights(el, chartHeights);
     if (!hideGraph) { this.renderBillsChart(); this.renderBillsDonut(); }
     this.finishFocus('bill');
+  },
+
+  fitBillAmounts(root) {
+    if (!root) return;
+    for (const full of root.querySelectorAll('.bill-amount-full')) {
+      const short = full.nextElementSibling;
+      const cell = full.closest('.bill-cell, .bill-cell-total');
+      if (!short || !cell) continue;
+      const style = getComputedStyle(cell);
+      const previous = {
+        display: full.style.display,
+        visibility: full.style.visibility,
+        position: full.style.position,
+        whiteSpace: full.style.whiteSpace
+      };
+      full.style.display = 'inline-block';
+      full.style.visibility = 'hidden';
+      full.style.position = 'absolute';
+      full.style.whiteSpace = 'nowrap';
+      const textWidth = full.getBoundingClientRect().width;
+      full.style.display = previous.display;
+      full.style.visibility = previous.visibility;
+      full.style.position = previous.position;
+      full.style.whiteSpace = previous.whiteSpace;
+      const available = cell.clientWidth - (parseFloat(style.paddingLeft) || 0) - (parseFloat(style.paddingRight) || 0) - 8;
+      const fits = textWidth <= available;
+      full.style.display = fits ? 'inline' : 'none';
+      short.style.display = fits ? 'none' : 'inline';
+    }
+  },
+
+  observeBillAmountFit(page) {
+    if (!page) return;
+    if (this._billAmountResizeObserver) this._billAmountResizeObserver.disconnect();
+    const fit = () => requestAnimationFrame(() => this.fitBillAmounts(page));
+    fit();
+    if (typeof ResizeObserver === 'function') {
+      this._billAmountResizeObserver = new ResizeObserver(fit);
+      this._billAmountResizeObserver.observe(page);
+    } else if (!this._billAmountResizeFallback) {
+      this._billAmountResizeFallback = fit;
+      window.addEventListener('resize', fit);
+    }
   },
 
   async toggleBillsGraph() {
@@ -60,14 +104,15 @@ Object.assign(window.BlackBook, {
   billsSummaryHtml() {
     let total = 0;
     for (const b of this.data.bills) { if (b.amount != null) {
+      const monthlyAmount = Math.abs(b.amount) / (b.frequency === 'annual' ? 12 : 1);
       const cur = b.currency || this.baseCurrency() || 'RSD';
-      if (cur === this.baseCurrency()) { total += Math.abs(b.amount); }
+      if (cur === this.baseCurrency()) { total += monthlyAmount; }
       else {
         const from = this.billPayFrom(b);
         const acc = from && !from.startsWith('card:') ? this.data.accounts.find(a => a.id === from) : null;
         const fee = (acc && acc.foreignFee) || 0;
-        const feeRes = this.calcForeignFee(b.amount, fee, cur);
-        total += Math.abs(this.toBase(b.amount, cur)) + feeRes.feeBase;
+        const feeRes = this.calcForeignFee(monthlyAmount, fee, cur);
+        total += Math.abs(this.toBase(monthlyAmount, cur)) + feeRes.feeBase;
       }
     } }
     return '<div class="month-summary">' +
@@ -78,7 +123,7 @@ Object.assign(window.BlackBook, {
 
 billsGridHtml() {
     const formatGridAmount = (amount) => this.formatBillGridAmount(amount);
-    const compactAmount = (amount) => new Intl.NumberFormat('en-US', { notation: 'compact', maximumFractionDigits: 0 }).format(amount).toLowerCase();
+    const compactAmount = (amount) => new Intl.NumberFormat('en-US', { notation: 'compact', maximumFractionDigits: 0 }).format(amount).toLowerCase().replace(/^-0$/, '0');
     const responsiveAmount = (amount, currency, native = false) => {
       const symbol = { EUR: '€', USD: '$', GBP: '£', JPY: '¥', CHF: 'CHF' }[currency] || currency;
       const full = formatGridAmount(amount) + (native ? ' ' + currency : '');
@@ -100,7 +145,7 @@ billsGridHtml() {
       html += '<div class="bills-grid-empty">No bills yet. Click + NEW BILL to add one.</div>';
     }
     let bi = 0;
-    for (const bill of this.data.bills) {
+    for (const [billIndex, bill] of this.data.bills.entries()) {
       const alt = bi % 2 === 1 ? ' alt' : '';
       const color = this.billColor(bill);
       let yearTotal = 0;
@@ -108,22 +153,14 @@ billsGridHtml() {
       for (let m = 0; m < 12; m++) {
         const p = this.getBillPayment(bill.id, this.vy() + '-' + String(m + 1).padStart(2, '0'));
         if (!p) continue;
-        const tx = p.txId ? this.data.transactions.find(t => t.id === p.txId) : null;
-        if (tx) {
-          const txCur = tx.currency || bill.currency || this.baseCurrency() || 'RSD';
-          if (txCur === this.baseCurrency()) { yearTotal += Math.abs(tx.amount); }
-          else { yearTotal += Math.abs(this.toBase(tx.amount, txCur)); }
-        } else if (p.nativeAmount != null) {
-          yearTotal += Math.abs(p.amount);
-        } else {
-          const native = p.amount != null ? p.amount : bill.amount;
-          if (native != null) yearTotal += Math.abs(this.toBase(native, bill.currency || this.baseCurrency() || 'RSD'));
-        }
+        yearTotal += this.billPaymentTotalBase(p, bill);
         yearHasPaid = true;
       }
       html += '<div class="bill-cell-label' + alt + (bill.active ? '' : ' inactive') + this.focusRecordHtml('bill', bill.id) + '">' +
-        '<span class="bill-name-line"><span class="cat-dot" style="background:' + color + ';"></span><span class="bill-name-text">' + this.escapeHtml(bill.name) + this.healthMarker('bills', bill.id) + '</span><span class="bill-due-day">' + this.ordinalDay(bill.dueDay) + '</span></span>' +
+        '<span class="bill-name-line"><span class="cat-dot" style="background:' + color + ';"></span><span class="bill-name-text">' + this.escapeHtml(bill.name) + this.healthMarker('bills', bill.id) + '</span><span class="bill-due-day">' + (bill.frequency === 'annual' ? MONTHS_F[(Number(bill.dueMonth) || 1) - 1] + ' ' : '') + this.ordinalDay(bill.dueDay) + '</span></span>' +
         '<span class="bill-actions-mini">' +
+        '<button type="button" class="btn btn-sm btn-secondary btn-icon bill-order-btn" onclick="event.stopPropagation();BlackBook.reorderBill(\x27' + bill.id + '\x27,-1)" title="Move bill up" aria-label="Move ' + this.escapeHtml(bill.name) + ' up"' + (billIndex === 0 ? ' disabled' : '') + '>&#8593;</button>' +
+        '<button type="button" class="btn btn-sm btn-secondary btn-icon bill-order-btn" onclick="event.stopPropagation();BlackBook.reorderBill(\x27' + bill.id + '\x27,1)" title="Move bill down" aria-label="Move ' + this.escapeHtml(bill.name) + ' down"' + (billIndex === this.data.bills.length - 1 ? ' disabled' : '') + '>&#8595;</button>' +
         '<button class="btn btn-sm ' + (bill.autopay ? 'btn-primary' : 'btn-muted') + '" onclick="BlackBook.toggleBillAutopay(\x27' + bill.id + '\x27)" title="Auto-mark upcoming months as paid">' + (bill.autopay ? 'AUTO' : 'MAN') + '</button>' +
         '<button class="btn btn-sm btn-secondary" onclick="BlackBook.openEditBill(\x27' + bill.id + '\x27)">EDIT</button>' +
         '<button class="btn btn-sm btn-danger btn-icon" title="Delete bill" onclick="BlackBook.deleteBill(\x27' + bill.id + '\x27)">' + this.xIcon() + '</button></span>' +
@@ -131,10 +168,19 @@ billsGridHtml() {
       for (let m = 0; m < 12; m++) {
         const mk = this.vy() + '-' + String(m + 1).padStart(2, '0');
         const paid = this.getBillPayment(bill.id, mk);
+        if (!paid && !this.billOccursInMonth(bill, mk)) {
+          html += '<div class="bill-cell disabled bill-not-due' + alt + '" aria-hidden="true"></div>';
+          continue;
+        }
         let amtLabel;
         if (paid) {
-          const tx = paid.txId ? this.data.transactions.find(t => t.id === paid.txId) : null;
+          const paymentTransactions = this.billPaymentTransactions(paid);
+          const tx = paymentTransactions.find(item => item.id === paid.txId) || paymentTransactions[0] || null;
           let rsdAmount, nativeAbs;
+          if (paymentTransactions.length > 1) {
+            rsdAmount = this.billPaymentTotalBase(paid, bill);
+            amtLabel = responsiveAmount(rsdAmount, this.baseCurrency());
+          } else {
           if (tx) {
             const txCur = tx.currency || bill.currency || this.baseCurrency() || 'RSD';
             if (txCur === this.baseCurrency()) {
@@ -147,7 +193,7 @@ billsGridHtml() {
             rsdAmount = Math.abs(paid.amount);
             nativeAbs = paid.nativeAmount != null ? Math.abs(paid.nativeAmount) : null;
           }
-          const natCur = (tx && tx.nativeCurrency) || paid.nativeCurrency || bill.currency || this.baseCurrency() || 'RSD';
+          const natCur = (tx && (tx.nativeCurrency || tx.currency)) || paid.nativeCurrency || paid.payCurrency || bill.currency || this.baseCurrency() || 'RSD';
           const rsd = responsiveAmount(rsdAmount, this.baseCurrency());
           let nativeVal = nativeAbs != null ? Math.abs(nativeAbs) : null;
           if (nativeVal == null && natCur !== this.baseCurrency()) {
@@ -157,15 +203,17 @@ billsGridHtml() {
           amtLabel = nativeVal != null && natCur !== this.baseCurrency()
             ? '<div class="bill-amt-lines" title="' + this.escapeHtml(formatGridAmount(rsdAmount) + ' ' + this.baseCurrency() + ' / ' + formatGridAmount(nativeVal) + ' ' + natCur) + '"><span class="bill-amt-rsd">' + rsd + '</span><span class="bill-amt-native">' + responsiveAmount(nativeVal, natCur, true) + '</span></div>'
             : rsd;
+          }
         } else {
           amtLabel = '';
         }
         const cellStyle = paid ? ' style="background:' + color + ';color:var(--on-fill);font-weight:700;"' : '';
         const clickFn = 'toggleBillPayment';
-        const transactionLink = paid && paid.txId ? this.linkedTransactionButton(paid.txId) : '';
+        const transactionLink = paid && paid.txId ? this.linkedBillPaymentButton(paid) : '';
+        const linkedCount = paid ? this.billPaymentTransactions(paid).length : 0;
         html += '<div class="bill-cell' + alt + (paid ? ' paid' : '') + '"' + cellStyle + ' onclick="BlackBook.' + clickFn + '(\x27' + bill.id + '\x27,\x27' + mk + '\x27)" oncontextmenu="BlackBook.openBillPayModal(\x27' + bill.id + '\x27,\x27' + mk + '\x27);return false;" title="' +
-          bill.name + ' \u00b7 due ' + this.ordinalDay(bill.dueDay) +
-          (paid ? ' \u00b7 paid \u00b7 click to unpay' : ' \u00b7 click to mark paid') +
+          bill.name + ' \u00b7 due ' + (bill.frequency === 'annual' ? MONTHS_F[(Number(bill.dueMonth) || 1) - 1] + ' ' : '') + this.ordinalDay(bill.dueDay) +
+          (paid ? ' \u00b7 paid' + (linkedCount > 1 ? ' · ' + linkedCount + ' linked transactions' : '') + ' \u00b7 click to unpay' : ' \u00b7 click to mark paid') +
           ' &middot; right-click for custom amount">' + amtLabel + transactionLink + '</div>';
       }
       html += '<div class="bill-cell-total' + alt + '"' + (yearHasPaid ? ' style="background:' + color + '22;color:' + color + ';font-weight:700;" title="' + this.escapeHtml(formatGridAmount(yearTotal) + ' ' + this.baseCurrency()) + '"' : '') + '>' + (yearHasPaid ? responsiveAmount(yearTotal, this.baseCurrency()) : '') + '</div>';
@@ -178,21 +226,25 @@ billsGridHtml() {
   formatBillGridAmount(amount) { return this.fmtNumber(amount).replace(/\.00$/, ''); },
 
   openNewBill() {
+    this._pendingRecurringBillTxIds = null;
     document.getElementById('bill-id').value = '';
     document.getElementById('bill-name').value = '';
     document.getElementById('bill-amount').value = '';
     document.getElementById('bill-currency').value = this.baseCurrency();
     this.updateBillAmountLabel();
     document.getElementById('bill-dueDay').value = '';
-    document.getElementById('bill-active').value = 'true';
-    document.getElementById('bill-autopay').checked = false;
+    document.getElementById('bill-frequency-toggle').dataset.frequency = 'monthly';
+    document.getElementById('bill-dueMonth').value = String(new Date().getMonth() + 1);
+    this.updateBillFrequencyFields();
+    document.getElementById('bill-autopay-toggle').dataset.autopay = 'false';
+    this.updateBillAutopayButton();
     const colorEl = document.getElementById('bill-color');
     colorEl.value = '#888888';
     colorEl.disabled = false;
     const hexEl = document.getElementById('bill-color-hex');
     if (hexEl) { hexEl.value = '#888888'; hexEl.dataset.auto = '1'; }
     const resetBtn = document.getElementById('bill-color-reset');
-    if (resetBtn) { resetBtn.dataset.name = ''; }
+    if (resetBtn) { resetBtn.dataset.name = ''; resetBtn.innerHTML = this.refreshIcon(); }
     this.bindColorPicker('bill-color', 'bill-color-hex', 'bill-color-reset');
     const catInput = document.getElementById('bill-category-input');
     const catHidden = document.getElementById('bill-category');
@@ -218,15 +270,18 @@ billsGridHtml() {
     document.getElementById('bill-currency').value = bill.currency;
     this.updateBillAmountLabel();
     document.getElementById('bill-dueDay').value = bill.dueDay;
-    document.getElementById('bill-active').value = String(bill.active);
-    document.getElementById('bill-autopay').checked = !!bill.autopay;
+    document.getElementById('bill-frequency-toggle').dataset.frequency = bill.frequency === 'annual' ? 'annual' : 'monthly';
+    document.getElementById('bill-dueMonth').value = String(Number(bill.dueMonth) || 1);
+    this.updateBillFrequencyFields();
+    document.getElementById('bill-autopay-toggle').dataset.autopay = String(!!bill.autopay);
+    this.updateBillAutopayButton();
     const colorEl = document.getElementById('bill-color');
     colorEl.value = this.billColor(bill);
     colorEl.disabled = false;
     const hexEl = document.getElementById('bill-color-hex');
     if (hexEl) { hexEl.value = this.billColor(bill); hexEl.dataset.auto = bill.color ? '0' : '1'; }
     const resetBtn = document.getElementById('bill-color-reset');
-    if (resetBtn) { resetBtn.dataset.name = bill.name || bill.id || ''; }
+    if (resetBtn) { resetBtn.dataset.name = bill.name || bill.id || ''; resetBtn.innerHTML = this.refreshIcon(); }
     this.bindColorPicker('bill-color', 'bill-color-hex', 'bill-color-reset');
     const catInput = document.getElementById('bill-category-input');
     const catHidden = document.getElementById('bill-category');
@@ -270,10 +325,15 @@ billsGridHtml() {
     this.renderBills();
   },
 
-  async toggleBillActive(billId) {
-    const bill = this.data.bills.find(b => b.id === billId);
+  async toggleBillActive(billId, ev) {
+    const bills = this.data.bills || [];
+    const bill = bills.find(b => b.id === billId);
     if (!bill) return;
-    bill.active = !bill.active;
+    if (ev && ev.altKey) {
+      for (const item of bills) item.active = item.id === billId;
+    } else {
+      bill.active = bill.active === false;
+    }
     await this.save({ undoable: true, label: 'Change bill visibility' });
     this.renderBills();
   },
@@ -284,6 +344,7 @@ billsGridHtml() {
     if (!this.data.billPayments) this.data.billPayments = [];
     const bill = this.data.bills.find(b => b.id === billId);
     const idx = this.data.billPayments.findIndex(p => p.billId === billId && p.month === mk);
+    if (!bill || (idx < 0 && !this.billOccursInMonth(bill, mk))) return;
     if (idx >= 0) {
       this.removeBillTransaction(this.data.billPayments[idx]);
       this.data.billPayments.splice(idx, 1);
@@ -308,6 +369,7 @@ billsGridHtml() {
   applyAutopayForBill(bill) {
     const n = new Date();
     const mk = n.getFullYear() + '-' + String(n.getMonth() + 1).padStart(2, '0');
+    if (!this.billOccursInMonth(bill, mk)) return;
     const dueDay = bill.dueDay || 1;
     if (n.getDate() >= dueDay) {
       this.ensureBillPaid(bill, mk);
@@ -348,7 +410,7 @@ billsGridHtml() {
   billMatchTx(bill, pay) {
     const amt = pay.amount != null ? Math.abs(pay.amount) : (bill.amount != null ? Math.abs(bill.amount) : null);
     const from = pay.accountId || this.billPayFrom(bill);
-    const linked = new Set((this.data.billPayments || []).map(p => p.txId).filter(Boolean));
+    const linked = new Set((this.data.billPayments || []).flatMap(p => this.billPaymentTransactionIds(p)));
     const candidates = (this.data.transactions || []).filter(t => {
       if (t.type !== 'expense' || this.isTransfer(t)) return false;
       if (linked.has(t.id)) return false;
@@ -438,12 +500,11 @@ billsGridHtml() {
   },
 
   removeBillTransaction(pay) {
-    if (!pay.txId) return;
-    const tx = this.data.transactions.find(t => t.id === pay.txId);
-    if (tx && String(tx.id).indexOf('bil-') === 0) {
-      this.data.transactions = (this.data.transactions || []).filter(t => t.id !== pay.txId);
-    }
+    const ids = this.billPaymentTransactionIds(pay);
+    const syntheticIds = new Set(ids.filter(id => String(id).startsWith('bil-')));
+    if (syntheticIds.size) this.data.transactions = (this.data.transactions || []).filter(tx => !syntheticIds.has(tx.id));
     delete pay.txId;
+    delete pay.relatedTxIds;
   },
 
   renderBillsChart() {
@@ -462,15 +523,9 @@ billsGridHtml() {
           let s = 0;
           for (const b of this.data.bills) {
             const p = this.getBillPayment(b.id, mk);
+            if (!p && !this.billOccursInMonth(b, mk)) continue;
             if (p) {
-              const tx = p.txId ? this.data.transactions.find(t => t.id === p.txId) : null;
-              if (tx) {
-                const txCur = tx.currency || b.currency || this.baseCurrency() || 'RSD';
-                if (txCur === this.baseCurrency()) { s += Math.abs(tx.amount); }
-                else { s += Math.abs(this.toBase(tx.amount, txCur)); }
-              }
-              else if (p.nativeAmount != null) { s += Math.abs(p.amount); }
-              else { const native = p.amount != null ? p.amount : b.amount; if (native != null) s += Math.abs(this.toBase(native, b.currency || this.baseCurrency() || 'RSD')); }
+              s += this.billPaymentTotalBase(p, b);
             } else {
               const native = b.amount;
               if (native != null) {
@@ -492,6 +547,7 @@ billsGridHtml() {
         backgroundColor: hc,
         fill: false,
         tension: 0.3,
+        cubicInterpolationMode: 'monotone',
         borderWidth: 2.5,
         pointRadius: 2
       });
@@ -502,16 +558,8 @@ billsGridHtml() {
         label: bill.name,
         data: months.map(mk => {
           const p = this.getBillPayment(bill.id, mk);
-          if (p) {
-            const tx = p.txId ? this.data.transactions.find(t => t.id === p.txId) : null;
-            if (tx) {
-              const txCur = tx.currency || bill.currency || this.baseCurrency() || 'RSD';
-              return this.round2(txCur === this.baseCurrency() ? Math.abs(tx.amount) : Math.abs(this.toBase(tx.amount, txCur)));
-            }
-            if (p.nativeAmount != null) return this.round2(Math.abs(p.amount));
-            const native = p.amount != null ? p.amount : bill.amount;
-            return native != null ? this.round2(this.toBase(native, bill.currency)) : 0;
-          }
+          if (p) return this.billPaymentTotalBase(p, bill);
+          if (!this.billOccursInMonth(bill, mk)) return null;
           const native = bill.amount;
           if (native == null) return 0;
           const cur = bill.currency || this.baseCurrency() || 'RSD';
@@ -526,6 +574,7 @@ billsGridHtml() {
         backgroundColor: this.billColor(bill),
         fill: false,
         tension: 0.3,
+        cubicInterpolationMode: 'monotone',
         borderWidth: 2,
         pointRadius: 3
       });
@@ -585,14 +634,70 @@ billsGridHtml() {
     });
   },
 
+  async reorderBill(billId, direction) {
+    const bills = this.data.bills || [];
+    const index = bills.findIndex(bill => bill.id === billId);
+    const target = index + Math.sign(direction);
+    if (index < 0 || target < 0 || target >= bills.length) return;
+    [bills[index], bills[target]] = [bills[target], bills[index]];
+    if (!(await this.save({ undoable: true, label: 'Reorder bills' }))) {
+      [bills[index], bills[target]] = [bills[target], bills[index]];
+      return;
+    }
+    this.renderBills();
+  },
+
+  updateBillFrequencyFields() {
+    const toggle = document.getElementById('bill-frequency-toggle');
+    const frequency = toggle && toggle.dataset.frequency === 'annual' ? 'annual' : 'monthly';
+    document.getElementById('bill-dueMonth-group').classList.toggle('hidden', frequency !== 'annual');
+    if (toggle) {
+      toggle.textContent = frequency === 'annual' ? 'ANNUAL' : 'MONTHLY';
+      toggle.classList.toggle('btn-primary', frequency === 'annual');
+      toggle.classList.toggle('btn-muted', frequency !== 'annual');
+      toggle.setAttribute('aria-pressed', String(frequency === 'annual'));
+    }
+  },
+
+  toggleBillFrequency() {
+    const frequency = document.getElementById('bill-frequency-toggle');
+    frequency.dataset.frequency = frequency.dataset.frequency === 'annual' ? 'monthly' : 'annual';
+    this.updateBillFrequencyFields();
+  },
+
+  updateBillAutopayButton() {
+    const button = document.getElementById('bill-autopay-toggle');
+    if (!button) return;
+    const enabled = button.dataset.autopay === 'true';
+    button.textContent = enabled ? 'AUTO' : 'MANUAL';
+    button.classList.toggle('btn-primary', enabled);
+    button.classList.toggle('btn-muted', !enabled);
+    button.setAttribute('aria-pressed', String(enabled));
+    button.title = enabled ? 'Automatic payment is on' : 'Automatic payment is off';
+  },
+
+  toggleBillAutopayField() {
+    const button = document.getElementById('bill-autopay-toggle');
+    button.dataset.autopay = String(button.dataset.autopay !== 'true');
+    this.updateBillAutopayButton();
+  },
+
+  billOccursInMonth(bill, monthKey) {
+    if (!bill || bill.frequency !== 'annual') return true;
+    const month = Number(String(monthKey || '').slice(5, 7));
+    return month >= 1 && month <= 12 && month === (Number(bill.dueMonth) || 1);
+  },
+
   openBillPayModal(billId, mk) {
     const bill = this.data.bills.find(b => b.id === billId);
     if (!bill) return;
+    if (!this.getBillPayment(billId, mk) && !this.billOccursInMonth(bill, mk)) return;
     this._bpayBill = bill;
     this._bpayMk = mk;
     const existing = this.getBillPayment(billId, mk);
-    const cur = bill.currency || this.baseCurrency() || 'RSD';
-    const from = this.billPayFrom(bill);
+    const linkedTx = existing && existing.txId ? (this.data.transactions || []).find(tx => tx.id === existing.txId) : null;
+    const cur = (linkedTx && (linkedTx.nativeCurrency || linkedTx.currency)) || (existing && existing.payCurrency) || bill.currency || this.baseCurrency() || 'RSD';
+    const from = linkedTx ? (linkedTx.cardId ? 'card:' + linkedTx.cardId : linkedTx.accountId) : (existing && existing.accountId) || this.billPayFrom(bill);
     const accSel = document.getElementById('bpay-account');
     const curSel = document.getElementById('bpay-currency');
     accSel.innerHTML = this.accountSelectOptions(from);
@@ -741,6 +846,13 @@ billsGridHtml() {
     this._billPaymentsRepaired = true;
     let changed = false;
     for (const p of this.data.billPayments) {
+      const linkedTransactions = this.billPaymentTransactions(p);
+      if (linkedTransactions.length > 1) {
+        const before = JSON.stringify([p.relatedTxIds, p.txId, p.amount, p.amountCurrency, p.payCurrency]);
+        this.syncBillPaymentTransactions(p, this.data.bills.find(b => b.id === p.billId));
+        if (before !== JSON.stringify([p.relatedTxIds, p.txId, p.amount, p.amountCurrency, p.payCurrency])) changed = true;
+        continue;
+      }
       if (!p.txId) continue;
       const tx = this.data.transactions.find(t => t.id === p.txId);
       if (!tx) continue;

@@ -734,6 +734,16 @@ select:disabled {
   text-transform: none;
 }
 
+.color-picker-row .color-reset-button.btn.btn-icon,
+.color-picker-row .bill-color-reset.btn.btn-icon { width:28px; min-width:28px; height:28px; flex:0 0 28px; }
+.color-picker-row .color-reset-button svg,
+.color-picker-row .bill-color-reset svg { width:14px; height:14px; }
+#bill-dueMonth-group.hidden { display:none !important; }
+.bill-timing-row { display:grid; grid-template-columns:minmax(72px,.7fr) minmax(108px,1fr) minmax(125px,1.2fr); gap:10px; }
+.bill-timing-row .form-group { min-width:0; }
+.bill-frequency-button, .bill-autopay-button { width:100%; min-height:32px; }
+#bill-modal .modal-content { max-width:520px; }
+
 /* ===== MODALS ===== */
 .modal {
   position: fixed;
@@ -906,6 +916,11 @@ select:disabled {
 .command-item-label {
   font-weight: 600;
 }
+
+.command-transaction-item { display:block; min-width:0; }
+.command-transaction-item .command-item-label { display:block; min-width:0; }
+.command-transaction-meta { display:flex; align-items:center; gap:10px; min-width:0; white-space:nowrap; }
+.command-transaction-note { display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; margin-top:3px; color:var(--text-dim); font-size:12px; font-weight:400; }
 
 .command-item-shortcut {
   font-size:12px;
@@ -1749,7 +1764,7 @@ select:disabled {
   aspect-ratio: 1;
   padding: 0;
   justify-content: center;
-  border-left: 1px solid var(--divider);
+  border-left: none;
 }
 .account-mgr-square .mgr-lines {
   display: flex;
@@ -1890,6 +1905,37 @@ select:disabled {
 .qe-account { flex: 4 1 260px !important; min-width: 200px; max-width: none; }
 .qe-date { flex: 0 0 130px !important; max-width: 130px; }
 .qe-currency { flex: 0 0 auto !important; width: auto !important; min-width: 88px; }
+.qe-account-currency { display:flex; align-items:center; justify-content:center; flex:0 0 88px; width:88px; height:30px; color:var(--text-muted); font-size:12px; text-align:center; }
+.qe-account-category-row { min-height:30px; }
+.qe-category-control { display:flex; align-items:center; gap:6px; width:100%; min-width:0; }
+.qe-category-control .category-autocomplete { flex:1; min-width:0; max-width:250px; }
+.qe-main-row, .qe-purchase-row { min-height:30px; }
+.qe-purchase-label { flex:none; margin:0; color:var(--text-muted); font-size:11px; }
+#transaction-modal #tx-native-amount[hidden] { display:none !important; }
+.qe-secondary-amount { display:flex; align-items:center; gap:5px; width:100%; min-width:0; }
+.qe-secondary-amount::before { content:""; flex:0 0 28px; }
+.qe-secondary-amount > input { flex:1 1 auto !important; width:0; min-width:0; max-width:none; height:30px; }
+.qe-secondary-amount > .custom-select { flex:0 0 88px !important; width:88px !important; min-width:88px; }
+#transaction-modal .qe-account-category-row { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,250px) 130px; gap:8px; align-items:center; }
+#transaction-modal .qe-account-category-row > .custom-select:has(> .qe-account) { width:100% !important; min-width:0; }
+#transaction-modal .qe-account-category-row .qe-account { min-width:0; width:100% !important; }
+#transaction-modal .qe-main-row,
+#transaction-modal .qe-purchase-row { display:grid; grid-template-columns:130px minmax(0,1fr); gap:6px; align-items:center; }
+#transaction-modal .qe-main-row > .qe-purchase-label,
+#transaction-modal .qe-purchase-row > .qe-purchase-label { text-align:right; padding-right:6px; }
+#transaction-modal .qe-main-row .qe-amount-wrap { width:100%; min-width:0; }
+@media (max-width:520px) {
+  #transaction-modal .qe-account-category-row { grid-template-columns:minmax(0,1fr) 110px; }
+  #transaction-modal .qe-account-category-row > .custom-select:has(> .qe-account) { grid-column:1 / -1; }
+  #transaction-modal .qe-category-control { grid-column:1; }
+  #transaction-modal .qe-account-category-row .qe-date { grid-column:2; width:100%; max-width:none; }
+  #transaction-modal .qe-category-control .category-autocomplete { max-width:none; }
+  #transaction-modal .qe-main-row,
+  #transaction-modal .qe-purchase-row { grid-template-columns:86px minmax(0,1fr); }
+  #transaction-modal .qe-main-row > .qe-purchase-label,
+  #transaction-modal .qe-purchase-row > .qe-purchase-label { grid-column:1; text-align:right; }
+}
+.qe-secondary-amount select { flex:0 0 88px !important; width:88px !important; min-width:88px; }
 .qe-amount-wrap { display:flex; flex:1 1 auto; min-width:120px; margin-left:auto; height:30px; gap:5px; }
 .qe-amount-wrap .qe-amount { flex:1 1 auto !important; min-width:0; max-width:none; margin:0; height:30px; }
 .qe-sign-toggle { flex:0 0 30px; width:30px; height:30px; padding:0; border:1px solid var(--expense); background:var(--expense); color:var(--on-fill); font-family:inherit; font-size:17px; font-weight:700; line-height:1; cursor:pointer; }
@@ -1902,13 +1948,6 @@ select:disabled {
 .qe-full-row .category-autocomplete,
 .qe-full-row .input { width: 100%; }
 
-
-.quick-entry-hint {
-  font-size:12px;
-  color: var(--text-muted);
-  margin-top: 4px;
-  text-align: center;
-}
 
 /* ===== BILLS ===== */
 .bill-pay-list {
@@ -2595,6 +2634,8 @@ select:disabled {
 }
 
 @media (max-width: 520px) {
+  .bill-timing-row { grid-template-columns:repeat(2, minmax(0, 1fr)); }
+  #bill-dueMonth-group { grid-column:1 / -1; }
   #transaction-modal .quick-entry-row:not(.qe-full-row) { flex-wrap:wrap; }
   #transaction-modal .category-autocomplete.custom-select:has(> .qe-account) { flex:1 1 100% !important; min-width:0; }
   #transaction-modal .qe-date { flex:1 1 120px !important; max-width:none; }
@@ -2873,8 +2914,6 @@ h1, h2, h3 {
   white-space: nowrap;
 }
 
-.bill-cell-label.inactive { opacity: 0.45; }
-
 .bill-name-line {
   display: flex;
   align-items: center;
@@ -2934,15 +2973,8 @@ h1, h2, h3 {
 .bill-cell .linked-tx-action { position:absolute; right:1px; bottom:1px; z-index:2; width:13px; min-width:13px; height:13px; padding:0; justify-content:center; border:0; background:transparent; color:inherit; font-size:10px; }
 .bill-cell .linked-tx-action .transaction-link-icon { width:10px; height:10px; }
 
+.bill-amount-full, .bill-amount-short { white-space:nowrap; }
 .bill-amount-short { display:none; }
-@container bill-amount (max-width: 84px) {
-  .bill-amount-full-native { display:none; }
-  .bill-amount-short-native { display:inline; }
-}
-@container bill-amount (max-width: 72px) {
-  .bill-amount-full { display:none; }
-  .bill-amount-short { display:inline; }
-}
 .bill-amt-lines {
   display: flex;
   flex-direction: column;
@@ -3041,6 +3073,55 @@ h1, h2, h3 {
 
 .modal-content.wide {
   max-width: 640px;
+}
+
+/* Yearly balance modal */
+.ap-footer { flex-wrap:wrap; }
+.yearly-balances-open { flex:1 1 100%; }
+.yearly-balances-content { width:min(1100px, calc(100vw - 24px)); height:min(680px, calc(100vh - 32px)); max-height:calc(100vh - 32px); display:flex; flex-direction:column; gap:8px; overflow:hidden; }
+.yearly-balances-content .modal-header { flex:0 0 auto; margin:0; }
+.yearly-balances-controls { display:flex; align-items:center; gap:8px; flex:0 0 auto; }
+.yearly-balances-controls label { color:var(--text-muted); font-size:12px; font-weight:700; text-transform:uppercase; white-space:nowrap; }
+.yearly-balances-controls select { min-width:0; flex:1; }
+.yearly-mode-toggle { display:flex; align-items:center; justify-content:center; width:110px; min-width:110px; white-space:nowrap; }
+.yearly-mode-toggle[hidden] { display:none; }
+.yearly-balances-summary { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:8px; height:56px; flex:0 0 56px; }
+.yearly-summary-item { min-width:0; height:100%; overflow:hidden; border:1px solid var(--divider); padding:7px 9px; display:flex; flex-direction:column; align-items:flex-start; gap:3px; }
+.yearly-summary-item > span:first-child { color:var(--text-muted); font-size:11px; font-weight:700; white-space:nowrap; }
+.yearly-summary-item > span:nth-child(2) { font-size:14px; font-weight:600; white-space:nowrap; font-variant-numeric:tabular-nums; }
+.yearly-balances-context { color:var(--text-muted); font-size:11px; line-height:1.35; height:40px; flex:0 0 40px; overflow:hidden; }
+.yearly-balances-chart-wrap { height:clamp(185px, 29vh, 250px); flex:0 0 clamp(185px, 29vh, 250px); position:relative; min-height:0; }
+#yearly-balances-modal.yearly-all-view .yearly-balances-chart-wrap { height:auto; flex:1 1 220px; min-height:185px; }
+.yearly-balances-chart-wrap canvas { width:100% !important; height:100% !important; }
+.yearly-balances-chart-empty { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; color:var(--text-muted); text-align:center; padding:12px; }
+.yearly-balances-chart-empty[hidden] { display:none; }
+.yearly-balances-account-series { display:flex; align-items:center; justify-content:center; flex-wrap:wrap; gap:6px; overflow-x:hidden; overflow-y:auto; flex:0 0 auto; min-height:34px; max-height:64px; padding:1px 0 4px; }
+.yearly-balances-account-series[hidden] { display:none; }
+.yearly-balances-account-series.is-placeholder { visibility:hidden; }
+.yearly-account-toggle { flex:0 0 auto; }
+.yearly-account-toggle:hover { background:var(--cc, var(--surface-hover)); color:var(--on-fill); }
+.yearly-account-toggle.selected { background:var(--cc, var(--accent)); color:var(--on-fill); }
+.yearly-balances-history { min-height:0; flex:1 1 0; overflow:auto; overscroll-behavior:contain; }
+.yearly-balances-history[hidden] { display:none; }
+.yearly-balances-table { width:100%; table-layout:fixed; border-collapse:collapse; font-size:12px; }
+.yearly-balances-table th, .yearly-balances-table td { border-bottom:1px solid var(--divider); padding:8px 7px; text-align:right; white-space:nowrap; font-size:12px; }
+.yearly-balances-table thead { position:sticky; top:0; z-index:1; background:var(--modal-bg); }
+.yearly-balances-table thead th { color:var(--text-muted); font-weight:700; }
+.yearly-balances-table tbody tr:nth-child(even) { background:var(--stripe); }
+.yearly-balances-table th:first-child, .yearly-balances-table td:first-child { text-align:left; width:58px; }
+.yearly-balances-table tbody th { color:var(--text-bright); font-weight:700; }
+.yearly-balances-empty { color:var(--text-muted); padding:12px 4px; text-align:center; }
+@media (max-width:520px) {
+  .yearly-balances-content { width:calc(100vw - 16px); height:min(680px, calc(100vh - 16px)); max-height:calc(100vh - 16px); padding:10px; }
+  .yearly-balances-controls { flex-wrap:wrap; }
+  .yearly-balances-controls label { flex:0 0 auto; }
+  .yearly-balances-controls select { flex:1 1 calc(100% - 80px); }
+  .yearly-mode-toggle { flex:1 1 100%; }
+  .yearly-balances-summary { gap:4px; }
+  .yearly-summary-item { padding:6px; }
+  .yearly-summary-item > span:nth-child(2) { font-size:12px; }
+  .yearly-balances-chart-wrap { height:clamp(175px, 27vh, 220px); flex-basis:clamp(175px, 27vh, 220px); }
+  .yearly-balances-table th, .yearly-balances-table td { padding:7px 4px; }
 }
 
 @media (max-width:520px) {
@@ -3258,10 +3339,6 @@ h1, h2, h3 {
   .money-full { display:none; }
   .money-short { display:inline; }
 }
-@container bill-amount (max-width: 120px) {
-  .money-full { display:none; }
-  .money-short { display:inline; }
-}
 
 .header-center { min-width:0; gap:6px; }
 .app-toast {
@@ -3381,3 +3458,102 @@ h1, h2, h3 {
 .account-chips.account-chips-fit .money-short { display:none !important; }
 .account-chips.account-chips-measure .chip-name { max-width:none; overflow:visible; }
 .account-chips.account-chips-fit .account-chip-list > .account-chip { flex:1 1 0 !important; width:0 !important; min-width:0 !important; }
+
+/* Shared action height, including modal direction and schedule controls. */
+.btn, .btn-sm, .inv-dir-toggle, .debt-dir-toggle,
+.bill-frequency-button, .bill-autopay-button {
+  box-sizing: border-box;
+  height: 28px;
+  min-height: 28px;
+  padding-top: 2px;
+  padding-bottom: 2px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.bill-actions-mini .bill-order-btn { min-width:24px; padding:0 3px; font-size:12px; }
+.bill-actions-mini .bill-order-btn:disabled { opacity:.3; cursor:default; }
+.overview-accounts-sep { margin-top: 0; }
+.account-chip.account-mgr-square { border-left: none; }
+
+.data-tools-modal { width:min(760px, calc(100vw - 32px)); max-height:calc(100vh - 48px); overflow:auto; }
+#data-tools-check-panel.hidden, #data-tools-recurring-panel.hidden { display:none !important; }
+.data-tools-tabs { display:flex; gap:8px; margin:0 0 14px; padding-bottom:10px; border-bottom:1px solid var(--divider); }
+.data-tools-tabs .btn { min-width:140px; }
+.health-issue { padding:12px 0; border-bottom:1px solid var(--divider); }
+.health-issue-title { display:block; margin-bottom:6px; color:var(--text-bright); font-weight:700; }
+.health-issue-message { display:block; margin-top:6px; color:var(--expense); font-size:12px; }
+.health-repair-row { display:grid; grid-template-columns:auto minmax(150px,1fr) auto; align-items:center; gap:8px; margin-top:10px; }
+.health-repair-row > label { color:var(--text-muted); font-size:10px; font-weight:700; }
+.health-transaction-summary { display:flex; justify-content:space-between; align-items:center; gap:8px; padding:8px; background:var(--surface-raised); }
+.health-transaction-main { display:flex; flex-direction:column; min-width:0; gap:3px; }
+.health-transaction-main > span { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--text-dim); font-size:12px; }
+.health-transaction-meta { display:flex; align-items:center; gap:8px; color:var(--text-dim); font-size:11px; }
+.recurring-group { margin:12px 0; padding:12px; background:var(--surface-raised); }
+.recurring-group-header { display:flex; justify-content:space-between; align-items:flex-start; gap:12px; margin-bottom:8px; }
+.recurring-group details > summary { cursor:pointer; list-style:none; }
+.recurring-group details > summary::-webkit-details-marker { display:none; }
+.recurring-group details > summary::after { content:'+'; color:var(--accent); font-size:18px; margin-left:8px; }
+.recurring-group details[open] > summary::after { content:'−'; }
+.recurring-group details:not([open]) > summary { margin-bottom:0; }
+.recurring-rule-tools { border-top:1px solid var(--border); margin-top:12px; padding-top:10px; }
+.recurring-rule-tools label { display:block; color:var(--text-muted); font-size:11px; }
+.recurring-rule-tools label .input { margin-top:4px; }
+.recurring-unify-label { display:block; margin-top:10px; color:var(--text-muted); font-size:11px; }
+.recurring-unify-label .input { margin-top:4px; }
+.recurring-bill-action { display:flex; gap:8px; margin-top:10px; }
+.recurring-bill-action .input { flex:1; min-width:0; }
+.recurring-rule-details { margin-top:10px; padding-top:8px; border-top:1px solid var(--border); color:var(--text-muted); font-size:11px; }
+.recurring-rule-details > summary { cursor:pointer; }
+.recurring-rule-details .recurring-rule-tools { border-top:0; margin-top:6px; padding-top:0; }
+.recurring-saved-rules { margin:8px 0 12px; padding:10px; background:var(--surface-raised); }
+.recurring-saved-rules > strong { color:var(--text-muted); font-size:11px; }
+.recurring-saved-rules > div { display:flex; align-items:center; justify-content:space-between; gap:10px; padding-top:7px; font-size:12px; }
+.quick-entry-actions { justify-content:flex-end; }
+.recurring-group-header h3 { margin:0 0 4px; color:var(--text-bright); font-size:14px; }
+.recurring-group-header span { color:var(--text-muted); font-size:11px; }
+.recurring-group-header > strong { flex:none; color:var(--text-bright); font-size:12px; }
+.recurring-occurrences { display:flex; flex-direction:column; max-height:220px; overflow-y:auto; }
+.recurring-occurrence { display:grid; grid-template-columns:20px minmax(80px,auto) minmax(90px,auto) minmax(0,1fr) auto; align-items:center; gap:8px; padding:5px 0; border-top:1px solid var(--divider); font-size:12px; }
+.recurring-occurrence > span:nth-of-type(3) { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--text-dim); }
+.recurring-occurrence input { accent-color:var(--accent); }
+.recurring-group-actions { display:flex; flex-wrap:wrap; justify-content:flex-end; gap:8px; margin-top:10px; }
+@media(max-width:560px) {
+  .data-tools-tabs .btn { flex:1 1 0; min-width:0; padding-left:8px; padding-right:8px; }
+  .health-repair-row { grid-template-columns:1fr auto; }
+  .health-repair-row > label { grid-column:1/-1; }
+  .recurring-occurrence { grid-template-columns:20px minmax(70px,auto) minmax(80px,auto) auto; }
+  .recurring-occurrence > span:nth-of-type(3) { display:none; }
+}
+
+/* Forms share one control size regardless of native input/select metrics. */
+.modal .input:not(textarea), .modal select, .modal .select,
+.modal .debt-dir-toggle, .modal .inv-dir-toggle {
+  box-sizing: border-box;
+  height: 28px;
+  min-height: 28px;
+  padding-top: 2px;
+  padding-bottom: 2px;
+  line-height: 22px;
+}
+.modal .qe-sign-toggle {
+  box-sizing: border-box;
+  width: 28px;
+  height: 28px;
+  min-height: 28px;
+  flex-basis: 28px;
+}
+#page-overview .account-chips { margin-bottom: 10px; }
+#page-overview .account-chips-row { height: 80px; }
+#page-overview .account-chip-list > .account-chip {
+  box-sizing: border-box;
+  justify-content: center;
+  gap: 0;
+  padding-top: 0;
+  padding-bottom: 0;
+}
+#page-overview .chip-name, #page-overview .chip-balance { line-height: 1.05; }
+#page-overview .empty-state { width:100%; text-align:center; }
+@media (max-width: 700px) {
+  #page-overview .account-chips-row { height: 78px; }
+}
