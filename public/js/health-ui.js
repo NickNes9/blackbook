@@ -226,7 +226,11 @@ Object.assign(window.BlackBook, {
       actions.remove();
       details.append(toolbar);
       const ruleRow = document.createElement('div'); ruleRow.className = 'recurring-rules-row';
-      if (bill) { bill.classList.add('recurring-control-row'); ruleRow.append(bill); }
+      if (bill) {
+        bill.classList.add('recurring-control-row');
+        bill.querySelector('button').classList.replace('btn-primary', 'btn-secondary');
+        ruleRow.append(bill);
+      }
       if (categoryRow) ruleRow.append(categoryRow);
       details.append(ruleRow);
     });

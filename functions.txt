@@ -453,6 +453,7 @@ Data health:
   Issues expand to show details/repairs; a clean scan shows No Issues Found.
   Recurring groups show Match Text, Bulk Edit and Disregard Match together,
   followed by bill linking and category-rule controls together on one row,
+  with a neutral gray Continue button,
   wrapping when the window is narrow;
   saved rules are collapsed at the bottom. Lists scroll below the fixed tabs.
   Bulk Edit opens Find & Replace instead of separate group editing controls and
