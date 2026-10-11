@@ -9,7 +9,8 @@ GLOBAL / ALL PAGES
 ----------------------------------------------------------------------
 
 - Navigate between pages: Overview, Bills, Budget, Credit Cards,
-  Savings, Debts, Invoices, Forecast, Settings (sidebar, or press 1-9).
+  Savings, Debts, Invoices, Forecast, Reports, Settings (sidebar;
+  press 1-9 for Overview through Reports, or 0 for Settings).
 - Switch pages with the mouse wheel over the sidebar.
 - Jump straight to today with a keypress (D).
 - Move between months with the left/right arrow keys; scroll the wheel
@@ -310,6 +311,21 @@ FORECAST
 - Open a recurring template from the forecast to edit it.
 - Forecast warnings for projected shortfalls; show them in a dialog.
 - Auto-balanced bill payments are folded into the projection.
+
+----------------------------------------------------------------------
+REPORTS (0.9.7 LAYOUT PREVIEW)
+----------------------------------------------------------------------
+
+- Switch between Categories, Compare, People, Cash Flow, and Calendar.
+- Review yearly category history, monthly differences, person totals,
+  a cash-flow waterfall, and a calendar with selectable days.
+- Change the account, category, person, and period to try the layouts.
+- Account cards use their own colors. Click or Shift-click to toggle
+  several accounts, or Alt-click to isolate one; all can be deselected.
+- Controls use illustrative EUR values held only in memory. The preview
+  does not read or modify profile transactions. Live reports come later.
+- Arrow keys change the year for Categories and People, or the month for
+  the other views. D returns to the current period; 0 opens Settings.
 
 ----------------------------------------------------------------------
 SETTINGS

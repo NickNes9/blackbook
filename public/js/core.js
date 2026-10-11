@@ -340,10 +340,11 @@ this.connectWebSocket();
         if (this.currentPage === 'budget') { this.toggleBudgetGraph(); return; }
         if (this.currentPage === 'forecast') { this.toggleForecastGraph(); return; }
       }
-      if (e.key === 'Tab') { e.preventDefault(); if (this.currentPage === 'overview') this.cycleAccount(); return; }
+      if (e.key === 'Tab' && this.currentPage === 'overview') { e.preventDefault(); this.cycleAccount(); return; }
+      if (e.key === '0') { e.preventDefault(); this.navigateTo('settings'); return; }
       if (/^[1-9]$/.test(e.key)) {
         const idx = parseInt(e.key, 10) - 1;
-        const pages = this.pageList().filter(p => this.isPageEnabled(p));
+        const pages = this.pageList().filter(p => p !== 'settings' && this.isPageEnabled(p));
         if (idx < pages.length) { e.preventDefault(); this.navigateTo(pages[idx]); }
       }
     });
@@ -402,7 +403,7 @@ this.connectWebSocket();
     return '#' + [r, g, b].map(x => Math.round(x * 255).toString(16).padStart(2, '0')).join('');
   },
 
-  pageList() { return ['overview', 'bills', 'budget', 'cards', 'savings', 'debts', 'invoices', 'forecast', 'settings']; },
+  pageList() { return ['overview', 'bills', 'budget', 'cards', 'savings', 'debts', 'invoices', 'forecast', 'reports', 'settings']; },
 
   isPageEnabled(page) {
     if (page === 'settings' || page === 'overview') return true;
@@ -449,6 +450,7 @@ this.connectWebSocket();
     if (this.billsPieChart) { this.billsPieChart.destroy(); this.billsPieChart = null; }
     if (this.savingsChart) { this.savingsChart.destroy(); this.savingsChart = null; }
     if (this.forecastChart) { this.forecastChart.destroy(); this.forecastChart = null; }
+    if (this.destroyReportsCharts) this.destroyReportsCharts();
     this.currentPage = page;
     document.body.classList.remove('mobile-nav-open');
     document.querySelectorAll('.page').forEach(p => {
@@ -516,6 +518,7 @@ this.connectWebSocket();
       else if (page === 'savings') this.renderSavings();
       else if (page === 'debts') this.renderDebts();
       else if (page === 'invoices') this.renderInvoices();
+      else if (page === 'reports') this.renderReports();
       else if (page === 'settings') this.renderSettings();
       if (page === 'settings' && window.UpdateUi) { try { UpdateUi.renderSettings(); } catch (err) { console.error('Update UI render failed:', err); } }
       const pageEl = document.getElementById('page-' + page);
@@ -669,9 +672,9 @@ this.connectWebSocket();
     }
     if (!editing && ['overview', 'bills', 'budget', 'forecast'].includes(this.currentPage)) add('H', 'GRAPH');
     if (!editing && this.currentPage === 'overview') add('TAB', 'ACCOUNT');
-    if (!editing) add('← →', 'MONTH');
+    if (!editing) add('← →', this.currentPage === 'reports' && this.reportsState && ['categories', 'people'].includes(this.reportsState().view) ? 'YEAR' : 'MONTH');
     const pageCount = this.pageList().filter(page => this.isPageEnabled(page)).length;
-    if (!editing && pageCount > 1) add('1–' + pageCount, 'PAGES');
+    if (!editing && pageCount > 1) add('1–' + (pageCount - 1) + ' / 0', 'PAGES');
     if (!editing) add('Space', 'COMMAND');
     if (!editing && this._undoReady && !this._undoBusy && this._undoHistory) {
       if (this._undoHistory.undoStack.length) add('Ctrl Z', 'UNDO');
@@ -2441,6 +2444,7 @@ this.connectWebSocket();
   pickMonth(m) { if (this.vw().m !== m) this.clearTransactionSelectionForPeriod(); this.vw().m = m; this.renderPage(this.currentPage); },
   shiftYear(d) { if (d) this.clearTransactionSelectionForPeriod(); this.vw().y += d; this.renderPage(this.currentPage); },
   arrowPeriod(dir) {
+    if (this.currentPage === 'reports' && this.shiftReportsPeriod) { this.shiftReportsPeriod(dir); return; }
     if (this.currentPage === 'savings') { this.shiftYear(dir); return; }
     const v = this.vw();
     let y = v.y, m = v.m + dir;
@@ -2450,6 +2454,7 @@ this.connectWebSocket();
     this.renderPage(this.currentPage);
   },
   gotoToday() {
+    if (this.currentPage === 'reports' && this.reportsToday) { this.reportsToday(); return; }
     const n = new Date();
     const v = this.vw();
     if (v.m !== n.getMonth() || v.y !== n.getFullYear()) this.clearTransactionSelectionForPeriod();

@@ -1093,7 +1093,7 @@ Object.assign(window.BlackBook, {
     const defaultCategoryOpts = '<option value="">None</option>' + this.categoriesAvailableOn(this.today()).map(c => '<option value="' + c.id + '"' + (c.id === defaultCategoryId ? ' selected' : '') + '>' + this.escapeHtml(c.name) + '</option>').join('');
 
     let pagesList = '';
-    const PAGE_LABELS = { forecast: 'Forecast', bills: 'Bills', budget: 'Budget', cards: 'Credit Cards', savings: 'Savings', debts: 'Debts', invoices: 'Invoices' };
+    const PAGE_LABELS = { forecast: 'Forecast', bills: 'Bills', budget: 'Budget', cards: 'Credit Cards', savings: 'Savings', debts: 'Debts', invoices: 'Invoices', reports: 'Reports' };
     for (const p of Object.keys(PAGE_LABELS)) {
       const on = this.isPageEnabled(p);
       pagesList += '<div class="settings-row">' +

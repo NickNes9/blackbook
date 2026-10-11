@@ -174,7 +174,7 @@ test('footer shortcut set follows the active page, selection, and undo/redo avai
   app._undoReady = true;
   app.currentPage = 'overview';
   let actions = app.footerHotkeys().map(item => item.key);
-  assert.equal(actions.join('|'), 'A|T|D|H|TAB|← →|1–9|Space');
+  assert.equal(actions.join('|'), 'A|T|D|H|TAB|← →|1–9 / 0|Space');
 
   app._bulkSel.add('tx-1');
   actions = app.footerHotkeys().map(item => item.key);

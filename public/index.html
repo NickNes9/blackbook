@@ -9,6 +9,7 @@
   <link rel="stylesheet" href="/vendor/hack/hack.css">
   <link rel="stylesheet" href="/style.css">
   <link rel="stylesheet" href="/health.css">
+  <link rel="stylesheet" href="/reports.css">
 </head>
 <body>
   <header class="app-header">
@@ -33,6 +34,7 @@
       <button data-page="debts" class="sidebar-nav-item">DEBTS</button>
       <button data-page="invoices" class="sidebar-nav-item">INVOICES</button>
       <button data-page="forecast" class="sidebar-nav-item">FORECAST</button>
+      <button data-page="reports" class="sidebar-nav-item">REPORTS</button>
       <button data-page="settings" class="sidebar-nav-item">SETTINGS</button>
     </nav>
   </aside>
@@ -46,6 +48,7 @@
     <div id="page-savings" class="page page-fixed hidden"></div>
     <div id="page-debts" class="page page-fixed hidden"></div>
     <div id="page-invoices" class="page page-fixed hidden"></div>
+    <div id="page-reports" class="page page-fixed hidden"></div>
     <div id="page-settings" class="page hidden"></div>
   </main>
 
@@ -761,6 +764,8 @@
   <script src="/js/updates-ui.js"></script>
   <script src="/js/page-overview.js"></script>
   <script src="/js/page-forecast.js"></script>
+  <script src="/js/reports-preview.js"></script>
+  <script src="/js/page-reports.js"></script>
   <script src="/js/responsive-ui.js"></script>
   <script src="/js/page-transactions.js"></script>
   <script src="/js/transaction-tools.js"></script>

@@ -77,6 +77,11 @@ The shortcut bar at the bottom shows the actions available on the current page.
 
 ## What's new
 
+### In development — 0.9.7 Reports
+
+- A first visual preview of Categories, Compare, People, Cash Flow, and Calendar views, with interactive filters and charts using clearly labeled sample values.
+- The preview is for reviewing the layout; live profile reporting is the next step.
+
 ### 0.9.6
 
 - **Find & Replace** — live search, previewed bulk edits, and custom Overview filters for descriptions, categories, accounts, people, and bill links.
