@@ -453,6 +453,23 @@ Object.assign(window.BlackBook, {
 
   editHoveredTransaction(txId = this.hoveredTransactionId()) { if (txId) this.openEditTransaction(txId); },
 
+  copySelectedTransaction() {
+    const selected = this._bulkSel ? [...this._bulkSel] : [];
+    if (selected.length > 1) return;
+    const id = selected.length === 1 ? selected[0] : this.hoveredTransactionId();
+    const tx = this.data.transactions.find(item => item.id === id);
+    if (!tx) return;
+    this.openEditTransaction(id);
+    if (tx.type === 'transfer') {
+      this._editingTransferId = null;
+      document.getElementById('tr-date').value = this.fmtDateInput(this.today());
+    } else {
+      document.getElementById('tx-id').value = '';
+      document.getElementById('tx-date').value = this.fmtDateInput(this.today());
+      if (this._txDualCurrencyEdit) this._txDualCurrencyEdit.txId = '';
+    }
+  },
+
   async deleteTransaction(txId) {
     const wrap = document.querySelector('.tx-list-wrap');
     const scrollTop = wrap ? wrap.scrollTop : 0;

@@ -286,6 +286,11 @@ this.connectWebSocket();
       if (e.key === 'a' || e.key === 'A') { e.preventDefault(); this.openNewTransaction(); }
       if (e.key === 't' || e.key === 'T') { e.preventDefault(); this.openTransferModal(); }
       if (e.key === 'd' || e.key === 'D') { e.preventDefault(); this.gotoToday(); }
+      if (!e.ctrlKey && !e.metaKey && !e.altKey && (e.key === 'c' || e.key === 'C') && this.currentPage === 'overview') {
+        e.preventDefault();
+        this.copySelectedTransaction();
+        return;
+      }
       if (e.key === ' ') { e.preventDefault(); if (paletteOpen) this.closeCommandPalette(); else this.openCommandPalette(); return; }
       if (e.key === 'e' || e.key === 'E') {
         e.preventDefault();
@@ -627,6 +632,7 @@ this.connectWebSocket();
     if (!editing && this.currentPage === 'overview') {
       const selected = this._bulkSel ? this._bulkSel.size : 0;
       const hovered = !!(this._footerHoveredTxId || this.hoveredTransactionId());
+      if (selected === 1 || (!selected && hovered)) add('C', 'COPY TRANSACTION');
       if (selected || hovered) add('E', selected ? 'EDIT SELECTED' : 'EDIT');
       if (selected >= 2) add('M', 'MERGE SELECTED');
       if (selected) add('B', 'FILTER SELECTED');

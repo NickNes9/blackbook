@@ -31,6 +31,7 @@ GLOBAL / ALL PAGES
 - Keyboard shortcuts (when not typing in a field):
     * A / T  - open transaction / transfer modals
     * D      - go to today
+    * C      - copy one selected or hovered transaction into a new draft dated today
     * E      - bulk edit selected transactions
     * M      - merge selected transactions
     * B      - toggle bulk "selected only" filter

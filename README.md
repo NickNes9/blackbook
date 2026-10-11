@@ -4,6 +4,8 @@ A local-first personal finance console. Terminal aesthetic with light/dark theme
 
 ## What's new in 0.9.6 (work in progress)
 
+- **Copy transaction** — press C on Overview with one transaction selected or hovered to open an editable copy dated today. Save creates a new entry; D remains Today and T remains Transfer.
+
 - **Yearly balances** — compare total balances or individual accounts, see opening/current/change summaries, and review yearly history in a scrollable list.
 - **Smoother charts** — all line graphs use constrained smooth curves that avoid overshooting between data points; rounded negative zero displays as zero.
 - **Recurring review and transfer history** — inspect repeated payments, connect matching entries to bills, and preserve dated partial settlements when viewing balances and forecasts.
