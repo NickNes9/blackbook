@@ -32,6 +32,7 @@ GLOBAL / ALL PAGES
     * A / T  - open transaction / transfer modals
     * D      - go to today
     * C      - copy one selected or hovered transaction into a new draft dated today
+      Saving a copy selects its new entry and shows a temporary confirmation.
     * E      - bulk edit selected transactions
     * M      - merge selected transactions
     * B      - toggle bulk "selected only" filter
@@ -167,6 +168,9 @@ BILLS
   the same bill filters and shows amounts and percentages on hover.
 - Repair / re-link bill payments to their transactions automatically.
 - Reorder bills with up/down controls; bill order is stored in the profile.
+- Paid bill cells show an up/down arrow versus the previous month (previous
+  year for annual bills). Hover shows the exact difference and percentage.
+  Comparisons require recorded amounts in the same bill currency.
 - Monthly totals are summarized per month.
 - Graph resize + show/hide like other pages.
 
@@ -231,6 +235,8 @@ SAVINGS
 ----------------------------------------------------------------------
 
 - Create savings goals with a target amount and currency.
+- Set an optional target date; the goal shows the amount needed per calendar
+  month, including the current and target months, or a target-passed/reached state.
 - Add deposits and withdrawals per goal (with date and note); each entry
   creates an automatic transaction in the ledger.
 - Goal totals and progress stay visible; expand Payment History to see
@@ -371,6 +377,8 @@ Appearance / behavior:
 - Attention bar can be shown/hidden.
 
 Data health:
+- The UNCATEGORIZED count opens Overview with all matching transactions
+  selected and isolated across the profile's full history.
 - Settings > Data > CHECK DATA opens Data Tools with CHECK DATA and
   RECURRING PAYMENTS tabs.
 - Check Data reviews broken links, duplicate IDs, possible duplicate

@@ -64,6 +64,7 @@ Object.assign(window.BlackBook, {
   },
   renderDataHealth() {
     const issues = this._healthIssues || [];
+    const uncategorized = this.uncategorizedTransactionIds();
     const names = { transactions: 'Transaction', accounts: 'Account', bills: 'Bill', invoices: 'Invoice', debts: 'Debt', savingsGoals: 'Savings goal', installments: 'Card plan', categories: 'Category', creditCards: 'Credit card' };
     const transactionSummary = (tx, issue) => {
       const category = (this.data.categories || []).find(item => item.id === tx.categoryId);
@@ -87,7 +88,11 @@ Object.assign(window.BlackBook, {
       const safeMessage = issue.message.replace(/\s*\([^)]*\)/g, '');
       return '<div class="health-issue"><span class="health-issue-title">' + this.escapeHtml((names[issue.collection] || issue.collection) + ': ' + label) + '</span>' + summary + '<span class="health-issue-message">' + this.escapeHtml(safeMessage) + '</span></div>';
     }).join('');
-    document.getElementById('data-health-results').innerHTML = '<p class="health-explanation">Read-only check. Nothing is changed unless you choose a repair. Possible duplicates can be legitimate payments.</p>' + (rows || '<p>No broken references, duplicate warnings, or missing account exchange rates detected.</p>');
+    document.getElementById('data-health-results').innerHTML = '<p class="health-explanation">Read-only check. Nothing is changed unless you choose a repair. Possible duplicates can be legitimate payments.</p>' + '<button type="button" class="btn btn-secondary" onclick="BlackBook.openDataHealthTransactions(BlackBook.uncategorizedTransactionIds())"' + (uncategorized.length ? '' : ' disabled') + '>UNCATEGORIZED · ' + uncategorized.length + '</button>' + (rows || '<p>No broken references, duplicate warnings, or missing account exchange rates detected.</p>');
+  },
+  uncategorizedTransactionIds() {
+    const categories = new Map((this.data.categories || []).map(category => [category.id, category]));
+    return (this.data.transactions || []).filter(tx => tx.type !== 'transfer' && (!categories.has(tx.categoryId) || String(categories.get(tx.categoryId).name || '').trim().toLowerCase() === 'uncategorized')).map(tx => tx.id);
   },
   missingAccountRepairHtml(tx, issue) {
     const field = issue.field;

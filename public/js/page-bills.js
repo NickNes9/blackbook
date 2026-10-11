@@ -214,7 +214,7 @@ billsGridHtml() {
         html += '<div class="bill-cell' + alt + (paid ? ' paid' : '') + '"' + cellStyle + ' onclick="BlackBook.' + clickFn + '(\x27' + bill.id + '\x27,\x27' + mk + '\x27)" oncontextmenu="BlackBook.openBillPayModal(\x27' + bill.id + '\x27,\x27' + mk + '\x27);return false;" title="' +
           bill.name + ' \u00b7 due ' + (bill.frequency === 'annual' ? MONTHS_F[(Number(bill.dueMonth) || 1) - 1] + ' ' : '') + this.ordinalDay(bill.dueDay) +
           (paid ? ' \u00b7 paid' + (linkedCount > 1 ? ' · ' + linkedCount + ' linked transactions' : '') + ' \u00b7 click to unpay' : ' \u00b7 click to mark paid') +
-          ' &middot; right-click for custom amount">' + amtLabel + transactionLink + '</div>';
+          ' &middot; right-click for custom amount">' + amtLabel + (paid ? this.billChangeIndicator(bill, mk, paid) : '') + transactionLink + '</div>';
       }
       html += '<div class="bill-cell-total' + alt + '"' + (yearHasPaid ? ' style="background:' + color + '22;color:' + color + ';font-weight:700;" title="' + this.escapeHtml(formatGridAmount(yearTotal) + ' ' + this.baseCurrency()) + '"' : '') + '>' + (yearHasPaid ? responsiveAmount(yearTotal, this.baseCurrency()) : '') + '</div>';
       bi++;
@@ -224,6 +224,34 @@ billsGridHtml() {
   },
 
   formatBillGridAmount(amount) { return this.fmtNumber(amount).replace(/\.00$/, ''); },
+
+  billChangeIndicator(bill, month, payment) {
+    const currency = bill.currency || this.baseCurrency();
+    const exactAmount = pay => {
+      if (!pay) return null;
+      const transactions = this.billPaymentTransactions(pay);
+      if (!transactions.length) return null;
+      let total = 0;
+      for (const tx of transactions) {
+        if ((tx.currency || this.baseCurrency()) === currency) total += Math.abs(Number(tx.amount));
+        else if (tx.nativeCurrency === currency && tx.nativeAmount != null) total += Math.abs(Number(tx.nativeAmount));
+        else return null;
+      }
+      return Number.isFinite(total) ? total : null;
+    };
+    const [year, monthNumber] = month.split('-').map(Number);
+    const annual = bill.frequency === 'annual';
+    const previousYear = annual || monthNumber === 1 ? year - 1 : year;
+    const previousMonth = annual ? monthNumber : monthNumber === 1 ? 12 : monthNumber - 1;
+    const previousKey = previousYear + '-' + String(previousMonth).padStart(2, '0');
+    const previous = exactAmount(this.getBillPayment(bill.id, previousKey));
+    const current = exactAmount(payment);
+    if (previous == null || current == null) return '';
+    const change = this.round2(current - previous);
+    if (!change) return '';
+    const title = 'Previous ' + (annual ? 'year' : 'month') + ': ' + this.fmtAmount(previous, currency) + ' · ' + (change > 0 ? 'Increase: ' : 'Decrease: ') + this.fmtAmount(Math.abs(change), currency) + (previous > 0 ? ' · ' + this.round2(Math.abs(change) / previous * 100) + '%' : '');
+    return '<span class="bill-change" title="' + this.escapeHtml(title) + '" aria-label="' + this.escapeHtml(title) + '">' + (change > 0 ? '↑' : '↓') + '</span>';
+  },
 
   openNewBill() {
     this._pendingRecurringBillTxIds = null;

@@ -3099,6 +3099,7 @@ h1, h2, h3 {
 .yearly-balances-account-series[hidden] { display:none; }
 .yearly-balances-account-series.is-placeholder { visibility:hidden; }
 .yearly-account-toggle { flex:0 0 auto; }
+.bill-change { position:absolute; top:4px; right:5px; font-size:11px; line-height:1; cursor:help; }
 .yearly-account-toggle:hover { background:var(--cc, var(--surface-hover)); color:var(--on-fill); }
 .yearly-account-toggle.selected { background:var(--cc, var(--accent)); color:var(--on-fill); }
 .yearly-balances-history { min-height:0; flex:1 1 0; overflow:auto; overscroll-behavior:contain; }

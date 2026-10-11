@@ -33,6 +33,7 @@ Object.assign(window.BlackBook, {
   },
 
   openNewTransaction(targetId) {
+    this._copyTransactionDraft = false;
     this._txDualCurrencyEdit = null;
     const usable = this.visibleAccounts().length + (this.data.creditCards || []).length;
     if (!usable) { alert('Create an account first — use CREATE FIRST ACCOUNT on the overview, or Settings → Accounts → + ADD.'); return; }
@@ -170,6 +171,7 @@ Object.assign(window.BlackBook, {
   },
 
   openTransferModal() {
+    this._copyTransactionDraft = false;
     this._transferSourceIds = null;
     const vis = this.visibleAccounts();
     if (vis.length < 2) { alert('You need at least two accounts to transfer.'); return; }
@@ -190,6 +192,7 @@ Object.assign(window.BlackBook, {
   },
 
   openEditTransfer(txId) {
+    this._copyTransactionDraft = false;
     const tx = this.data.transactions.find(t => t.id === txId);
     this._transferSourceIds = null;
     if (!tx || tx.type !== 'transfer') return this.openEditTransaction(txId);
@@ -369,10 +372,16 @@ Object.assign(window.BlackBook, {
       this.closeModal('transfer-modal');
       this.syncViewToDate(date);
       this.renderPage(this.currentPage);
+      if (this._copyTransactionDraft && this._lastSaveSuccess === this._saveSequence) {
+        this._copyTransactionDraft = false;
+        this.openLinkedTransaction(this.data.transactions[0].id);
+        this.showToast('Transaction copied');
+      }
     });
   },
 
   openEditTransaction(txId) {
+    this._copyTransactionDraft = false;
     this._txDualCurrencyEdit = null;
     const tx = this.data.transactions.find(t => t.id === txId);
     if (!tx) return;
@@ -460,6 +469,7 @@ Object.assign(window.BlackBook, {
     const tx = this.data.transactions.find(item => item.id === id);
     if (!tx) return;
     this.openEditTransaction(id);
+    this._copyTransactionDraft = true;
     if (tx.type === 'transfer') {
       this._editingTransferId = null;
       document.getElementById('tr-date').value = this.fmtDateInput(this.today());
@@ -881,7 +891,13 @@ Object.assign(window.BlackBook, {
       this.syncViewToDate(txData.date);
       const wrap = document.querySelector('.tx-list-wrap');
       const scrollTop = wrap ? wrap.scrollTop : 0;
-      await this.save({ undoable: true, label: id ? 'Edit transaction' : 'Add transaction' }); this.closeModal('transaction-modal'); this.renderPage(this.currentPage);
+      const saved = await this.save({ undoable: true, label: id ? 'Edit transaction' : 'Add transaction' }); this.closeModal('transaction-modal'); this.renderPage(this.currentPage);
+      if (saved && !id && this._copyTransactionDraft) {
+        this._copyTransactionDraft = false;
+        this.openLinkedTransaction(txData.id);
+        this.showToast('Transaction copied');
+        return;
+      }
       const nw = document.querySelector('.tx-list-wrap');
       if (nw) nw.scrollTop = scrollTop;
     });

@@ -4,6 +4,8 @@ A local-first personal finance console. Terminal aesthetic with light/dark theme
 
 ## What's new in 0.9.6 (work in progress)
 
+- **Small workflow additions** — savings goals support optional deadlines and a monthly contribution estimate; bill payments show same-currency change arrows; saved copies are selected with a confirmation; Check Data links directly to all uncategorized entries.
+
 - **Copy transaction** — press C on Overview with one transaction selected or hovered to open an editable copy dated today. Save creates a new entry; D remains Today and T remains Transfer.
 
 - **Yearly balances** — compare total balances or individual accounts, see opening/current/change summaries, and review yearly history in a scrollable list.
