@@ -84,6 +84,7 @@ The shortcut bar at the bottom shows the actions available on the current page.
 - **Yearly balances** — compare accounts over time and review each year's opening, closing, and change amounts.
 - Copy transactions with **C**, set savings deadlines, and compare bill payments with the previous period.
 - Clearer Data Tools and more accurate recurring-payment grouping, with direct bill-linking and category-rule controls.
+- Recurring-payment groups use a neutral gray **Continue** button to keep the action visually distinct from saved rules.
 - Bulk account edits preserve exact currency amounts. Smooth graphs avoid artificial peaks and dips, and negative zero displays as zero.
 
 ### 0.9.5
