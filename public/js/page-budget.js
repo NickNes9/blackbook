@@ -208,10 +208,10 @@ Object.assign(window.BlackBook, {
     if (empty) segments = [{ id: null, name: 'No budget', pct: 100, amount: 0, color: '#454545' }];
     this[chartKey] = new Chart(canvas.getContext('2d'), {
       type: 'doughnut',
-      data: { labels: segments.map(item => item.name), datasets: [{ data: segments.map(item => item.pct),
-        backgroundColor: segments.map(item => item.color), borderColor: 'rgba(0,0,0,0)', borderWidth: 1 }] },
+      data: { labels: segments.map(item => item.name), datasets: [{ data: this.donutDisplayValues(segments.map(item => item.pct)),
+        backgroundColor: segments.map(item => item.color), borderColor: getComputedStyle(document.documentElement).getPropertyValue('--bg').trim(), borderWidth: 1, hoverOffset: 0 }] },
       options: {
-        responsive: true, maintainAspectRatio: false, cutout: '67%', animation: false,
+        responsive: true, maintainAspectRatio: false, cutout: '52.5%', animation: false,
         plugins: { legend: { display: false }, tooltip: { enabled: false, external: ({ chart, tooltip }) => {
           const point = tooltip.dataPoints && tooltip.dataPoints[0];
           const item = point && segments[point.dataIndex];

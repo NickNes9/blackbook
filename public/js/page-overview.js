@@ -938,8 +938,8 @@ Object.assign(window.BlackBook, {
     this.updateOverviewDonutPercent(income, expenses);
     this.overviewPieChart = new Chart(canvas.getContext('2d'), {
       type: 'doughnut',
-      data: { labels, datasets: [{ data: values, backgroundColor: colors, borderColor: 'rgba(0,0,0,0)', borderWidth: 1 }] },
-      options: { responsive: true, maintainAspectRatio: false, cutout: '67%', animation: false,
+      data: { labels, datasets: [{ data: this.donutDisplayValues(values), backgroundColor: colors, borderColor: getComputedStyle(document.documentElement).getPropertyValue('--bg').trim(), borderWidth: 1, hoverOffset: 0 }] },
+      options: { responsive: true, maintainAspectRatio: false, cutout: '62%', animation: false,
         plugins: { legend: { display: false }, tooltip: { enabled: false, external: ({ chart, tooltip }) => {
           const point = tooltip.dataPoints && tooltip.dataPoints[0];
           const index = point && point.dataIndex;

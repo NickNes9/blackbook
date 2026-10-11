@@ -1313,6 +1313,16 @@ this.connectWebSocket();
     tip.style.top = Math.max(8, Math.min(top, window.innerHeight - tip.offsetHeight - 8)) + 'px';
   },
 
+  donutDisplayValues(values, minimumAngle = 2) {
+    const amounts = values.map(value => Math.max(0, Number(value) || 0));
+    const total = amounts.reduce((sum, value) => sum + value, 0);
+    const count = amounts.filter(value => value > 0).length;
+    if (!total || !count) return amounts;
+    const floor = Math.min(minimumAngle / 360, .8 / count);
+    const remainder = 1 - floor * count;
+    return amounts.map(value => value > 0 ? floor + remainder * value / total : 0);
+  },
+
   fmtNumber(amount) {
     const value = Number(amount) || 0;
     const formatted = value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });

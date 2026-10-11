@@ -40,7 +40,7 @@ Object.assign(window.BlackBook, {
       '</div>' +
       this.billsSummaryHtml() +
       '<div class="list-sep"></div>' +
-      '<div class="page-scroll-wrap"><div class="bills-grid-wrap">' + this.billsGridHtml() + '</div></div>' +
+      '<div class="page-scroll-wrap">' + this.billsGridHtml() + '</div>' +
       (hideGraph
         ? ''
         : '<div class="list-sep"></div>' + this.billsChipsHtml() +
@@ -651,8 +651,8 @@ billsGridHtml() {
     canvas.setAttribute('aria-label', (monthly ? 'Monthly' : 'Yearly') + ' bill breakdown. Click to show ' + (monthly ? 'year' : 'month'));
     this.billsPieChart = new Chart(canvas.getContext('2d'), {
       type: 'doughnut',
-      data: { labels: empty ? ['No bills'] : labels, datasets: [{ data: empty ? [1] : values, backgroundColor: empty ? ['#454545'] : series.map(d => d.backgroundColor), borderColor: 'rgba(0,0,0,0)', borderWidth: 1 }] },
-      options: { responsive: true, maintainAspectRatio: false, cutout: '67%', animation: false,
+      data: { labels: empty ? ['No bills'] : labels, datasets: [{ data: empty ? [1] : this.donutDisplayValues(values), backgroundColor: empty ? ['#454545'] : series.map(d => d.backgroundColor), borderColor: getComputedStyle(document.documentElement).getPropertyValue('--bg').trim(), borderWidth: 1, hoverOffset: 0 }] },
+      options: { responsive: true, maintainAspectRatio: false, cutout: '52.5%', animation: false,
         onClick: () => { this._billsDonutPeriod = monthly ? 'year' : 'month'; this.renderBillsDonut(); },
         plugins: { legend: { display: false }, tooltip: { enabled: false, external: ({ chart, tooltip }) => {
           const point = tooltip.dataPoints && tooltip.dataPoints[0];

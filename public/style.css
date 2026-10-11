@@ -277,7 +277,7 @@ input[type="checkbox"]:checked {
 .attention-item.severity-3 { color:var(--text-bright); }
 .attention-hide { margin-left:0; padding:3px 5px; }
 
-.forecast-account-filters { display:flex; gap:4px; flex-wrap:wrap; padding:8px 0 12px; color:var(--text-dim); font-size:12px; }
+.forecast-account-filters { display:flex; gap:6px; flex-wrap:wrap; padding:0 0 12px; color:var(--text-dim); font-size:12px; }
 .forecast-event { display:grid; grid-template-columns:100px 105px 1fr 145px; gap:10px; align-items:center; min-height:36px; border-bottom:1px solid var(--divider); font-size:12px; }
 .forecast-event > :last-child { text-align:right; }
 .forecast-kind { color:var(--text-muted); font-size:10px; }
@@ -1614,7 +1614,7 @@ table thead th {
 
 /* ===== CATEGORY BREAKDOWN ===== */
 .cat-bar-container {
-  margin-bottom: 20px;
+  margin-bottom: 10px;
   max-width: 100%;
   overflow: hidden;
 }
@@ -2634,7 +2634,7 @@ table thead th {
   .tx-list { min-width:650px; }
   .forecast-event { min-width:560px; }
   .forecast-list { overflow-x:auto; }
-  .forecast-account-filters { gap:4px; }
+  .forecast-account-filters { gap:6px; }
   .account-chips { margin-bottom:12px; overflow-x:auto; }
   .account-chips-row { width:max-content; min-width:100%; flex-wrap:nowrap; }
   .account-chip { flex:0 0 auto; flex-direction:row; gap:7px; min-width:102px; padding:6px 10px; font-size:15px; white-space:nowrap; }
@@ -2773,7 +2773,7 @@ h1, h2, h3 {
   font-size:12px;
 }
 
-.bills-grid-head {
+.bills-grid > .bills-grid-head {
   color: var(--text-muted);
   text-transform: uppercase;
   font-weight: 700;
@@ -2793,10 +2793,10 @@ h1, h2, h3 {
 .bills-grid-head.selected { background: var(--accent); color: var(--on-fill); }
 
 /* Sticky corner (BILL) sits above month headers when scrolling sideways */
-.bills-grid-head:first-child { z-index: 40; }
+.bills-grid > .bills-grid-head:first-child { z-index: 40; }
 
 /* Keep the TOTAL label above its sticky values, not an unrelated month. */
-.bills-grid-head:nth-child(14) { right: 0; z-index: 35; }
+.bills-grid > .bills-grid-head:nth-child(14) { right: 0; z-index: 35; }
 
 /* First column sticky for all rows */
 .bills-grid > :nth-child(14n + 1) {
