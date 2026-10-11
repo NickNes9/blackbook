@@ -8,7 +8,7 @@ Your finances, on your computer. Black Book is a free personal finance app for t
 
 [Download the latest release](https://github.com/NickNes9/blackbook/releases/latest) · [Report a problem](https://github.com/NickNes9/blackbook/issues) · [Full feature guide](functions.txt)
 
-[Download Windows](https://github.com/NickNes9/blackbook/releases/download/v0.9.5/black-book-v0.9.5-win.zip) · [Download macOS](https://github.com/NickNes9/blackbook/releases/download/v0.9.5/black-book-v0.9.5-mac.zip) · [Download Linux](https://github.com/NickNes9/blackbook/releases/download/v0.9.5/black-book-v0.9.5-linux.zip)
+[Download Windows](https://github.com/NickNes9/blackbook/releases/download/v0.9.6/black-book-v0.9.6-win.zip) · [Download macOS](https://github.com/NickNes9/blackbook/releases/download/v0.9.6/black-book-v0.9.6-mac.zip) · [Download Linux](https://github.com/NickNes9/blackbook/releases/download/v0.9.6/black-book-v0.9.6-linux.zip)
 
 ## What you can do
 
