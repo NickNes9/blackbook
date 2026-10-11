@@ -8,7 +8,7 @@ Object.assign(window.BlackBook, {
     if (this.overviewPieChart) { this.overviewPieChart.destroy(); this.overviewPieChart = null; }
     if (this.overviewLineChart) { this.overviewLineChart.destroy(); this.overviewLineChart = null; }
     const hideGraph = !!(this.data.settings && this.data.settings.hideOverviewGraph);
-    el.innerHTML = this.accountCardsHtml() + this.monthPickerHtml() + this.monthSummaryHtml() + this.categoryBreakdownHtml() +
+    el.innerHTML = this.accountCardsHtml() + '<div class="list-sep overview-accounts-sep"></div>' + this.monthPickerHtml() + this.monthSummaryHtml() + this.categoryBreakdownHtml() +
       this.categoryFilterHtml() + this.selectedTransactionDetailsHtml() + '<div class="tx-list-wrap">' + this.recentTransactionsHtml() + '</div>' +
       (hideGraph
         ? ''
@@ -75,6 +75,7 @@ Object.assign(window.BlackBook, {
     const modes = [null, 'expense', 'income'];
     const idx = modes.indexOf(this.ovActiveTypes());
     const next = modes[(idx + 1) % modes.length];
+    if (this._overviewCustomFilter?.profile === this.profile) this._overviewCustomFilter.filter.type = next || '';
     this._ovInc = next === 'income';
     this._ovExp = next === 'expense';
     this.renderPage('overview');
@@ -125,11 +126,10 @@ Object.assign(window.BlackBook, {
   cycleOvSort() {
     const wrap = document.querySelector('.tx-list-wrap');
     const scrollTop = wrap ? wrap.scrollTop : 0;
-    const modes = ['date', 'value'];
+    const modes = ['date', 'value', 'name'];
     const idx = modes.indexOf(this._ovSortBy);
     this._ovSortBy = modes[(idx + 1) % modes.length];
-    // Ensure default direction is desc when cycling
-    if (!this._ovSortDir) this._ovSortDir = 'desc';
+    this._ovSortDir = this._ovSortBy === 'name' ? 'asc' : 'desc';
     this.renderPage('overview');
     const nw = document.querySelector('.tx-list-wrap');
     if (nw) nw.scrollTop = scrollTop;
@@ -167,11 +167,12 @@ Object.assign(window.BlackBook, {
     const year = this.vy(), month = this.vm();
     let income = 0, expenses = 0;
     for (const tx of this.data.transactions) {
+      if (!this.overviewCustomMatches(tx)) continue;
       const { y, m } = this.ymOf(tx.date);
       if (this.isTransfer(tx)) continue;
       if (this._bulkSel && this._bulkSel.size && this._bulkOnly && !this._bulkSel.has(tx.id)) continue;
       if (y === year && m === month) {
-        const rsd = this.toBase(tx.amount, tx.currency);
+        const rsd = this.transactionToBase(tx);
         if (tx.type === 'income') income += Math.abs(rsd); else expenses += Math.abs(rsd);
       }
     }
@@ -191,7 +192,7 @@ Object.assign(window.BlackBook, {
   monthSummaryHtml() {
     const { income, expenses } = this.overviewMonthlyTotals();
     const monthEnd = this.monthEndBalanceAt();
-    const sortLabel = this._ovSortBy === 'date' ? 'DATE' : this._ovSortBy === 'value' ? 'VALUE' : 'DATE';
+    const sortLabel = this._ovSortBy === 'date' ? 'DATE' : this._ovSortBy === 'value' ? 'VALUE' : this._ovSortBy === 'name' ? 'NAME' : 'DATE';
     const mergeButton = this._bulkSel && this._bulkSel.size >= 2
       ? '<button class="btn btn-sm btn-primary page-control ov-merge-selected" onclick="BlackBook.openMergeModal()">MERGE SELECTED</button>'
       : '';
@@ -200,8 +201,9 @@ Object.assign(window.BlackBook, {
       '<span style="display:flex;gap:6px;align-items:center;">' +
       (this._bulkSel && this._bulkSel.size ? '<div class="cat-filter-chip bulk-filter-chip' + (this._bulkOnly ? ' selected' : '') + '" onclick="BlackBook.toggleBulkOnly()">SELECTED (' + this._bulkSel.size + ')</div>' : '') +
       mergeButton +
+      '<button class="btn btn-sm ' + (this._overviewCustomFilter?.profile === this.profile && this._overviewCustomFilter ? 'btn-primary' : 'btn-secondary') + ' page-control" onclick="BlackBook.toggleOverviewFindReplace()" title="' + (this._overviewCustomFilter?.profile === this.profile && this._overviewCustomFilter ? 'Custom filter active · click to clear' : 'Find and preview transaction changes') + '">FIND &amp; REPLACE</button>' +
       '<button class="btn btn-sm btn-secondary page-control ov-type-cycle" onclick="BlackBook.cycleOvType()" title="Cycle filter: Type → Expenses → Income">' + this.ovTypeLabel() + '</button>' +
-      '<button class="btn btn-sm btn-secondary page-control ov-sort-cycle" onclick="BlackBook.cycleOvSort()" title="Cycle sort: Date → Value">' + sortLabel + '</button>' +
+      '<button class="btn btn-sm btn-secondary page-control ov-sort-cycle" onclick="BlackBook.cycleOvSort()" title="Cycle sort: Date → Value → Name">' + sortLabel + '</button>' +
       '<button class="btn btn-sm btn-secondary ov-sort-dir" onclick="BlackBook.toggleOvSortDir()" title="' + (this._ovSortDir === 'asc' ? 'Descending' : 'Ascending') + '">' + (this._ovSortDir === 'asc' ? '&#9650;' : '&#9660;') + '</button>' +
       '</span></div>';
   },
@@ -222,10 +224,11 @@ Object.assign(window.BlackBook, {
     const catTotals = {};
     const catCounts = {};
     for (const tx of this.data.transactions) {
+      if (!this.overviewCustomMatches(tx)) continue;
       const { y, m } = this.ymOf(tx.date);
       if (this.isTransfer(tx)) continue;
       if (y === year && m === month && (!filter || tx.type === filter)) {
-        const value = this.toBase(tx.amount, tx.currency);
+        const value = this.transactionToBase(tx);
         const amount = filter ? Math.abs(value) : (tx.type === 'expense' ? -Math.abs(value) : Math.abs(value));
         catTotals[tx.categoryId] = (catTotals[tx.categoryId] || 0) + amount;
         catCounts[tx.categoryId] = (catCounts[tx.categoryId] || 0) + 1;
@@ -298,7 +301,7 @@ Object.assign(window.BlackBook, {
       if (this.isTransfer(tx)) continue;
       const d = new Date(tx.date);
       if (d.getFullYear() === year && d.getMonth() === month) {
-        const rsd = this.toBase(tx.amount, tx.currency);
+        const rsd = this.transactionToBase(tx);
         if (tx.type === 'income') monthlyIncome += rsd; else monthlyExpenses += rsd;
       }
     }
@@ -308,7 +311,16 @@ Object.assign(window.BlackBook, {
     for (const bill of this.data.bills) {
       if (!bill.active) continue;
       if (bill.amount == null) continue;
-      if (bill.dueDay >= todayDate && bill.dueDay <= todayDate + 7) { upcomingBillCount++; upcomingBillTotal += this.toBase(bill.amount, bill.currency); }
+      let due = new Date(now.getFullYear(), now.getMonth(), Math.min(Number(bill.dueDay) || 1, new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate()));
+      if (bill.frequency === 'annual') {
+        const dueMonth = (Number(bill.dueMonth) || 1) - 1;
+        due = new Date(now.getFullYear(), dueMonth, Math.min(Number(bill.dueDay) || 1, new Date(now.getFullYear(), dueMonth + 1, 0).getDate()));
+        if (due < new Date(now.getFullYear(), now.getMonth(), now.getDate())) due.setFullYear(due.getFullYear() + 1);
+      } else if (due < new Date(now.getFullYear(), now.getMonth(), now.getDate())) {
+        due = new Date(now.getFullYear(), now.getMonth() + 1, Math.min(Number(bill.dueDay) || 1, new Date(now.getFullYear(), now.getMonth() + 2, 0).getDate()));
+      }
+      const daysAway = Math.round((due - new Date(now.getFullYear(), now.getMonth(), now.getDate())) / 86400000);
+      if (daysAway <= 7) { upcomingBillCount++; upcomingBillTotal += this.toBase(bill.amount, bill.currency); }
     }
     return '<div class="metrics-grid">' +
       '<div class="metric-panel"><div class="metric-title">NET WORTH</div><div class="metric-value ' + (netWorth >= 0 ? 'metric-positive' : 'metric-negative') + '">' + this.fmtBase(netWorth) + '</div></div>' +
@@ -323,13 +335,18 @@ Object.assign(window.BlackBook, {
     const y = this.vy(), m = this.vm();
     const used = new Set();
     let hasTransfers = false;
+    let hasTransactions = false;
     for (const tx of this.data.transactions) {
+      if (!this.overviewCustomMatches(tx)) continue;
       const { y: ty, m: tm } = this.ymOf(tx.date);
       if (ty !== y || tm !== m) continue;
+      if (this.selectedAccount && !(tx.accountId === this.selectedAccount || tx.cardId === this.selectedAccount || tx.fromAccountId === this.selectedAccount || tx.toAccountId === this.selectedAccount)) continue;
+      hasTransactions = true;
       if (tx.type === 'transfer') { hasTransfers = true; continue; }
       if (!tx.categoryId) continue;
       used.add(tx.categoryId);
     }
+    if (!hasTransactions) return '';
     const selected = this.selectedCategories;
     let html = '<div class="cat-filter"><div class="cat-filter-chip' + (!selected && !this._ovInc && !this._ovExp ? ' selected' : '') + '" onclick="BlackBook.selectCategory(null, event)" title="Show all categories">ALL</div>';
     if (hasTransfers) {
@@ -350,7 +367,7 @@ Object.assign(window.BlackBook, {
     const selected = this.data.transactions.filter(tx => this._bulkSel.has(tx.id) && String(tx.date || '').startsWith(month));
     if (!selected.length) return '';
     return '<div class="selected-transaction-details"><span class="selected-transaction-details-label">SELECTED DETAILS</span>' + selected.map(tx =>
-      '<span class="selected-transaction-detail"><span>' + this.escapeHtml(this.fmtDateInput(tx.date)) + '</span><span class="selected-transaction-note">' + this.escapeHtml(tx.note || 'No note') + '</span><span>' + this.fmtAmount(tx.amount, tx.currency || this.baseCurrency()) + '</span></span>'
+      '<span class="selected-transaction-detail"><span>' + this.escapeHtml(this.fmtDateInput(tx.date)) + '</span><span class="selected-transaction-note">' + this.transactionDescriptionHtml(tx, 'No note') + '</span><span>' + this.fmtAmount(tx.amount, tx.currency || this.baseCurrency()) + '</span></span>'
     ).join('') + '</div>';
   },
 
@@ -362,7 +379,7 @@ Object.assign(window.BlackBook, {
   },
 
   recentTransactionsHtml() {
-    let txs = this.data.transactions.slice();
+    let txs = this.data.transactions.filter(tx => this.overviewCustomMatches(tx));
     const linkedFocusTx = this._linkedTransactionFocusId
       ? txs.find(tx => tx.id === this._linkedTransactionFocusId)
       : null;
@@ -374,7 +391,14 @@ Object.assign(window.BlackBook, {
     if (sortBy === 'date') {
       txs.sort((a, b) => dirMult * a.date.localeCompare(b.date));
     } else if (sortBy === 'value') {
-      txs.sort((a, b) => dirMult * (Math.abs(this.toBase(a.amount, a.currency)) - Math.abs(this.toBase(b.amount, b.currency))));
+      txs.sort((a, b) => dirMult * (Math.abs(this.transactionToBase(a)) - Math.abs(this.transactionToBase(b))));
+    } else if (sortBy === 'name') {
+      txs.sort((a, b) => {
+        const aHasDescription = Boolean(String(a.note || '').trim());
+        const bHasDescription = Boolean(String(b.note || '').trim());
+        if (aHasDescription !== bHasDescription) return aHasDescription ? -1 : 1;
+        return dirMult * String(a.note || '').localeCompare(String(b.note || ''), undefined, { sensitivity: 'base' }) || String(b.date || '').localeCompare(String(a.date || ''));
+      });
     }
     
     if (this.selectedAccount) {
@@ -410,19 +434,19 @@ Object.assign(window.BlackBook, {
         const shownLabel = (shownAcc.shortName || shownAcc.name || '?').toUpperCase();
         const amtDisplay = this.fmtDualCurrency(tx.amount, tx.currency, tx.currency, null, null);
         const amtInDisplay = tx.amountIn != null ? this.fmtDualCurrency(tx.amountIn, tx.currencyIn || tx.currency, tx.currencyIn || tx.currency, null, null) : amtDisplay;
-        rows += '<div id="tx-row-' + this.escapeHtml(tx.id) + '" class="tx-row tx-row-transfer' + (this._linkedTransactionFocusId === tx.id ? ' linked-transaction-focus' : '') + (this._bulkSel && this._bulkSel.has(tx.id) ? ' bulk-selected' : '') + '" onclick="BlackBook.bulkToggle(\x27' + tx.id + '\x27, event.shiftKey)" onmouseenter="BlackBook.hoveredTxId=\x27' + tx.id + '\x27" onmouseleave="BlackBook.hoveredTxId=null"><span class="tx-num">' + rowNum + '</span><div class="tx-acct-stripe" style="background:' + this.accountColor(shownAcc) + '"><span class="tx-acct-label">' + this.escapeHtml(shownLabel) + '</span></div><span class="tx-date">' + this.fmtDateInput(tx.date) + '</span><span class="tx-cat" style="color:#71717a">Transfer</span><span class="tx-note">' + this.escapeHtml(tx.note || '') + this.healthMarker('transactions', tx.id) + '</span><span class="tx-actions" onclick="event.stopPropagation()">' + '<button class="btn btn-sm btn-secondary" onclick="BlackBook.openEditTransfer(\x27' + tx.id + '\x27)">EDIT</button><button class="btn btn-sm btn-danger btn-icon" title="Delete transaction" onclick="BlackBook.deleteTransaction(\x27' + tx.id + '\x27)">' + this.xIcon() + '</button></span><span class="tx-amt amt-transfer">' + amtDisplay + ' &#8594; ' + amtInDisplay + '</span></div>';
+        rows += '<div id="tx-row-' + this.escapeHtml(tx.id) + '" class="tx-row tx-row-transfer' + (this._linkedTransactionFocusId === tx.id ? ' linked-transaction-focus' : '') + (this._bulkSel && this._bulkSel.has(tx.id) ? ' bulk-selected' : '') + '" onclick="BlackBook.bulkToggle(\x27' + tx.id + '\x27, event.shiftKey)" onmouseenter="BlackBook.hoveredTxId=\x27' + tx.id + '\x27" onmouseleave="BlackBook.hoveredTxId=null"><span class="tx-num">' + rowNum + '</span><div class="tx-acct-stripe" style="background:' + this.accountColor(shownAcc) + '"><span class="tx-acct-label">' + this.escapeHtml(shownLabel) + '</span></div><span class="tx-date">' + this.fmtDateInput(tx.date) + '</span><span class="tx-cat" style="color:#71717a">Transfer</span><span class="tx-note">' + this.transactionDescriptionHtml(tx) + this.healthMarker('transactions', tx.id) + '</span><span class="tx-actions" onclick="event.stopPropagation()">' + '<button class="btn btn-sm btn-secondary" onclick="BlackBook.openEditTransfer(\x27' + tx.id + '\x27)">EDIT</button><button class="btn btn-sm btn-danger btn-icon" title="Delete transaction" onclick="BlackBook.deleteTransaction(\x27' + tx.id + '\x27)">' + this.xIcon() + '</button></span><span class="tx-amt amt-transfer">' + amtDisplay + ' &#8594; ' + amtInDisplay + '</span></div>';
       } else {
         const card = tx.cardId ? cards[tx.cardId] : null;
         const acc = card
           ? { shortName: card.shortName || '?', name: card.name }
           : (accounts[tx.accountId] || { shortName: 'TR', name: 'Transfer' });
         const cat = categories[tx.categoryId] || { name: '?' };
-        const rsd = this.toBase(tx.amount, tx.currency);
+        const rsd = this.transactionToBase(tx);
         const amtClass = tx.type === 'income' ? 'amt-income' : 'amt-expense';
         let wtClass = '';
         if (Math.abs(rsd) > 10000) wtClass = ' amt-heavy'; else if (Math.abs(rsd) > 5000) wtClass = ' amt-medium';
         const txCur = tx.currency || this.baseCurrency() || 'RSD';
-        const accCur = card ? this.baseCurrency() : ((accounts[tx.accountId] || {}).currency || this.baseCurrency() || 'RSD');
+        const accCur = card ? (card.currency || this.baseCurrency()) : ((accounts[tx.accountId] || {}).currency || this.baseCurrency() || 'RSD');
         const txAmtDisplay = this.fmtDualCurrency(tx.amount, txCur, accCur, tx.nativeAmount, tx.nativeCurrency);
         const editFn = card ? 'openEditCardTx' : 'openEditTransaction';
         let billChip = '';
@@ -456,7 +480,7 @@ Object.assign(window.BlackBook, {
           const mBill = this.matchingUnpaidBill(tx);
           if (mBill) billChip = '<button class="btn btn-sm bill-link-chip" title="Match unpaid bill: ' + this.escapeHtml(mBill.name) + '" onclick="event.stopPropagation();BlackBook.linkTxToBill(\x27' + tx.id + '\x27)">BILL: ' + this.escapeHtml(mBill.name) + '</button>';
         }
-        rows += '<div id="tx-row-' + this.escapeHtml(tx.id) + '" class="tx-row' + (this._linkedTransactionFocusId === tx.id ? ' linked-transaction-focus' : '') + (this._bulkSel && this._bulkSel.has(tx.id) ? ' bulk-selected' : '') + '" onclick="BlackBook.bulkToggle(\x27' + tx.id + '\x27, event.shiftKey)" onmouseenter="BlackBook.hoveredTxId=\x27' + tx.id + '\x27" onmouseleave="BlackBook.hoveredTxId=null"><span class="tx-num">' + rowNum + '</span><div class="tx-acct-stripe" style="background:' + this.accountColor(acc) + '"><span class="tx-acct-label">' + this.escapeHtml((acc.shortName || '?').toUpperCase()) + '</span></div><span class="tx-date">' + this.fmtDateInput(tx.date) + '</span><span class="tx-cat" style="color:' + this.categoryColor(cat) + '">' + this.escapeHtml(cat.name) + catLink + this.healthMarker('transactions', tx.id) + '</span><span class="tx-note">' + this.escapeHtml(tx.note || '') + '</span><span class="tx-actions" onclick="event.stopPropagation()">' + billChip + '<button class="btn btn-sm btn-secondary" onclick="BlackBook.' + editFn + '(\x27' + tx.id + '\x27)">EDIT</button><button class="btn btn-sm btn-danger btn-icon" title="Delete transaction" onclick="BlackBook.deleteTransaction(\x27' + tx.id + '\x27)">' + this.xIcon() + '</button></span><span class="tx-amt ' + amtClass + wtClass + '">' + txAmtDisplay + '</span></div>';
+        rows += '<div id="tx-row-' + this.escapeHtml(tx.id) + '" class="tx-row' + (this._linkedTransactionFocusId === tx.id ? ' linked-transaction-focus' : '') + (this._bulkSel && this._bulkSel.has(tx.id) ? ' bulk-selected' : '') + '" onclick="BlackBook.bulkToggle(\x27' + tx.id + '\x27, event.shiftKey)" onmouseenter="BlackBook.hoveredTxId=\x27' + tx.id + '\x27" onmouseleave="BlackBook.hoveredTxId=null"><span class="tx-num">' + rowNum + '</span><div class="tx-acct-stripe" style="background:' + this.accountColor(acc) + '"><span class="tx-acct-label">' + this.escapeHtml((acc.shortName || '?').toUpperCase()) + '</span></div><span class="tx-date">' + this.fmtDateInput(tx.date) + '</span><span class="tx-cat" style="color:' + this.categoryColor(cat) + '">' + this.escapeHtml(cat.name) + catLink + this.healthMarker('transactions', tx.id) + '</span><span class="tx-note">' + this.transactionDescriptionHtml(tx) + '</span><span class="tx-actions" onclick="event.stopPropagation()">' + billChip + '<button class="btn btn-sm btn-secondary" onclick="BlackBook.' + editFn + '(\x27' + tx.id + '\x27)">EDIT</button><button class="btn btn-sm btn-danger btn-icon" title="Delete transaction" onclick="BlackBook.deleteTransaction(\x27' + tx.id + '\x27)">' + this.xIcon() + '</button></span><span class="tx-amt ' + amtClass + wtClass + '">' + txAmtDisplay + '</span></div>';
       }
     }
     return '<div class="tx-list">' + rows + '</div>';
@@ -582,7 +606,278 @@ Object.assign(window.BlackBook, {
       '<div class="accounts-panel-head"><span>Accounts</span><button class="ap-btn" onclick="BlackBook.closeAccountsPanel()" title="Close">&times;</button></div>' +
       rows +
       '<div class="ap-footer"><button class="btn btn-sm btn-primary" onclick="BlackBook.closeAccountsPanel();BlackBook.openNewAccount()">+ ADD</button>' +
-      '<button class="btn btn-sm btn-secondary" onclick="BlackBook.closeAccountsPanel();BlackBook.navigateTo(\x27settings\x27)">MANAGE IN SETTINGS</button></div>';
+      '<button class="btn btn-sm btn-secondary" onclick="BlackBook.closeAccountsPanel();BlackBook.navigateTo(\x27settings\x27)">MANAGE IN SETTINGS</button>' +
+      '<button class="btn btn-sm btn-secondary yearly-balances-open" onclick="BlackBook.openYearlyBalances()">YEARLY BALANCES</button></div>';
+  },
+
+  yearlyBalanceAccounts() {
+    return (this.data.accounts || []).filter(account => account.type !== 'credit' && account.type !== 'creditcard');
+  },
+
+  yearlyBalanceYears(accountId = null) {
+    const dates = [];
+    const relevant = tx => !accountId || tx.accountId === accountId || tx.fromAccountId === accountId || tx.toAccountId === accountId;
+    for (const tx of this.data.transactions || []) {
+      if (!relevant(tx)) continue;
+      const parts = typeof this.transactionBalanceParts === 'function' ? this.transactionBalanceParts(tx) : [tx];
+      for (const part of (Array.isArray(parts) ? parts : [tx])) if (/^\d{4}-\d{2}-\d{2}$/.test(part.date || '')) dates.push(part.date);
+    }
+    for (const checkpoint of this.data.balanceCheckpoints || []) {
+      if ((!accountId || checkpoint.accountId === accountId) && /^\d{4}-\d{2}-\d{2}$/.test(checkpoint.date || '')) dates.push(checkpoint.date);
+    }
+    const currentYear = Number(String(this.today()).slice(0, 4));
+    const firstYear = dates.length ? Math.min(currentYear, ...dates.map(date => Number(date.slice(0, 4)))) : currentYear;
+    return Array.from({ length: currentYear - firstYear + 1 }, (_, i) => firstYear + i);
+  },
+
+  yearlyBalanceFor(account, year) {
+    const priorYearEnd = String(year - 1) + '-12-31';
+    const startDate = String(year) + '-01-01';
+    const endDate = year === Number(String(this.today()).slice(0, 4)) ? this.today() : String(year) + '-12-31';
+    const prior = this.accountBalanceNative(account.id, priorYearEnd);
+    const opening = (this.data.transactions || []).filter(tx => tx.accountId === account.id && tx.date === startDate && tx.balanceCorrection && tx.balanceCorrection.kind === 'opening')
+      .reduce((sum, tx) => sum + (Number(tx.amount) || 0), 0);
+    const end = this.accountBalanceNative(account.id, endDate);
+    const currency = account.currency || prior.currency || this.baseCurrency();
+    const checkpoints = this.data.balanceCheckpoints || [];
+    const openingRecorded = checkpoints.some(cp => cp.accountId === account.id && cp.date === startDate && cp.kind === 'opening');
+    const currentRecorded = year === Number(String(this.today()).slice(0, 4)) && checkpoints.some(cp => cp.accountId === account.id && cp.date === endDate && cp.kind === 'current');
+    return { year, accountId: account.id, accountName: account.name, currency, start: prior.amount + opening, end: end.amount, change: end.amount - prior.amount - opening, startDate, endDate, openingRecorded, currentRecorded };
+  },
+
+  yearlyBalanceToBase(amount, currency) {
+    const value = Number(amount);
+    const base = this.baseCurrency();
+    if (!Number.isFinite(value)) return null;
+    if (value === 0 || !currency || currency === base) return value;
+    const rates = this.getRates();
+    const rateFrom = currency === 'EUR' ? 1 : Number((rates[currency] || {}).rate);
+    const rateTo = base === 'EUR' ? 1 : Number((rates[base] || {}).rate);
+    if (!Number.isFinite(rateFrom) || rateFrom <= 0 || !Number.isFinite(rateTo) || rateTo <= 0) return null;
+    const converted = this.convertBetweenCurrencies(value, currency, base);
+    return Number.isFinite(converted) ? converted : null;
+  },
+
+  yearlyBalanceAggregate(accounts, year) {
+    let start = 0, end = 0;
+    const excluded = [];
+    for (const account of accounts) {
+      const row = this.yearlyBalanceFor(account, year);
+      const convertedStart = this.yearlyBalanceToBase(row.start, row.currency);
+      const convertedEnd = this.yearlyBalanceToBase(row.end, row.currency);
+      if (convertedStart == null || convertedEnd == null) {
+        if (row.start !== 0 || row.end !== 0) excluded.push(account.id);
+        continue;
+      }
+      start += convertedStart;
+      end += convertedEnd;
+    }
+    return { year, start, end, change: end - start, excluded };
+  },
+
+  yearlyBalanceCheckpointNote(accounts) {
+    const ids = new Set(accounts.map(account => account.id));
+    const checkpoints = this.data.balanceCheckpoints || [];
+    const hasOpening = checkpoints.some(cp => ids.has(cp.accountId) && cp.kind === 'opening');
+    const currentRecorded = checkpoints.some(cp => ids.has(cp.accountId) && cp.kind === 'current' && cp.date === this.today());
+    const parts = [];
+    if (hasOpening) parts.push('Opening checkpoint recorded; applied before January 1 activity');
+    if (currentRecorded) parts.push('current balance checkpoint recorded');
+    return parts.join(' · ');
+  },
+
+  openYearlyBalances() {
+    this.closeAccountsPanel();
+    this._yearlyBalanceMode = 'total';
+    this._yearlyVisibleAccounts = new Set(this.yearlyBalanceAccounts().map(account => account.id));
+    let modal = document.getElementById('yearly-balances-modal');
+    if (!modal) {
+      modal = document.createElement('div');
+      modal.id = 'yearly-balances-modal';
+      modal.className = 'modal hidden';
+      modal.setAttribute('role', 'dialog');
+      modal.setAttribute('aria-modal', 'true');
+      modal.setAttribute('aria-labelledby', 'yearly-balances-title');
+      modal.innerHTML = '<div class="modal-backdrop" onclick="BlackBook.closeYearlyBalances()"></div><div class="modal-content wide yearly-balances-content"><div class="modal-header"><h2 id="yearly-balances-title">Yearly balances</h2><button class="modal-close" type="button" onclick="BlackBook.closeYearlyBalances()" aria-label="Close">×</button></div><div class="yearly-balances-controls"><label for="yearly-balances-account">Account</label><select id="yearly-balances-account" class="input" onchange="BlackBook.renderYearlyBalances()"></select><button id="yearly-balances-mode" class="btn btn-sm btn-secondary yearly-mode-toggle" type="button" onclick="BlackBook.toggleYearlyBalanceMode()" aria-label="Switch between total and accounts views"></button></div><div class="yearly-balances-chart-wrap"><canvas id="yearly-balances-chart" aria-label="Yearly balance graph"></canvas><div id="yearly-balances-chart-empty" class="yearly-balances-empty" hidden></div></div><div id="yearly-balances-account-series" class="yearly-balances-account-series" role="group" aria-label="Accounts shown in graph"></div><div id="yearly-balances-summary" class="yearly-balances-summary"></div><div id="yearly-balances-context" class="yearly-balances-context" role="status"></div><section id="yearly-balances-history" class="yearly-balances-history" aria-label="Yearly balance history"></section></div>';
+      document.body.appendChild(modal);
+      this._yearlyBalanceModalObserver = new MutationObserver(() => {
+        if (modal.classList.contains('hidden') && this.yearlyBalanceChart) { this.yearlyBalanceChart.destroy(); this.yearlyBalanceChart = null; }
+      });
+      this._yearlyBalanceModalObserver.observe(modal, { attributes: true, attributeFilter: ['class'] });
+    }
+    const select = document.getElementById('yearly-balances-account');
+    const selected = this.selectedAccount && this.yearlyBalanceAccounts().some(a => a.id === this.selectedAccount) ? this.selectedAccount : '';
+    select.innerHTML = '<option value="">All accounts</option>' + this.yearlyBalanceAccounts().map(a => '<option value="' + this.escapeHtml(a.id) + '">' + this.escapeHtml(a.name) + ' · ' + this.escapeHtml(a.currency || this.baseCurrency()) + '</option>').join('');
+    select.value = selected;
+    this.renderYearlyBalances();
+    this.openModal('yearly-balances-modal');
+    select.focus();
+  },
+
+  renderYearlyBalances() {
+    const select = document.getElementById('yearly-balances-account');
+    const summary = document.getElementById('yearly-balances-summary');
+    const context = document.getElementById('yearly-balances-context');
+    const history = document.getElementById('yearly-balances-history');
+    const seriesEl = document.getElementById('yearly-balances-account-series');
+    const modeButton = document.getElementById('yearly-balances-mode');
+    if (!select || !summary || !context || !history || !seriesEl || !modeButton) return;
+    if (this.yearlyBalanceChart) { this.yearlyBalanceChart.destroy(); this.yearlyBalanceChart = null; }
+    const accountId = select.value || null;
+    const allAccounts = this.yearlyBalanceAccounts();
+    const accounts = accountId ? allAccounts.filter(a => a.id === accountId) : allAccounts;
+    const accountMode = !!accountId;
+    const viewMode = accountMode ? 'account' : (this._yearlyBalanceMode || 'total');
+    const modal = document.getElementById('yearly-balances-modal');
+    modal.classList.toggle('yearly-all-view', !accountMode);
+    modal.classList.toggle('yearly-account-view', accountMode);
+    modeButton.hidden = accountMode;
+    modeButton.textContent = viewMode === 'accounts' ? 'ACCOUNTS' : 'TOTAL';
+    modeButton.setAttribute('aria-label', 'Switch to ' + (viewMode === 'accounts' ? 'total' : 'accounts') + ' view');
+    modeButton.setAttribute('aria-pressed', viewMode === 'accounts' ? 'true' : 'false');
+    const years = this.yearlyBalanceYears(accountId);
+    const currentYear = Number(String(this.today()).slice(0, 4));
+    const graphEmpty = document.getElementById('yearly-balances-chart-empty');
+    const canvas = document.getElementById('yearly-balances-chart');
+    const base = this.baseCurrency();
+    const chartStyles = getComputedStyle(document.documentElement);
+    const startColor = chartStyles.getPropertyValue('--text-dim').trim() || '#7a7a7a';
+    const endColor = chartStyles.getPropertyValue('--accent').trim() || '#fa8c3c';
+    let datasets = [], currency = base, excluded = new Set();
+    history.hidden = accountMode ? false : true;
+    seriesEl.hidden = accountMode;
+    seriesEl.classList.toggle('is-placeholder', !accountMode && viewMode !== 'accounts');
+    if (accountMode) {
+      const account = accounts[0];
+      if (!account) { summary.innerHTML = '<div class="yearly-balances-empty">No account history is available.</div>'; }
+      else {
+        currency = account.currency || base;
+        const current = this.yearlyBalanceFor(account, currentYear);
+        summary.innerHTML = this.yearlyBalanceSummaryHtml(current.start, current.end);
+        datasets = [
+          { label: 'Start', data: years.map(year => this.yearlyBalanceFor(account, year).start), borderColor: startColor },
+          { label: 'End', data: years.map(year => this.yearlyBalanceFor(account, year).end), borderColor: endColor }
+        ];
+        const notes = [];
+        if (current.openingRecorded) notes.push('Opening checkpoint recorded before January 1 activity.');
+        if (current.currentRecorded) notes.push('Current checkpoint recorded.');
+        context.textContent = ['Amounts in ' + currency + '.', 'Current through ' + this.fmtDateInput(this.today()) + '.', ...notes].join(' ');
+        context.title = context.textContent;
+        history.innerHTML = this.yearlyBalanceHistoryHtml(years.map(year => this.yearlyBalanceFor(account, year)));
+      }
+      seriesEl.innerHTML = '';
+    } else if (viewMode === 'total') {
+      const aggregates = years.map(year => this.yearlyBalanceAggregate(allAccounts, year));
+      const current = aggregates.find(row => row.year === currentYear) || { start: 0, end: 0, excluded: [] };
+      summary.innerHTML = this.yearlyBalanceSummaryHtml(current.start, current.end);
+      datasets = [
+        { label: 'Start', data: aggregates.map(row => row.start), borderColor: startColor },
+        { label: 'End', data: aggregates.map(row => row.end), borderColor: endColor }
+      ];
+      for (const row of aggregates) row.excluded.forEach(id => excluded.add(id));
+      const excludedNames = [...excluded].map(id => allAccounts.find(account => account.id === id)).filter(Boolean).map(account => account.name || account.shortName || 'Account');
+      context.textContent = 'Current through ' + this.fmtDateInput(this.today()) + '. Converted at current rates · ' + base + (excludedNames.length ? ' · Missing rates: ' + excludedNames.length + ' account(s) omitted.' : '');
+      context.title = excludedNames.length ? 'Missing rates; omitted: ' + excludedNames.join(', ') : context.textContent;
+      history.innerHTML = '';
+      seriesEl.innerHTML = '';
+    } else {
+      const chosen = this._yearlyVisibleAccounts || new Set(allAccounts.map(account => account.id));
+      const selected = allAccounts.filter(account => chosen.has(account.id));
+      const cards = allAccounts.map(account => '<button type="button" class="cat-filter-chip yearly-account-toggle' + (chosen.has(account.id) ? ' selected' : '') + '" style="--cc:' + this.escapeHtml(this.accountColor(account)) + ';" aria-pressed="' + (chosen.has(account.id) ? 'true' : 'false') + '" title="Click or Shift-click to toggle; Alt-click to isolate" onclick="BlackBook.toggleYearlyAccountSeries(\x27' + this.escapeHtml(account.id) + '\x27,event)">' + this.escapeHtml(account.name || account.shortName || 'Account') + '</button>').join('');
+      seriesEl.innerHTML = cards;
+      const currentAggregate = this.yearlyBalanceAggregate(selected, currentYear);
+      summary.innerHTML = selected.length ? this.yearlyBalanceSummaryHtml(currentAggregate.start, currentAggregate.end) : '';
+      datasets = selected.map(account => ({
+        label: account.name || account.shortName || 'Account',
+        data: years.map(year => {
+          const amount = this.yearlyBalanceFor(account, year).end;
+          const converted = this.yearlyBalanceToBase(amount, account.currency || base);
+          if (converted == null && amount !== 0) { excluded.add(account.id); return null; }
+          return converted;
+        }),
+        borderColor: this.accountColor(account),
+        backgroundColor: this.accountColor(account),
+        tension: 0.25,
+        cubicInterpolationMode: 'monotone',
+        spanGaps: false
+      }));
+      currentAggregate.excluded.forEach(id => excluded.add(id));
+      const notes = [];
+      const checkpointNote = this.yearlyBalanceCheckpointNote(selected);
+      if (checkpointNote) notes.push(checkpointNote + '.');
+      notes.push('Current through ' + this.fmtDateInput(this.today()) + '. Converted at current rates · ' + base);
+      let excludedNames = [];
+      if (excluded.size) {
+        excludedNames = [...excluded].map(id => allAccounts.find(account => account.id === id)).filter(Boolean).map(account => account.name || account.shortName || 'Account');
+        notes.push('Missing rates: ' + excludedNames.length + ' account(s) omitted.');
+      }
+      context.textContent = notes.join(' ');
+      context.title = excludedNames.length ? 'Missing rates; omitted: ' + excludedNames.join(', ') : context.textContent;
+      history.innerHTML = '';
+    }
+    const noAccountHistory = !accountMode && allAccounts.length === 0;
+    if (noAccountHistory) { summary.innerHTML = '<div class="yearly-balances-empty">No accounts are available for a balance summary.</div>'; context.textContent = ''; context.title = ''; datasets = []; }
+    const noAccounts = !accountMode && viewMode === 'accounts' && !(this._yearlyVisibleAccounts && this._yearlyVisibleAccounts.size);
+    graphEmpty.hidden = datasets.length > 0 && !noAccounts;
+    graphEmpty.textContent = noAccountHistory ? 'Add an account to see yearly balances.' : noAccounts ? 'Select one or more accounts below the graph.' : (!accounts.length ? 'No account balance history is available.' : 'No graphable balances yet.');
+    canvas.hidden = graphEmpty.hidden === false;
+    if (!years.length || !datasets.length || noAccounts || (accountMode && !accounts.length)) return;
+    const options = this.lineChartOptions();
+    options.plugins.legend.display = false;
+    options.plugins.legend.position = 'bottom';
+    options.plugins.legend.labels = { color: getComputedStyle(document.documentElement).getPropertyValue('--text-muted').trim() };
+    options.plugins.tooltip.external = ({ chart, tooltip }) => {
+      const points = tooltip.dataPoints || [];
+      const label = points.length ? [tooltip.title && tooltip.title[0], ...points.map(point => point.dataset.label + ': ' + this.fmtNumber(point.parsed.y) + ' ' + currency)].filter(Boolean).join('\n') : '';
+      this.showDonutTooltip(chart, tooltip, label);
+    };
+    options.scales.x.ticks.color = chartStyles.getPropertyValue('--text-muted').trim();
+    options.scales.y.ticks.color = chartStyles.getPropertyValue('--text-muted').trim();
+    options.scales.x.grid.color = chartStyles.getPropertyValue('--text-muted').trim();
+    options.scales.y.grid.color = chartStyles.getPropertyValue('--text-muted').trim();
+    options.scales.x.grid.lineWidth = 1;
+    options.scales.y.grid.lineWidth = 1;
+    if (!accountMode && viewMode === 'accounts') options.plugins.legend.display = false;
+    this.yearlyBalanceChart = new Chart(canvas.getContext('2d'), {
+      type: 'line',
+      data: { labels: years.map(String), datasets: datasets.map(dataset => ({ ...dataset, backgroundColor: dataset.backgroundColor || dataset.borderColor, cubicInterpolationMode: 'monotone', tension: dataset.tension == null ? 0.25 : dataset.tension })) },
+      options
+    });
+  },
+
+  yearlyBalanceSummaryHtml(start, end) {
+    const change = end - start;
+    const amount = (value, signed = false) => '<span class="' + (value < 0 ? 'amount-negative' : 'amount-positive') + '">' + (signed && value > 0 ? '+' : '') + this.fmtNumber(value) + '</span>';
+    return '<div class="yearly-summary-item"><span>START</span>' + amount(start) + '</div><div class="yearly-summary-item"><span>CURRENT</span>' + amount(end) + '</div><div class="yearly-summary-item"><span>CHANGE</span>' + amount(change, true) + '</div>';
+  },
+
+  yearlyBalanceHistoryHtml(rows) {
+    if (!rows.length) return '<div class="yearly-balances-empty">No account balance history is available yet.</div>';
+    const ordered = rows.slice().sort((a, b) => b.year - a.year);
+    return '<table class="yearly-balances-table"><thead><tr><th>Year</th><th>Start</th><th>End / Current</th><th>Change</th></tr></thead><tbody>' + ordered.map(row => '<tr><th scope="row">' + row.year + '</th><td>' + this.fmtNumber(row.start) + '</td><td>' + this.fmtNumber(row.end) + '</td><td class="' + (row.change < 0 ? 'amount-negative' : 'amount-positive') + '">' + (row.change > 0 ? '+' : '') + this.fmtNumber(row.change) + '</td></tr>').join('') + '</tbody></table>';
+  },
+
+  toggleYearlyBalanceMode() {
+    this._yearlyBalanceMode = this._yearlyBalanceMode === 'accounts' ? 'total' : 'accounts';
+    this.renderYearlyBalances();
+  },
+
+  toggleYearlyAccountSeries(id, event) {
+    const all = this.yearlyBalanceAccounts();
+    const selected = this._yearlyVisibleAccounts || new Set(all.map(account => account.id));
+    if (event && event.altKey) this._yearlyVisibleAccounts = new Set([id]);
+    else {
+      const next = new Set(selected);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      this._yearlyVisibleAccounts = next;
+    }
+    this.renderYearlyBalances();
+  },
+
+  closeYearlyBalances() {
+    if (this.yearlyBalanceChart) { this.yearlyBalanceChart.destroy(); this.yearlyBalanceChart = null; }
+    this.closeModal('yearly-balances-modal');
   },
 
   closeAccountsPanel() {
@@ -616,15 +911,15 @@ Object.assign(window.BlackBook, {
       if (d.getFullYear() !== year) continue;
       if (dailySelection && d.getMonth() !== this.vm()) continue;
       const index = dailySelection ? d.getDate() - 1 : d.getMonth();
-      const rsd = Math.abs(this.toBase(tx.amount, tx.currency));
+      const rsd = Math.abs(this.transactionToBase(tx));
       if (tx.type === 'income') income[index] += rsd; else expenses[index] -= rsd;
     }
     const incCol = this.data.settings.incomeColor || '#4ade80';
     const expCol = this.data.settings.expenseColor || '#f87171';
     const visible = this.overviewChartVisibility();
     const datasets = [];
-    if (visible.income) datasets.push({ label: 'Income', data: income, borderColor: incCol, backgroundColor: incCol, fill: { target: 'origin', above: this.hexToRgba(incCol, 0.1), below: this.hexToRgba(incCol, 0.1) }, tension: 0.3 });
-    if (visible.expenses) datasets.push({ label: 'Expenses', data: expenses, borderColor: expCol, backgroundColor: expCol, fill: { target: 'origin', above: this.hexToRgba(expCol, 0.1), below: this.hexToRgba(expCol, 0.1) }, tension: 0.3 });
+    if (visible.income) datasets.push({ label: 'Income', data: income, borderColor: incCol, backgroundColor: incCol, fill: { target: 'origin', above: this.hexToRgba(incCol, 0.1), below: this.hexToRgba(incCol, 0.1) }, tension: 0.3, cubicInterpolationMode: 'monotone' });
+    if (visible.expenses) datasets.push({ label: 'Expenses', data: expenses, borderColor: expCol, backgroundColor: expCol, fill: { target: 'origin', above: this.hexToRgba(expCol, 0.1), below: this.hexToRgba(expCol, 0.1) }, tension: 0.3, cubicInterpolationMode: 'monotone' });
     this.overviewLineChart = new Chart(canvas.getContext('2d'), {
       type: 'line',
       data: { labels, datasets: datasets },

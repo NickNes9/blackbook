@@ -6,6 +6,7 @@ import vm from 'node:vm';
 const index = readFileSync(new URL('../public/index.html', import.meta.url), 'utf8');
 const overview = readFileSync(new URL('../public/js/page-overview.js', import.meta.url), 'utf8');
 const styles = readFileSync(new URL('../public/style.css', import.meta.url), 'utf8');
+const tools = readFileSync(new URL('../public/js/transaction-tools.js', import.meta.url), 'utf8');
 const core = readFileSync(new URL('../public/js/core.js', import.meta.url), 'utf8');
 const transactions = readFileSync(new URL('../public/js/page-transactions.js', import.meta.url), 'utf8');
 const bills = readFileSync(new URL('../public/js/page-bills.js', import.meta.url), 'utf8');
@@ -29,12 +30,12 @@ test('the selected account retains its full presentation while other account chi
 
 test('narrow account chips do not let the selected chip grow over its neighbors', () => {
   assert.ok(styles.includes('.account-chip.selected:not(.ov-chip):not(.account-mgr-square) { flex-grow: 2; }'));
-  assert.match(overview, /overviewChip \+ '<div class="account-chip-list">' \+ accts\.map\(chip\)\.join\(''\) \+ '<\/div>' \+ squareChip/);
-  const lastRule = selector => styles.slice(styles.lastIndexOf(selector)).split('}')[0];
-  assert.match(lastRule('.account-chips-row {'), /width:\s*100%;/);
-  assert.match(lastRule('.account-chips-row {'), /min-width:\s*0;/);
+  assert.match(overview, /account-chip-list/);
+  assert.match(overview, /accts\.map\(chip\)\.join\(''\)/);
+  assert.match(styles, /^\.account-chips-row \{[^}]*width:\s*100%;/m);
+  assert.match(styles, /^\.account-chips-row \{[^}]*min-width:\s*0;/m);
   assert.match(styles, /\.account-chip-list \{[^}]*flex:\s*1 1 auto;[^}]*min-width:\s*0;[^}]*overflow-x:\s*auto/);
-  assert.match(lastRule('.account-chips {'), /width:\s*100%;[^}]*min-width:\s*0;/);
+  assert.match(styles, /^\.account-chips \{[^}]*width:\s*100%;[^}]*min-width:\s*0;/m);
   assert.doesNotMatch(styles, /\.chip-name\s*\{[^}]*letter-spacing/);
   assert.doesNotMatch(styles, /\.account-name-short \{[^}]*letter-spacing/);
   assert.doesNotMatch(styles, /\.account-chip\.chip-compact \.chip-name \{[^}]*letter-spacing/);
@@ -43,6 +44,7 @@ test('narrow account chips do not let the selected chip grow over its neighbors'
 test('account chip balances omit only the unnecessary zero decimals', () => {
   const context = { window: {}, localStorage: { getItem: () => '' } };
   vm.runInNewContext(core, context);
+  vm.runInNewContext(tools, context);
   vm.runInNewContext(overview, context);
   const app = context.window.BlackBook;
   app.fmtAmount = (amount, currency) => Number(amount).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' ' + currency;
@@ -53,12 +55,14 @@ test('account chip balances omit only the unnecessary zero decimals', () => {
 test('bills show full whole-number amounts when a cell has room without showing .00', () => {
   const context = { window: {}, localStorage: { getItem: () => '' } };
   vm.runInNewContext(core, context);
+  vm.runInNewContext(tools, context);
   vm.runInNewContext(bills, context);
   const app = context.window.BlackBook;
   app.fmtNumber = amount => Number(amount).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   assert.equal(app.formatBillGridAmount(70000), '70,000');
   assert.equal(app.formatBillGridAmount(70000.5), '70,000.50');
-  assert.match(styles, /@container bill-amount \(max-width: 72px\)/);
+  assert.match(bills, /const fits = textWidth <= available/);
+  assert.match(bills, /cell\.clientWidth[\s\S]*- 8/);
 });
 
 test('selection survives clicks on overview filters and merge dialog, but clears outside', () => {
@@ -69,6 +73,7 @@ test('selection survives clicks on overview filters and merge dialog, but clears
     document: { addEventListener: (type, listener) => { if (type === 'pointerdown') pointerdown = listener; } }
   };
   vm.runInNewContext(core, context);
+  vm.runInNewContext(tools, context);
   const app = context.window.BlackBook;
   app._bulkSel = new Set(['a', 'b']);
   let clears = 0;
@@ -94,6 +99,7 @@ test('selection survives clicks on overview filters and merge dialog, but clears
 test('changing the viewed month clears transaction selection and its selected-only mode', () => {
   const context = { window: {}, localStorage: { getItem: () => null } };
   vm.runInNewContext(core, context);
+  vm.runInNewContext(tools, context);
   const app = context.window.BlackBook;
   app.currentPage = 'overview';
   app._pageView = { overview: { y: 2026, m: 0 } };
@@ -113,6 +119,7 @@ test('selected-only overview charts use days of the current month and selected t
     Chart: class { constructor(_canvas, config) { chart = config; } }
   };
   vm.runInNewContext(core, context);
+  vm.runInNewContext(tools, context);
   vm.runInNewContext(overview, context);
   const app = context.window.BlackBook;
   app.currentPage = 'overview';
@@ -142,6 +149,7 @@ test('selected-only overview charts use days of the current month and selected t
 test('Shift-click builds and reduces an overview category filter while normal click isolates one', () => {
   const context = { window: {}, localStorage: { getItem: () => null } };
   vm.runInNewContext(core, context);
+  vm.runInNewContext(tools, context);
   vm.runInNewContext(overview, context);
   const app = context.window.BlackBook;
   app.data = { categories: [] };
@@ -172,6 +180,7 @@ test('Shift-click builds and reduces an overview category filter while normal cl
 test('the Transfer category can be combined with another category using Shift-click', () => {
   const context = { window: {}, localStorage: { getItem: () => null } };
   vm.runInNewContext(core, context);
+  vm.runInNewContext(tools, context);
   vm.runInNewContext(overview, context);
   const app = context.window.BlackBook;
   app.data = { categories: [{ id: 'transfer', name: 'Transfer' }] };
@@ -186,6 +195,7 @@ test('the Transfer category can be combined with another category using Shift-cl
 test('all Shift-selected overview category cards remain visibly selected', () => {
   const context = { window: {}, localStorage: { getItem: () => null } };
   vm.runInNewContext(core, context);
+  vm.runInNewContext(tools, context);
   vm.runInNewContext(overview, context);
   const app = context.window.BlackBook;
   app.data = {
@@ -228,6 +238,7 @@ test('E and Delete target selections first, then only the row actually hovered',
     }
   };
   vm.runInNewContext(core, context);
+  vm.runInNewContext(tools, context);
   vm.runInNewContext(transactions, context);
   const app = context.window.BlackBook;
   app._bulkSel = new Set(['selected']);
@@ -262,6 +273,7 @@ test('successful merge closes its dialog and uses an in-app notification', async
     alert: () => { throw new Error('Browser alert must not be used after merge'); }
   };
   vm.runInNewContext(core, context);
+  vm.runInNewContext(tools, context);
   vm.runInNewContext(transactions, context);
   const app = context.window.BlackBook;
   app.data = { transactions: [

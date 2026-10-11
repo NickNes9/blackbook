@@ -68,6 +68,7 @@ window.BlackBook = {
     if (!this.data.recurringTemplates) this.data.recurringTemplates = [];
     if (!this.data.reconciliations) this.data.reconciliations = [];
     if (!this.data.importRules) this.data.importRules = [];
+    if (!this.data.recurringRules) this.data.recurringRules = [];
     if (!this.data.settings) this.data.settings = {};
     if (this.migrateCreditCards()) await this.save();
     if (this.migrateTransfers()) await this.save();
@@ -173,9 +174,6 @@ this.connectWebSocket();
           const pick = this._cmdPaletteIndex >= 0 ? this._cmdPaletteIndex : 0;
           if (this._cmdPaletteItems[pick]) this._cmdPaletteItems[pick].execute();
         }
-        const emptyQuery = !e.target.value.trim();
-        if (emptyQuery && (e.key === 'n' || e.key === 'N')) { e.preventDefault(); this.closeCommandPalette(); this.openNewTransaction(); }
-        if (emptyQuery && (e.key === 't' || e.key === 'T')) { e.preventDefault(); this.closeCommandPalette(); this.openTransferModal(); }
       });
     }
 
@@ -308,6 +306,11 @@ this.connectWebSocket();
       if (e.key === 'a' || e.key === 'A') { e.preventDefault(); this.openNewTransaction(); }
       if (e.key === 't' || e.key === 'T') { e.preventDefault(); this.openTransferModal(); }
       if (e.key === 'd' || e.key === 'D') { e.preventDefault(); this.gotoToday(); }
+      if (!e.ctrlKey && !e.metaKey && !e.altKey && (e.key === 'c' || e.key === 'C') && this.currentPage === 'overview') {
+        e.preventDefault();
+        this.copySelectedTransaction();
+        return;
+      }
       if (e.key === ' ') { e.preventDefault(); if (paletteOpen) this.closeCommandPalette(); else this.openCommandPalette(); return; }
       if (e.key === 'e' || e.key === 'E') {
         e.preventDefault();
@@ -556,6 +559,21 @@ this.connectWebSocket();
     const items = [];
     for (const bill of this.data.bills || []) {
       if (bill.active === false || !bill.amount) continue;
+      if (bill.frequency === 'annual') {
+        const year = Number(today.slice(0, 4));
+        const month = Number(bill.dueMonth) || 1;
+        const makeDueDate = (y) => new Date(y, month - 1, Math.min(Number(bill.dueDay) || 1, new Date(y, month, 0).getDate()));
+        let due = makeDueDate(year);
+        let date = due.getFullYear() + '-' + String(due.getMonth() + 1).padStart(2, '0') + '-' + String(due.getDate()).padStart(2, '0');
+        const paid = (this.data.billPayments || []).some(p => p.billId === bill.id && p.month === date.slice(0, 7));
+        if (due < new Date(today + 'T00:00:00') || paid) {
+          due = makeDueDate(year + 1);
+          date = due.getFullYear() + '-' + String(due.getMonth() + 1).padStart(2, '0') + '-' + String(due.getDate()).padStart(2, '0');
+        }
+        const distance = inDays(date);
+        if (distance >= 0 && distance <= 3) items.push({ severity: 3, date, label: bill.name + (distance === 0 ? ' is due today' : ' is due in ' + distance + ' days'), page: 'bills' });
+        continue;
+      }
       const due = new Date(today + 'T00:00:00'); due.setDate(Math.min(Number(bill.dueDay) || 1, new Date(due.getFullYear(), due.getMonth() + 1, 0).getDate()));
       let date = due.getFullYear() + '-' + String(due.getMonth() + 1).padStart(2, '0') + '-' + String(due.getDate()).padStart(2, '0');
       const paid = (this.data.billPayments || []).some(p => p.billId === bill.id && p.month === date.slice(0, 7));
@@ -575,6 +593,14 @@ this.connectWebSocket();
   },
 
   refreshAttention() {
+    const toggle = document.getElementById('settings-attention-toggle');
+    if (toggle && this.data) {
+      const shown = !this.data.settings?.attentionBarHidden;
+      toggle.textContent = shown ? 'SHOW' : 'HIDE';
+      toggle.classList.toggle('btn-primary', shown);
+      toggle.classList.toggle('btn-secondary', !shown);
+      toggle.setAttribute('aria-pressed', String(shown));
+    }
     const bar = document.getElementById('attention-bar');
     if (!bar || !this.data) return;
     const hidden = this.data.settings && this.data.settings.attentionBarHidden;
@@ -587,6 +613,7 @@ this.connectWebSocket();
   },
 
   async hideAttentionBar() { this.data.settings.attentionBarHidden = true; await this.save(); this.refreshAttention(); },
+  toggleAttentionBar() { return this.data.settings.attentionBarHidden ? this.showAttentionBar() : this.hideAttentionBar(); },
   async showAttentionBar() { this.data.settings.attentionBarHidden = false; await this.save(); this.refreshAttention(); },
   showAttention() {
     const groups = ['URGENT', 'FORECAST', 'DUE SOON', 'REVIEW'];
@@ -634,6 +661,7 @@ this.connectWebSocket();
     if (!editing && this.currentPage === 'overview') {
       const selected = this._bulkSel ? this._bulkSel.size : 0;
       const hovered = !!(this._footerHoveredTxId || this.hoveredTransactionId());
+      if (selected === 1 || (!selected && hovered)) add('C', 'COPY TRANSACTION');
       if (selected || hovered) add('E', selected ? 'EDIT SELECTED' : 'EDIT');
       if (selected >= 2) add('M', 'MERGE SELECTED');
       if (selected) add('B', 'FILTER SELECTED');
@@ -917,7 +945,7 @@ this.connectWebSocket();
 
   populateCurrencyDropdowns() {
     const curs = this.currencyList();
-    const selects = ['tx-currency-select', 'bill-currency', 'savings-goal-currency', 'settings-account-currency', 'debt-currency', 'invoice-currency'];
+    const selects = ['tx-native-currency-select', 'bill-currency', 'savings-goal-currency', 'settings-account-currency', 'debt-currency', 'invoice-currency'];
     for (const id of selects) {
       const sel = document.getElementById(id);
       if (!sel) continue;
@@ -940,6 +968,13 @@ this.connectWebSocket();
     const rateTo = (base === 'EUR') ? 1 : (rates[base] || {}).rate;
     if (!rateFrom || !rateTo) return amount;
     return Math.round(amount * rateFrom / rateTo * 100) / 100;
+  },
+
+  transactionToBase(tx) {
+    const base = this.baseCurrency();
+    if (tx && tx.currency === base) return Number(tx.amount) || 0;
+    if (tx && tx.nativeCurrency === base && tx.nativeAmount != null) return Number(tx.nativeAmount) || 0;
+    return tx ? this.toBase(Number(tx.amount) || 0, tx.currency || base) : 0;
   },
 
   getRates() {
@@ -1062,7 +1097,7 @@ this.connectWebSocket();
   syncDateInputHints() {
     const pattern = this.dateFormatPattern();
     const textMonth = /MMM/.test(pattern);
-    for (const id of ['tx-date', 'tr-date', 'ctx-date', 'savings-entry-date', 'debt-date', 'debt-due', 'invoice-date', 'invoice-paid-date', 'ipay-date']) {
+    for (const id of ['tx-date', 'tr-date', 'ctx-date', 'savings-entry-date', 'debt-date', 'debt-paid-date', 'invoice-date', 'invoice-paid-date', 'ipay-date']) {
       const input = document.getElementById(id);
       if (!input) continue;
       input.placeholder = pattern;
@@ -1242,7 +1277,7 @@ this.connectWebSocket();
       },
       scales: {
         x: { ticks: { color: '#888888', maxRotation: 0, autoSkip: false, font: { size: 11 }, ...xTicks }, grid: { color: '#2a2a2a', drawBorder: false }, border: { display: false } },
-        y: { ticks: { color: '#888888', font: { size: 11 }, maxTicksLimit: 5, callback: value => new Intl.NumberFormat('en-US', { notation: 'compact', maximumFractionDigits: 1 }).format(value).toLowerCase() }, grid: { color: '#2a2a2a', drawBorder: false }, border: { display: false } }
+        y: { ticks: { color: '#888888', font: { size: 11 }, maxTicksLimit: 5, callback: value => new Intl.NumberFormat('en-US', { notation: 'compact', maximumFractionDigits: 1 }).format(value).toLowerCase().replace(/^-0(?:\.0+)?$/, '0') }, grid: { color: '#2a2a2a', drawBorder: false }, border: { display: false } }
       }
     };
   },
@@ -1275,7 +1310,8 @@ this.connectWebSocket();
 
   fmtNumber(amount) {
     const value = Number(amount) || 0;
-    return value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    const formatted = value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    return formatted === '-0.00' ? '0.00' : formatted;
   },
 
   fmtBase(amount) {
@@ -1298,29 +1334,79 @@ this.connectWebSocket();
   fmtDualCurrency(amount, currency, accountCurrency, nativeAmount, nativeCurrency) {
     const cur = currency || this.baseCurrency();
     const accCur = accountCurrency || this.baseCurrency();
-    const sign = amount < 0 ? '-' : '';
-    if (nativeCurrency && nativeCurrency !== accCur) {
-      const natAbs = Math.abs(nativeAmount);
-      const baseAbs = Math.abs(amount);
-      return sign + this.fmtNumber(natAbs) + ' ' + nativeCurrency + ' (' + this.fmtNumber(baseAbs) + ' ' + accCur + ')';
+    const primarySign = amount < 0 ? '-' : '';
+    if (nativeAmount != null && nativeCurrency && nativeCurrency !== cur) {
+      if (cur === accCur) return primarySign + this.fmtNumber(Math.abs(amount)) + ' ' + cur + ' (' + this.fmtNumber(Math.abs(nativeAmount)) + ' ' + nativeCurrency + ')';
+      if (nativeCurrency === accCur) {
+        const nativeSign = nativeAmount < 0 ? '-' : '';
+        return nativeSign + this.fmtNumber(Math.abs(nativeAmount)) + ' ' + nativeCurrency + ' (' + this.fmtNumber(Math.abs(amount)) + ' ' + cur + ')';
+      }
     }
     const abs = Math.abs(amount);
-    if (cur === accCur) return sign + this.fmtNumber(abs) + ' ' + cur;
+    if (cur === accCur) return primarySign + this.fmtNumber(abs) + ' ' + cur;
     const base = Math.abs(this.toBase(abs, cur));
-    return sign + this.fmtNumber(base) + ' ' + accCur + ' (' + this.fmtNumber(abs) + ' ' + cur + ')';
+    return primarySign + this.fmtNumber(base) + ' ' + accCur + ' (' + this.fmtNumber(abs) + ' ' + cur + ')';
+  },
+
+  transactionBalanceParts(tx) {
+    const settlements = tx && tx.settlements;
+    if (!tx || !Array.isArray(settlements) || !settlements.length) return [tx];
+    const sameAmount = (left, right) => Number.isFinite(Number(left)) && Number.isFinite(Number(right)) && Math.abs(Number(left) - Number(right)) < 0.005;
+    const validDate = value => typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value) && !isNaN(Date.parse(value)) && new Date(value + 'T00:00:00.000Z').toISOString().slice(0, 10) === value;
+    const primaryCurrency = tx.currency || this.baseCurrency();
+    const isTransfer = tx.type === 'transfer';
+    const incomingCurrency = tx.currencyIn || primaryCurrency;
+    let amountTotal = 0;
+    let amountInTotal = 0;
+    let nativeTotal = 0;
+    const parts = [];
+
+    for (const item of settlements) {
+      if (!item || !validDate(item.date) || item.currency !== primaryCurrency || item.amount == null || !Number.isFinite(Number(item.amount))) return [tx];
+      const part = { ...item, amount: Number(item.amount) };
+      amountTotal += part.amount;
+      if (isTransfer) {
+        if (tx.amountIn != null) {
+          if (item.amountIn == null || !Number.isFinite(Number(item.amountIn)) || (item.currencyIn || incomingCurrency) !== incomingCurrency) return [tx];
+          part.amountIn = Number(item.amountIn);
+          part.currencyIn = item.currencyIn || incomingCurrency;
+          amountInTotal += part.amountIn;
+        } else if (item.amountIn != null || item.currencyIn != null) return [tx];
+        if (item.nativeAmount != null || item.nativeCurrency != null) return [tx];
+      } else {
+        if (item.amountIn != null || item.currencyIn != null) return [tx];
+        if (tx.nativeAmount != null) {
+          const nativeCurrency = tx.nativeCurrency || primaryCurrency;
+          if (item.nativeAmount == null || !Number.isFinite(Number(item.nativeAmount)) || (item.nativeCurrency || nativeCurrency) !== nativeCurrency) return [tx];
+          part.nativeAmount = Number(item.nativeAmount);
+          part.nativeCurrency = item.nativeCurrency || nativeCurrency;
+          nativeTotal += part.nativeAmount;
+        } else if (item.nativeAmount != null || item.nativeCurrency != null) return [tx];
+      }
+      parts.push(part);
+    }
+
+    if (!sameAmount(amountTotal, tx.amount)) return [tx];
+    if (isTransfer && tx.amountIn != null && !sameAmount(amountInTotal, tx.amountIn)) return [tx];
+    if (!isTransfer && tx.nativeAmount != null && !sameAmount(nativeTotal, tx.nativeAmount)) return [tx];
+    return parts;
   },
 
   accountBalance(accountId, throughDate = null) {
     let total = 0;
     for (const tx of this.data.transactions) {
-      if (throughDate && tx.date > throughDate) continue;
-      if (tx.type === 'transfer') {
-        if (tx.fromAccountId === accountId) total -= this.toBase(tx.amount, tx.currency);
-        if (tx.toAccountId === accountId) total += this.toBase(tx.amountIn || tx.amount, tx.currencyIn || tx.currency);
-        continue;
+      for (const part of this.transactionBalanceParts(tx)) {
+        if (throughDate && part.date > throughDate) continue;
+        if (tx.type === 'transfer') {
+          if (tx.fromAccountId === accountId) total -= this.toBase(part.amount, part.currency);
+          if (tx.toAccountId === accountId) total += this.toBase(part.amountIn != null ? part.amountIn : part.amount, part.currencyIn || part.currency);
+          continue;
+        }
+        if (tx.accountId !== accountId) continue;
+        const exactBaseAmount = part.currency === this.baseCurrency()
+          ? part.amount : (part.nativeCurrency === this.baseCurrency() && part.nativeAmount != null ? part.nativeAmount : null);
+        total += exactBaseAmount != null ? exactBaseAmount : this.toBase(part.amount, part.currency);
       }
-      if (tx.accountId !== accountId) continue;
-      total += this.toBase(tx.amount, tx.currency);
     }
     return total;
   },
@@ -1330,34 +1416,38 @@ this.connectWebSocket();
     let total = 0;
     let currency = (acc && acc.currency) || this.baseCurrency();
     for (const tx of this.data.transactions) {
-      if (throughDate && tx.date > throughDate) continue;
-      if (tx.type === 'transfer') {
-        if (tx.fromAccountId === accountId) {
-          let amt = tx.amount;
-          if (tx.currency && acc && acc.currency && tx.currency !== acc.currency) {
-            const converted = this.convertBetweenCurrencies(tx.amount, tx.currency, acc.currency);
-            if (converted != null && !isNaN(converted)) amt = converted;
+      for (const part of this.transactionBalanceParts(tx)) {
+        if (throughDate && part.date > throughDate) continue;
+        if (tx.type === 'transfer') {
+          if (tx.fromAccountId === accountId) {
+            let amt = part.amount;
+            if (part.currency && acc && acc.currency && part.currency !== acc.currency) {
+              const converted = this.convertBetweenCurrencies(part.amount, part.currency, acc.currency);
+              if (converted != null && !isNaN(converted)) amt = converted;
+            }
+            total -= amt;
           }
-          total -= amt;
-        }
-        if (tx.toAccountId === accountId) {
-          let amt = tx.amountIn || tx.amount;
-          const cur = tx.currencyIn || tx.currency;
-          if (cur && acc && acc.currency && cur !== acc.currency) {
-            const converted = this.convertBetweenCurrencies(amt, cur, acc.currency);
-            if (converted != null && !isNaN(converted)) amt = converted;
+          if (tx.toAccountId === accountId) {
+            let amt = part.amountIn != null ? part.amountIn : part.amount;
+            const cur = part.currencyIn || part.currency;
+            if (cur && acc && acc.currency && cur !== acc.currency) {
+              const converted = this.convertBetweenCurrencies(amt, cur, acc.currency);
+              if (converted != null && !isNaN(converted)) amt = converted;
+            }
+            total += amt;
           }
-          total += amt;
+          continue;
         }
-        continue;
+        if (tx.accountId !== accountId) continue;
+        let amt = part.amount;
+        if (part.currency && acc && acc.currency && part.currency !== acc.currency && part.nativeCurrency === acc.currency && part.nativeAmount != null) {
+          amt = part.nativeAmount;
+        } else if (part.currency && acc && acc.currency && part.currency !== acc.currency) {
+          const converted = this.convertBetweenCurrencies(part.amount, part.currency, acc.currency);
+          if (converted != null && !isNaN(converted)) amt = converted;
+        }
+        total += amt;
       }
-      if (tx.accountId !== accountId) continue;
-      let amt = tx.amount;
-      if (tx.currency && acc && acc.currency && tx.currency !== acc.currency) {
-        const converted = this.convertBetweenCurrencies(tx.amount, tx.currency, acc.currency);
-        if (converted != null && !isNaN(converted)) amt = converted;
-      }
-      total += amt;
     }
     return { amount: total, currency: currency };
   },
@@ -1497,15 +1587,33 @@ this.connectWebSocket();
 
     const lq = query.toLowerCase();
     let searchHtml = '';
-    const txResults = this.data.transactions.filter(tx => (tx.note || '').toLowerCase().includes(lq) || String(tx.amount).includes(lq)).slice(0, 10);
+    const txResults = this.data.transactions
+      .map((tx, index) => {
+        const note = String(tx.note || '').toLowerCase();
+        const amount = String(tx.amount);
+        let relevance = -1;
+        if (note === lq || amount === lq) relevance = 3;
+        else if (note.startsWith(lq) || amount.startsWith(lq)) relevance = 2;
+        else if (note.includes(lq) || amount.includes(lq)) relevance = 1;
+        return { tx, index, relevance };
+      })
+      .filter(result => result.relevance >= 0)
+      .sort((a, b) => b.relevance - a.relevance || String(b.tx.date || '').localeCompare(String(a.tx.date || '')) || a.index - b.index)
+      .map(result => result.tx);
     if (txResults.length) {
       searchHtml += '<div class="command-section"><div style="padding:4px 12px;font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text-muted);">TRANSACTIONS</div>';
       for (const tx of txResults) {
         const cat = this.data.categories.find(c => c.id === tx.categoryId);
-        const sign = tx.type === 'income' ? '+' : '-';
-        const label = tx.date + '  ' + sign + this.fmtNumber(this.toBase(tx.amount, tx.currency)) + '  ' + (cat ? cat.name : '?') + (tx.note ? '  ' + tx.note : '');
-        searchHtml += this._paletteItemHtml(label, '');
-        this._cmdPaletteItems.push({ execute: (_txId => () => { this.closeCommandPalette(); this.openEditTransaction(_txId); })(tx.id) });
+        const transfer = tx.type === 'transfer';
+        const amountClass = transfer ? 'amt-transfer' : tx.type === 'income' ? 'amt-income' : 'amt-expense';
+        const sign = transfer ? '' : tx.type === 'income' ? '+' : '−';
+        const amount = sign + this.fmtNumber(Math.abs(tx.amount)) + ' ' + (tx.currency || this.baseCurrency());
+        const label = '<span class="command-transaction-meta"><span>' + this.escapeHtml(this.fmtDateInput(tx.date)) + '</span>' +
+          '<span class="' + amountClass + '">' + this.escapeHtml(amount) + '</span>' +
+          '<span style="color:' + (transfer ? 'var(--text-muted)' : cat ? this.categoryColor(cat) : 'var(--text-muted)') + '">' + this.escapeHtml(transfer ? 'Transfer' : cat ? cat.name : '?') + '</span></span>' +
+          '<span class="command-transaction-note">' + this.transactionDescriptionHtml(tx) + '</span>';
+        searchHtml += '<div class="command-item command-transaction-item" data-idx="' + this._cmdPaletteItems.length + '"><span class="command-item-label">' + label + '</span></div>';
+        this._cmdPaletteItems.push({ execute: (_txId => () => { this.closeCommandPalette(); this.openLinkedTransaction(_txId); })(tx.id) });
       }
       searchHtml += '</div>';
     }
@@ -1724,6 +1832,9 @@ this.connectWebSocket();
     if (hex._bound) return;
     hex._bound = true;
     if (reset) {
+      reset.innerHTML = this.refreshIcon();
+      reset.title = 'Use an automatic color';
+      reset.setAttribute('aria-label', 'Use an automatic color');
       reset.addEventListener('click', () => {
         const c = this._catPalette[Math.floor(Math.random() * this._catPalette.length)];
         if (color) color.value = c;
@@ -1840,24 +1951,29 @@ this.connectWebSocket();
     if (!tx || tx.type !== 'expense' || this.isTransfer(tx)) return null;
     const { y, m } = this.ymOf(tx.date);
     const mk = y + '-' + String(m + 1).padStart(2, '0');
-    const linkedTx = new Set((this.data.billPayments || []).map(p => p.txId).filter(Boolean));
+    const linkedTx = new Set((this.data.billPayments || []).flatMap(p => this.billPaymentTransactionIds(p)));
     if (linkedTx.has(tx.id)) return null;
-    const txRsd = this.toBase(Math.abs(tx.amount || 0), tx.currency || this.baseCurrency());
+    const txRsd = Math.abs(this.transactionToBase(tx));
     for (const bill of (this.data.bills || [])) {
       if (bill.active === false) continue;
-      if (this.getBillPayment(bill.id, mk)) continue;
+      if (bill.frequency === 'annual' && !this.billOccursInMonth(bill, mk)) continue;
+      const existingPayment = this.getBillPayment(bill.id, mk);
       const from = this.billPayFrom(bill);
       const matchAcc = from && from.startsWith('card:') ? tx.cardId === from.slice(5) : (tx.accountId === from);
-      if (!matchAcc) continue;
       if (bill.categoryId && tx.categoryId && bill.categoryId !== tx.categoryId) continue;
+      let descriptionMatch = false;
       if (bill.name && tx.note) {
         const bn = String(bill.name).trim().toLowerCase();
         const tn = String(tx.note).trim().toLowerCase();
-        if (tn !== bn && !tn.includes(bn) && !bn.includes(tn)) continue;
+        descriptionMatch = tn === bn || tn.includes(bn) || bn.includes(tn);
+        if (!descriptionMatch) continue;
       } else if (bill.name && !tx.note) {
         continue;
       }
-      if (bill.amount != null && txRsd > 0) {
+      // Once a split payment exists, matching descriptions may contribute from
+      // another card/account. Keep source/amount safeguards for the first match.
+      if (!matchAcc && !descriptionMatch) continue;
+      if (!existingPayment && bill.amount != null && txRsd > 0 && !descriptionMatch) {
         const bar = this.toBase(Math.abs(bill.amount), bill.currency || this.baseCurrency());
         const tolerance = Math.max(bar * 0.05, 1);
         if (Math.abs(txRsd - bar) > tolerance) continue;
@@ -1869,14 +1985,47 @@ this.connectWebSocket();
 
   linkedBillForTx(tx) {
     if (!tx) return null;
-    const pay = (this.data.billPayments || []).find(p => p.txId === tx.id);
+    const pay = this.billPaymentForTx(tx.id);
     if (!pay) return null;
     const bill = (this.data.bills || []).find(b => b.id === pay.billId);
     return bill || null;
   },
 
   billPaymentForTx(txId) {
-    return (this.data.billPayments || []).find(p => p.txId === txId) || null;
+    return (this.data.billPayments || []).find(p => this.billPaymentTransactionIds(p).includes(txId)) || null;
+  },
+
+  billPaymentTransactionIds(payment) {
+    if (!payment) return [];
+    const ids = [...(Array.isArray(payment.relatedTxIds) ? payment.relatedTxIds : []), payment.txId];
+    return [...new Set(ids.filter(Boolean))];
+  },
+
+  billPaymentTransactions(payment) {
+    const ids = new Set(this.billPaymentTransactionIds(payment));
+    return (this.data.transactions || []).filter(tx => ids.has(tx.id));
+  },
+
+  billPaymentTotalBase(payment, bill) {
+    const transactions = this.billPaymentTransactions(payment);
+    if (transactions.length) return this.round2(transactions.reduce((sum, tx) => sum + Math.abs(this.transactionToBase(tx)), 0));
+    const amount = payment && payment.amount != null ? payment.amount : bill && bill.amount;
+    if (amount == null) return 0;
+    if (payment && payment.nativeAmount != null && !payment.amountCurrency) return Math.abs(Number(amount) || 0);
+    const currency = payment && (payment.amountCurrency || payment.payCurrency) || bill && bill.currency || this.baseCurrency();
+    return Math.abs(this.toBase(Number(amount) || 0, currency));
+  },
+
+  syncBillPaymentTransactions(payment, bill) {
+    const transactions = this.billPaymentTransactions(payment);
+    if (!transactions.length) return;
+    transactions.sort((a, b) => Math.abs(this.transactionToBase(b)) - Math.abs(this.transactionToBase(a)));
+    payment.relatedTxIds = transactions.map(tx => tx.id);
+    payment.txId = transactions[0].id;
+    payment.amount = this.billPaymentTotalBase(payment, bill);
+    payment.amountCurrency = this.baseCurrency();
+    const currencies = new Set(transactions.map(tx => tx.currency || this.baseCurrency()));
+    payment.payCurrency = currencies.size === 1 ? transactions[0].currency || this.baseCurrency() : this.baseCurrency();
   },
 
   debtForPaymentTx(txId) {
@@ -1940,10 +2089,17 @@ this.connectWebSocket();
     const mk = y + '-' + String(m + 1).padStart(2, '0');
     const existing = this.getBillPayment(bill.id, mk);
     if (existing) {
-      if (existing.txId) return;
+      const linkedIds = new Set(this.billPaymentTransactionIds(existing));
+      if (linkedIds.has(tx.id)) return;
+      if ([...linkedIds].length && [...linkedIds].every(id => String(id).startsWith('bil-'))) this.removeBillTransaction(existing);
+      existing.paid = true;
+      existing.relatedTxIds = [...new Set([...this.billPaymentTransactionIds(existing), tx.id])];
+      this.syncBillPaymentTransactions(existing, bill);
     } else {
       if (!this.data.billPayments) this.data.billPayments = [];
-      this.data.billPayments.push({ billId: bill.id, month: mk, paid: true, amount: Math.abs(tx.amount), txId: tx.id });
+      const payment = { billId: bill.id, month: mk, paid: true, relatedTxIds: [tx.id] };
+      this.data.billPayments.push(payment);
+      this.syncBillPaymentTransactions(payment, bill);
     }
     this.save({ undoable: true, label: 'Mark bill paid' });
     this.renderPage(this.currentPage);
@@ -2198,12 +2354,35 @@ this.connectWebSocket();
       let color = null;
       const isAuto = hexEl && hexEl.dataset.auto === '1';
       if (!isAuto && colorEl) color = this.normalizeHex(hexEl ? hexEl.value : colorEl.value);
-      const billData = { name: document.getElementById('bill-name').value, amount: parsedAmt > 0 ? parsedAmt : null, currency: document.getElementById('bill-currency').value, dueDay: parseInt(document.getElementById('bill-dueDay').value), categoryId: document.getElementById('bill-category').value, active: document.getElementById('bill-active').value === 'true', autopay: document.getElementById('bill-autopay').checked, payAccountId: document.getElementById('bill-payfrom').value || null, color: isAuto ? null : color };
+      const frequency = document.getElementById('bill-frequency-toggle').dataset.frequency === 'annual' ? 'annual' : 'monthly';
       const original = id ? this.data.bills.find(b => b.id === id) : null;
+      const billData = { name: document.getElementById('bill-name').value, amount: parsedAmt > 0 ? parsedAmt : null, currency: document.getElementById('bill-currency').value, frequency, dueMonth: frequency === 'annual' ? parseInt(document.getElementById('bill-dueMonth').value, 10) : null, dueDay: parseInt(document.getElementById('bill-dueDay').value), categoryId: document.getElementById('bill-category').value, active: original ? original.active !== false : true, autopay: document.getElementById('bill-autopay-toggle').dataset.autopay === 'true', payAccountId: document.getElementById('bill-payfrom').value || null, color: isAuto ? null : color };
       if (!this.categorySelectionAllowed(billData.categoryId, this.today(), original && original.categoryId)) { alert('That category is archived. Choose another category.'); return; }
+      let linkedRecurringCount = 0, skippedRecurringCount = 0;
       if (id) { const bill = this.data.bills.find(b => b.id === id); if (bill) Object.assign(bill, billData); }
-      else { billData.id = crypto.randomUUID(); this.data.bills.push(billData); }
+      else {
+        billData.id = crypto.randomUUID();
+        this.data.bills.push(billData);
+        const pendingIds = this._pendingRecurringBillTxIds || [];
+        const byMonth = new Map();
+        for (const txId of pendingIds) {
+          const tx = (this.data.transactions || []).find(item => item.id === txId);
+          if (!tx || tx.type !== 'expense' || this.billPaymentForTx(tx.id)) { skippedRecurringCount++; continue; }
+          const month = this.monthKeyOf(tx.date);
+          if (!this.billOccursInMonth(billData, month)) { skippedRecurringCount++; continue; }
+          if (!byMonth.has(month)) byMonth.set(month, []);
+          byMonth.get(month).push(tx.id);
+        }
+        for (const [month, txIds] of byMonth) {
+          const payment = { billId: billData.id, month, paid: true, relatedTxIds: [...new Set(txIds)] };
+          this.data.billPayments.push(payment);
+          this.syncBillPaymentTransactions(payment, billData);
+          linkedRecurringCount += payment.relatedTxIds.length;
+        }
+        this._pendingRecurringBillTxIds = null;
+      }
       await this.save({ undoable: true, label: id ? 'Edit bill' : 'Add bill' }); this.closeModal('bill-modal'); this.renderPage(this.currentPage);
+      if (linkedRecurringCount) this.showToast(linkedRecurringCount + ' past payment(s) linked to bill' + (skippedRecurringCount ? ' · ' + skippedRecurringCount + ' not linked' : ''));
     });
   },
 
@@ -2323,7 +2502,15 @@ this.connectWebSocket();
     return '<button type="button" class="btn btn-sm btn-secondary linked-tx-action" data-tx-id="' + this.escapeHtml(tx.id) + '" onclick="event.stopPropagation();BlackBook.openLinkedTransaction(this.dataset.txId)" title="Open this transaction" aria-label="Open linked transaction">' + this.transactionLinkIcon() + '</button>';
   },
 
+  linkedBillPaymentButton(payment) {
+    const ids = this.billPaymentTransactionIds(payment).filter(id => (this.data.transactions || []).some(tx => tx.id === id));
+    if (!ids.length) return '';
+    const encoded = JSON.stringify(ids);
+    return '<button type="button" class="btn btn-sm btn-secondary linked-tx-action" data-tx-ids="' + this.escapeHtml(encoded) + '" onclick="event.stopPropagation();BlackBook.openDataHealthTransactions(JSON.parse(this.dataset.txIds))" title="Show all ' + ids.length + ' bill payment transaction' + (ids.length === 1 ? '' : 's') + ' on Overview" aria-label="Show linked bill payment transactions on Overview">' + this.transactionLinkIcon() + '</button>';
+  },
+
   openLinkedTransaction(txId) {
+    this._overviewCustomFilter = null;
     const tx = (this.data.transactions || []).find(item => item && item.id === txId);
     if (!tx) return;
     const { y, m } = this.ymOf(tx.date);
@@ -2334,12 +2521,17 @@ this.connectWebSocket();
       this._pageView.overview.m = m;
     }
     this._linkedTransactionFocusId = tx.id;
+    this.selectedAccount = tx.type === 'transfer' ? tx.fromAccountId || tx.toAccountId || null : tx.accountId || null;
+    this.selectedCategories = null;
+    this._ovInc = true;
+    this._ovExp = true;
     this._bulkSel = new Set([tx.id]);
     this._bulkOnly = false;
     this.navigateTo('overview');
   },
 
   openDataHealthTransactions(txIds) {
+    this._overviewCustomFilter = null;
     const requested = new Set((txIds || []).filter(Boolean));
     const transactions = (this.data.transactions || []).filter(tx => tx && requested.has(tx.id));
     if (!transactions.length) return;
@@ -2483,6 +2675,7 @@ this.connectWebSocket();
       const opt = el.selectedOptions && el.selectedOptions[0];
       btn.textContent = (opt && opt.text) ? opt.text : '\u00a0';
     };
+    el._syncCustomSelect = sync;
     const curIndex = () => Math.max(el.selectedIndex, 0);
     const open = () => {
       const opts = Array.from(el.options);
@@ -2531,13 +2724,19 @@ this.connectWebSocket();
     sync();
   },
 
+  syncCustomSelect(el) {
+    if (typeof el === 'string') el = document.getElementById(el);
+    if (el && typeof el._syncCustomSelect === 'function') el._syncCustomSelect();
+  },
+
   upgradeAllSelects(root) {
     const scope = root || document;
-    scope.querySelectorAll('select').forEach(s => this.upgradeSelect(s));
+    scope.querySelectorAll('select:not([hidden])').forEach(s => this.upgradeSelect(s));
   },
 
   chartAccountsTx() {
     let txs = this.data.transactions.slice();
+    if (this.currentPage === 'overview') txs = txs.filter(tx => this.overviewCustomMatches(tx));
     if (this.activeFilters.accounts.length) {
       txs = txs.filter(t => {
         if (t.type === 'transfer') return this.activeFilters.accounts.includes(t.fromAccountId) || this.activeFilters.accounts.includes(t.toAccountId);

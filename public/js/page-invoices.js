@@ -226,11 +226,12 @@ Object.assign(window.BlackBook, {
       const qty = this.evalAmount(String(row.querySelector('.inv-line-qty').value)) || 0;
       const price = this.evalAmount(String(row.querySelector('.inv-line-price').value)) || 0;
       const lineT = Math.round(qty * price * 100) / 100;
-      row.querySelector('.inv-line-total').textContent = lineT.toLocaleString('en-US', { maximumFractionDigits: 2 });
+      row.querySelector('.inv-line-total').textContent = (Object.is(lineT, -0) ? 0 : lineT).toLocaleString('en-US', { maximumFractionDigits: 2 });
       total += lineT;
     });
     const el = document.getElementById('inv-total-live');
-    if (el) el.textContent = (Math.round(total * 100) / 100).toLocaleString('en-US', { maximumFractionDigits: 2 });
+    const roundedTotal = Math.round(total * 100) / 100;
+    if (el) el.textContent = (Object.is(roundedTotal, -0) ? 0 : roundedTotal).toLocaleString('en-US', { maximumFractionDigits: 2 });
   },
 
   _addInvLineRow() {
@@ -432,6 +433,14 @@ Object.assign(window.BlackBook, {
     f.addEventListener('submit', async (e) => {
       e.preventDefault();
       const id = document.getElementById('invoice-id').value;
+      const numberInput = document.getElementById('invoice-number');
+      const normalizeNumber = value => String(value || '').trim().replace(/\s+/g, '').toLowerCase();
+      const numberKey = normalizeNumber(numberInput.value);
+      if (numberKey && (this.data.invoices || []).some(inv => inv.id !== id && normalizeNumber(inv.number) === numberKey)) {
+        this.showToast('Invoice already exists');
+        numberInput.focus();
+        return;
+      }
       const party = document.getElementById('invoice-party').value.trim();
       if (!party) return;
       const parseNum = (s) => { const n = this.evalAmount(s); return isNaN(n) ? 0 : n; };

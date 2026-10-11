@@ -15,6 +15,20 @@ Object.assign(window.BlackBook, {
 
   goalSaved(goal) { return (goal.entries || []).reduce((s, e) => s + e.amount, 0); },
 
+  savingsPaceHtml(goal) {
+    if (!goal.targetDate) return '';
+    const remaining = Math.max(0, (goal.targetAmount || 0) - this.goalSaved(goal));
+    const today = this.today();
+    const due = this.fmtDateInput(goal.targetDate);
+    if (!remaining) return '<div class="bill-meta-line">TARGET REACHED · ' + this.escapeHtml(due) + '</div>';
+    if (goal.targetDate < today) return '<div class="bill-meta-line">TARGET DATE PASSED · ' + this.fmtAmount(remaining, goal.currency || this.baseCurrency()) + ' remaining</div>';
+    const [year, month] = today.split('-').map(Number);
+    const [dueYear, dueMonth] = goal.targetDate.split('-').map(Number);
+    const months = Math.max(1, (dueYear - year) * 12 + dueMonth - month + 1);
+    const monthly = Math.ceil(remaining / months * 100) / 100;
+    return '<div class="bill-meta-line" title="Remaining amount divided across calendar months, including this month and the target month">TARGET ' + this.escapeHtml(due) + ' · ' + this.fmtAmount(monthly, goal.currency || this.baseCurrency()) + ' / MONTH</div>';
+  },
+
   async openSavingsEntries(goalId) {
     const goal = this.data.savingsGoals.find(g => g.id === goalId);
     if (!goal) return;
@@ -68,7 +82,7 @@ Object.assign(window.BlackBook, {
       '<button class="btn btn-sm btn-danger btn-icon" title="Delete goal" onclick="BlackBook.deleteSavingsGoal(\x27' + goal.id + '\x27)">' + this.xIcon() + '</button></span></div>' +
       '<div class="savings-progress-text"><span>' + this.fmtBase(saved) + ' of ' + this.fmtBase(target) + '</span><span>' + pct + '%</span></div>' +
       '<div class="savings-progress-bar"><div class="savings-progress-fill ' + barClass + '" style="width:' + pct + '%;"></div></div>' +
-      '<details class="item-details"><summary>PAYMENT HISTORY · ' + (goal.entries || []).length + '</summary>' + this.savingsEntriesHtml(goal) + '</details></div>';
+      this.savingsPaceHtml(goal) + '<details class="item-details"><summary>PAYMENT HISTORY · ' + (goal.entries || []).length + '</summary>' + this.savingsEntriesHtml(goal) + '</details></div>';
     return html;
   },
 
@@ -82,6 +96,8 @@ Object.assign(window.BlackBook, {
     document.getElementById('savings-goal-id').value = '';
     document.getElementById('savings-goal-name').value = '';
     document.getElementById('savings-goal-target').value = '';
+    document.getElementById('savings-goal-date').value = '';
+    document.getElementById('savings-goal-date').setCustomValidity('');
     document.getElementById('savings-goal-currency').value = this.baseCurrency();
     document.getElementById('savings-modal-title').textContent = 'New Savings Goal';
     this.openModal('savings-modal');
@@ -93,6 +109,8 @@ Object.assign(window.BlackBook, {
     document.getElementById('savings-goal-id').value = goal.id;
     document.getElementById('savings-goal-name').value = goal.name;
     document.getElementById('savings-goal-target').value = goal.targetAmount;
+    document.getElementById('savings-goal-date').value = goal.targetDate ? this.fmtDateInput(goal.targetDate) : '';
+    document.getElementById('savings-goal-date').setCustomValidity('');
     document.getElementById('savings-goal-currency').value = goal.currency || this.baseCurrency() || 'RSD';
     document.getElementById('savings-modal-title').textContent = 'Edit Savings Goal';
     this.openModal('savings-modal');
@@ -115,12 +133,16 @@ Object.assign(window.BlackBook, {
       const name = document.getElementById('savings-goal-name').value.trim();
       const targetAmount = this.evalAmount(document.getElementById('savings-goal-target').value);
       const currency = document.getElementById('savings-goal-currency').value;
+      const dateInput = document.getElementById('savings-goal-date');
+      const targetDate = dateInput.value.trim() ? this.parseDateInput(dateInput.value) : null;
+      dateInput.setCustomValidity(dateInput.value.trim() && !targetDate ? 'Enter a valid target date.' : '');
+      if (!dateInput.reportValidity()) return;
       if (!name || isNaN(targetAmount) || targetAmount <= 0) return;
       if (id) {
         const goal = this.data.savingsGoals.find(g => g.id === id);
-        if (goal) { goal.name = name; goal.targetAmount = targetAmount; goal.currency = currency; }
+        if (goal) { goal.name = name; goal.targetAmount = targetAmount; goal.currency = currency; goal.targetDate = targetDate; }
       } else {
-        this.data.savingsGoals.push({ id: crypto.randomUUID(), name: name, targetAmount: targetAmount, currency: currency, entries: [] });
+        this.data.savingsGoals.push({ id: crypto.randomUUID(), name: name, targetAmount: targetAmount, currency: currency, targetDate, entries: [] });
       }
       await this.save({ undoable: true, label: id ? 'Edit savings goal' : 'Add savings goal' });
       this.closeModal('savings-modal');

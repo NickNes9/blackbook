@@ -77,6 +77,15 @@ The shortcut bar at the bottom shows the actions available on the current page.
 
 ## What's new
 
+### 0.9.6
+
+- **Find & Replace** — live search, previewed bulk edits, and custom Overview filters for descriptions, categories, accounts, people, and bill links.
+- **People directory** — colored @mentions and linked transaction histories with income and expense totals.
+- **Yearly balances** — compare accounts over time and review each year's opening, closing, and change amounts.
+- Copy transactions with **C**, set savings deadlines, and compare bill payments with the previous period.
+- Clearer Data Tools and more accurate recurring-payment grouping, with direct bill-linking and category-rule controls.
+- Bulk account edits preserve exact currency amounts. Smooth graphs avoid artificial peaks and dips, and negative zero displays as zero.
+
 ### 0.9.5
 
 - Bills now has a donut chart alongside its line graph. Graphs keep their resized height when filters or categories change.
@@ -122,5 +131,5 @@ These changes were included in 0.9.5; there was no separate 0.9.4 download.
 
 ---
 
-Created by Nikola Nešić · Black Book 0.9.5
+Created by Nikola Nešić · Black Book 0.9.6
 - Portable downloads include the runtime: extract and open, with no separate Node.js installation. Each launcher opens its own installation; an empty installation prompts you to create a profile.

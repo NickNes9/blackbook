@@ -9,6 +9,7 @@ function makeApp() {
   const context = { window: { BlackBook: {} }, crypto: { randomUUID: () => 'test-id' } };
   vm.runInNewContext(source, context);
   const app = context.window.BlackBook;
+  app.billPaymentTransactionIds = payment => [...new Set([payment.txId, ...(payment.relatedTxIds || [])].filter(Boolean))];
   app.data = {
     bills: [], billPayments: [], transactions: [],
     accounts: [{ id: 'bank', currency: 'RSD' }], settings: { defaultAccountId: 'bank' }

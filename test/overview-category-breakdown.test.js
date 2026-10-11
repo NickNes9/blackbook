@@ -9,6 +9,7 @@ function breakdownFor(filter) {
   const window = { BlackBook: {} };
   runInNewContext(source, { window });
   const app = window.BlackBook;
+  app.overviewCustomMatches = () => true;
   app.data = {
     transactions: [
       { id: 'e1', date: '2026-01-05', type: 'expense', categoryId: 'food', amount: 30 },
@@ -31,6 +32,7 @@ function breakdownFor(filter) {
   };
   app.isTransfer = tx => !!tx.transfer;
   app.toBase = amount => amount;
+  app.transactionToBase = tx => tx.amount;
   app.fmtBase = amount => String(amount);
   app.categoryColor = category => category.color;
   app.escapeHtml = value => String(value);

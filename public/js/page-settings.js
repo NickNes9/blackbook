@@ -397,6 +397,10 @@ Object.assign(window.BlackBook, {
         const cat = this.data.categories.find(c => c.id === id);
         return !!cat && CategoryAvailability.availableOn(cat, date);
       };
+      const normalizeRuleText = value => String(value || '').toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim().replace(/\s+/g, ' ');
+      const importSource = String(accountId || '').startsWith('card:') ? accountId : 'account:' + accountId;
+      const sourceRule = (this.data.recurringRules || []).find(r => r.active !== false && r.action === 'category' && r.categoryId && availableId(r.categoryId) && r.match && normalizeRuleText(note).includes(normalizeRuleText(r.match)) && (!r.source || r.source === importSource));
+      if (sourceRule) return sourceRule.categoryId;
       const rule = (this.data.importRules || []).find(r => r.active !== false && r.categoryId && availableId(r.categoryId) && r.match && String(note || '').toLowerCase().includes(String(r.match).toLowerCase()));
       if (rule) return rule.categoryId;
       if (!cell) return null;
@@ -825,7 +829,7 @@ Object.assign(window.BlackBook, {
         const colorVal = isAuto ? null : this.normalizeHex(hexEl ? hexEl.value : colorEl.value);
         if (idVal.startsWith('card:') || (!idVal && type === 'creditcard')) {
           const rateVal = parseFloat(String(document.getElementById('settings-account-rate').value).replace(',', '.'));
-          const cardData = { name: name, shortName: shortName, ratePct: isNaN(rateVal) ? 5 : rateVal, dueDay: parseInt(document.getElementById('settings-account-due-day').value, 10) || 15, color: colorVal };
+          const cardData = { name: name, shortName: shortName, currency: currency, ratePct: isNaN(rateVal) ? 5 : rateVal, dueDay: parseInt(document.getElementById('settings-account-due-day').value, 10) || 15, color: colorVal };
           if (!this.data.creditCards) this.data.creditCards = [];
           if (idVal.startsWith('card:')) {
             const card = this.cardById(idVal.slice(5));
@@ -972,7 +976,7 @@ Object.assign(window.BlackBook, {
     const resetBtn = document.getElementById('settings-account-color-reset');
     if (resetBtn) { resetBtn.dataset.name = (card.name || card.id || ''); resetBtn.dataset.kind = 'card'; }
     this.bindColorPicker('settings-account-color', 'settings-account-color-hex', 'settings-account-color-reset');
-    document.getElementById('settings-account-currency').value = this.baseCurrency();
+    document.getElementById('settings-account-currency').value = card.currency || this.baseCurrency();
     document.getElementById('settings-account-type').value = 'creditcard';
     document.getElementById('settings-account-rate').value = card.ratePct != null ? card.ratePct : 5;
     document.getElementById('settings-account-due-day').value = card.dueDay || 15;
@@ -1062,7 +1066,7 @@ Object.assign(window.BlackBook, {
       const txCount = categoryTx.length;
       let spent = 0, income = 0, transfers = 0;
       for (const tx of categoryTx) {
-        const amount = Math.abs(this.toBase(Math.abs(Number(tx.amount) || 0), tx.currency || this.baseCurrency()));
+        const amount = Math.abs(this.transactionToBase(tx));
         if (tx.type === 'income') income += amount;
         else if (tx.type === 'transfer') transfers += amount;
         else spent += amount;
@@ -1110,8 +1114,8 @@ Object.assign(window.BlackBook, {
       '<div class="form-group"><label>Highlight Color</label><div style="display:flex;align-items:center;gap:8px;"><input type="color" id="settings-highlight-color" value="' + (this.data.settings.highlightColor || '#fa8c3c') + '" style="width:28px;height:28px;border:none;background:none;cursor:pointer;padding:0;"><span style="font-size:13px;color:var(--text-dim);">' + (this.data.settings.highlightColor || '#fa8c3c') + '</span></div></div>' +
       '<div class="form-group"><label>Income Color</label><div style="display:flex;align-items:center;gap:8px;"><input type="color" id="settings-income-color" value="' + (this.data.settings.incomeColor || '#4ade80') + '" style="width:28px;height:28px;border:none;background:none;cursor:pointer;padding:0;"><span style="font-size:13px;color:var(--text-dim);">' + (this.data.settings.incomeColor || '#4ade80') + '</span></div></div>' +
       '<div class="form-group"><label>Expense Color</label><div style="display:flex;align-items:center;gap:8px;"><input type="color" id="settings-expense-color" value="' + (this.data.settings.expenseColor || '#f87171') + '" style="width:28px;height:28px;border:none;background:none;cursor:pointer;padding:0;"><span style="font-size:13px;color:var(--text-dim);">' + (this.data.settings.expenseColor || '#f87171') + '</span></div></div>' +
-      '<div class="form-group"><label for="settings-date-format">Date Format</label><input id="settings-date-format" class="input" type="text" value="' + this.escapeHtml(this.dateFormatPattern()) + '" spellcheck="false" autocomplete="off" aria-describedby="settings-date-format-help settings-date-format-error"><div class="form-hint" id="settings-date-format-help">D or DD · M, MM or MMM · YY or YYYY. Example: ' + this.escapeHtml(this.fmtDateInput(this.today())) + '</div><div class="form-hint amount-negative" id="settings-date-format-error" role="status"></div></div>' +
-      '</div><div class="form-group"><label>Attention Bar</label><button class="btn btn-sm ' + (this.data.settings.attentionBarHidden ? 'btn-secondary' : 'btn-primary') + '" onclick="BlackBook.' + (this.data.settings.attentionBarHidden ? 'showAttentionBar()' : 'hideAttentionBar()') + '">' + (this.data.settings.attentionBarHidden ? 'SHOW' : 'HIDE') + '</button></div></div>' +
+      '<div class="form-group"><label for="settings-date-format">Date Format</label><input id="settings-date-format" class="input" type="text" value="' + this.escapeHtml(this.dateFormatPattern()) + '" spellcheck="false" autocomplete="off" aria-describedby="settings-date-format-help settings-date-format-error"><div class="form-hint" id="settings-date-format-help">D or DD · M, MM or MMM · YY or YYYY</div><div class="form-hint amount-negative" id="settings-date-format-error" role="status"></div></div>' +
+      '</div><div class="form-group"><label>Attention Bar</label><button id="settings-attention-toggle" aria-pressed="' + !this.data.settings.attentionBarHidden + '" class="btn btn-sm ' + (this.data.settings.attentionBarHidden ? 'btn-secondary' : 'btn-primary') + '" onclick="BlackBook.toggleAttentionBar()">' + (this.data.settings.attentionBarHidden ? 'HIDE' : 'SHOW') + '</button></div></div>' +
 
       '<div class="settings-section">' +
       '<div class="settings-section-header"><span class="settings-section-title">DEFAULTS</span></div>' +
@@ -1139,13 +1143,14 @@ Object.assign(window.BlackBook, {
       '<div class="settings-list" id="profiles-list">' + this.profilesListHtml() + '</div></div>' +
       '<div class="settings-section">' +
       '<div class="settings-section-header"><span class="settings-section-title">DATA</span></div>' +
+      '<div class="settings-data-actions">' + this.healthSummaryHtml() + '</div>' +
       '<div class="settings-data-actions"><button class="btn btn-secondary" id="settings-export">EXPORT JSON</button>' +
       '<button class="btn btn-secondary" id="settings-export-csv">EXPORT CSV</button>' +
       '<button class="btn btn-secondary" id="settings-import-btn">IMPORT JSON</button>' +
       '<input type="file" id="settings-import-file" accept=".json" style="display:none;">' +
 '<button class="btn btn-secondary" id="settings-import-csv-btn">IMPORT CSV/XLSX</button>' +
       '<input type="file" id="settings-import-csv-file" accept=".csv,.txt,.xlsx,.xls,text/csv,text/plain,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel" style="display:none;">' +
-      this.healthSummaryHtml() + '</div></div>' +
+      '</div></div>' +
       '<div class="settings-section">' +
       '<div class="settings-section-header"><span class="settings-section-title">ABOUT &amp; UPDATES</span></div>' +
       '<div id="settings-updates"></div></div>' +

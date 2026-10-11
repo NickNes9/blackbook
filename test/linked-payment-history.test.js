@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 import test from 'node:test';
 import vm from 'node:vm';
 
+const tools = readFileSync(new URL('../public/js/transaction-tools.js', import.meta.url), 'utf8');
 const core = readFileSync(new URL('../public/js/core.js', import.meta.url), 'utf8');
 const cards = readFileSync(new URL('../public/js/page-cards.js', import.meta.url), 'utf8');
 const overview = readFileSync(new URL('../public/js/page-overview.js', import.meta.url), 'utf8');
@@ -14,6 +15,7 @@ const bills = readFileSync(new URL('../public/js/page-bills.js', import.meta.url
 function loadApp(...sources) {
   const context = { window: {}, localStorage: { getItem: () => '' } };
   vm.runInNewContext(core, context);
+  vm.runInNewContext(tools, context);
   for (const source of sources) vm.runInNewContext(source, context);
   return context.window.BlackBook;
 }
@@ -148,7 +150,7 @@ test('linked payment actions are wired into savings, debt, invoice, and bill his
   assert.match(savings, /linkedTransactionButton\(\(this\.savingsTransactionForEntry\(e\) \|\| \{\}\)\.id\)/);
   assert.match(debts, /this\.linkedTransactionButton\(tx\.id\)/);
   assert.match(invoices, /this\.linkedTransactionButton\(tx\.id\)/);
-  assert.match(bills, /this\.linkedTransactionButton\(paid\.txId\)/);
+  assert.match(bills, /this\.linkedBillPaymentButton\(paid\)/);
   assert.match(cards, /inst-progress-marker/);
   assert.match(cards, /paymentTxs\.map\(item => this\.linkedTransactionButton\(item\.id\)\)/);
 });
