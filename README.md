@@ -4,7 +4,9 @@ A local-first personal finance console. Terminal aesthetic with light/dark theme
 
 ## What's new in 0.9.6 (work in progress)
 
-- **Small workflow additions** — savings goals support optional deadlines and a monthly contribution estimate; bill payments show same-currency change arrows; saved copies are selected with a confirmation; Check Data links directly to all uncategorized entries.
+- **Find & Replace** — filter transactions by description, account, category, type, date range, and person. Review old/new descriptions, exclude individual rows, and apply literal replacements or templates with one-step undo.
+- **People** — a per-profile directory with names, optional account numbers, and notes. Select people through @ suggestions in transaction and transfer descriptions; review their history and totals separately by currency.
+- **Small workflow additions** — savings goals support optional deadlines and a monthly contribution estimate; bill payments show same-currency change arrows; saved copies are selected with a confirmation.
 
 - **Copy transaction** — press C on Overview with one transaction selected or hovered to open an editable copy dated today. Save creates a new entry; D remains Today and T remains Transfer.
 

@@ -199,6 +199,7 @@ Object.assign(window.BlackBook, {
       '<span style="display:flex;gap:6px;align-items:center;">' +
       (this._bulkSel && this._bulkSel.size ? '<div class="cat-filter-chip bulk-filter-chip' + (this._bulkOnly ? ' selected' : '') + '" onclick="BlackBook.toggleBulkOnly()">SELECTED (' + this._bulkSel.size + ')</div>' : '') +
       mergeButton +
+      '<button class="btn btn-sm btn-secondary page-control" onclick="BlackBook.openFindReplace()" title="Find and preview description changes">FIND &amp; REPLACE</button>' +
       '<button class="btn btn-sm btn-secondary page-control ov-type-cycle" onclick="BlackBook.cycleOvType()" title="Cycle filter: Type → Expenses → Income">' + this.ovTypeLabel() + '</button>' +
       '<button class="btn btn-sm btn-secondary page-control ov-sort-cycle" onclick="BlackBook.cycleOvSort()" title="Cycle sort: Date → Value → Name">' + sortLabel + '</button>' +
       '<button class="btn btn-sm btn-secondary ov-sort-dir" onclick="BlackBook.toggleOvSortDir()" title="' + (this._ovSortDir === 'asc' ? 'Descending' : 'Ascending') + '">' + (this._ovSortDir === 'asc' ? '&#9650;' : '&#9660;') + '</button>' +

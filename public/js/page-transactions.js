@@ -70,6 +70,7 @@ Object.assign(window.BlackBook, {
     amountInput.dataset.fallbackType = document.getElementById('tx-type').value;
     amountInput.oninput = () => this.updateTransactionSign();
     this.updateTransactionSign();
+    this.initPeopleEntry([]);
     this.openModal('transaction-modal');
     setTimeout(() => amountInput.focus(), 50);
     this.initCategoryPicker('tx-category-input', 'tx-category', 'category-dropdown');
@@ -186,6 +187,7 @@ Object.assign(window.BlackBook, {
     this._transferNoteBase = null;
     this.updateTransferNote();
     document.getElementById('tr-date').value = this.fmtDateInput(this.today());
+    this.initPeopleEntry([], 'tr-note');
     this.updateTransferCurrencyLabels();
     this.openModal('transfer-modal');
     setTimeout(() => document.getElementById('tr-amount').focus(), 50);
@@ -214,6 +216,7 @@ Object.assign(window.BlackBook, {
     this._transferNoteBase = this.transferNoteBase();
     document.getElementById('tr-date').value = this.fmtDateInput(tx.date);
     this._editingTransferId = txId;
+    this.initPeopleEntry(tx.personIds || [], 'tr-note');
     this.updateTransferCurrencyLabels();
     this.openModal('transfer-modal');
     setTimeout(() => document.getElementById('tr-amount').focus(), 50);
@@ -262,7 +265,7 @@ Object.assign(window.BlackBook, {
     return Math.round(eur / rateTo * 100) / 100;
   },
 
-  async doTransfer(fromId, toId, amountOut, noteExtra, date, amountInOverride, deferSave = false) {
+  async doTransfer(fromId, toId, amountOut, noteExtra, date, amountInOverride, deferSave = false, personIds = []) {
     const cat = this.transferCategoryObj();
     const fromAcc = this.data.accounts.find(a => a.id === fromId);
     const toAcc = this.data.accounts.find(a => a.id === toId);
@@ -289,7 +292,8 @@ Object.assign(window.BlackBook, {
       categoryId: cat.id,
       date: date,
       note: note,
-      pairId: pairId
+      pairId: pairId,
+      personIds: [...personIds]
     });
     if (!deferSave) await this.save({ undoable: true, label: 'Transfer money' });
     return true;
@@ -352,12 +356,13 @@ Object.assign(window.BlackBook, {
           tx.currencyIn = curT;
           tx.date = date;
           tx.note = noteExtra || (fromAcc ? fromAcc.name : '?') + ' → ' + (toAcc ? toAcc.name : '?');
+          tx.personIds = this.transactionPeopleDraft('tr-note');
           await this.save({ undoable: true, label: 'Edit transfer' });
           this._editingTransferId = null;
         }
       } else {
         const mergeSources = this._transferSourceIds && this._transferSourceIds.length === 2;
-        const ok = await this.doTransfer(from, to, amountOut, noteExtra, date, amountIn, !!mergeSources);
+        const ok = await this.doTransfer(from, to, amountOut, noteExtra, date, amountIn, !!mergeSources, this.transactionPeopleDraft('tr-note'));
         if (!ok) return;
         if (mergeSources) {
           const src = this._transferSourceIds;
@@ -424,6 +429,7 @@ Object.assign(window.BlackBook, {
     const catInput = document.getElementById('tx-category-input');
     const catHidden = document.getElementById('tx-category');
     if (catInput && catHidden) { catHidden.value = tx.categoryId; const cat = this.data.categories.find(c => c.id === tx.categoryId); catInput.value = cat ? cat.name.toUpperCase() : ''; }
+    this.initPeopleEntry(tx.personIds || []);
     this.openModal('transaction-modal');
     setTimeout(() => document.getElementById('tx-amount').focus(), 50);
     this.initCategoryPicker('tx-category-input', 'tx-category', 'category-dropdown');
@@ -789,6 +795,7 @@ Object.assign(window.BlackBook, {
     const notes = txs.map(t => (t.note || '').trim()).filter(Boolean);
     tgt.amount = sum;
     tgt.note = notes.join('; ');
+    tgt.personIds = [...new Set(txs.flatMap(tx => tx.personIds || []))];
     delete tgt.nativeAmount; delete tgt.nativeCurrency; delete tgt.baseAmount; delete tgt.feeAmount;
     const keep = tgt.id;
     this.data.transactions = this.data.transactions.filter(t => t.id === keep || !this._mergeIds.includes(t.id));
@@ -811,6 +818,8 @@ Object.assign(window.BlackBook, {
       (!exp || !inc) ? 'one transaction must be an expense and one an income.' : null;
     if (reason) { alert('Cannot convert to transfer: ' + reason); return; }
     this._transferSourceIds = [exp.id, inc.id];
+    this._copyTransactionDraft = false;
+    this._editingTransferId = null;
     const fromAcc = accMap[exp.accountId];
     const toAcc = accMap[inc.accountId];
     const opts = this.data.accounts.filter(a => a.type !== 'credit' && a.type !== 'creditcard').map(a => '<option value="' + a.id + '">' + this.escapeHtml(a.name) + ' (' + (a.currency || this.baseCurrency() || 'RSD') + ')</option>').join('');
@@ -828,6 +837,7 @@ Object.assign(window.BlackBook, {
     const tgt = txs[this._mergeSelected] || exp;
     document.getElementById('tr-date').value = this.fmtDateInput(tgt.date);
     document.getElementById('tr-note').value = txs.map(t => (t.note || '').trim()).filter(Boolean).join('; ');
+    this.initPeopleEntry([...new Set(txs.flatMap(tx => tx.personIds || []))], 'tr-note');
     this._transferNoteBase = this.transferNoteBase();
     this.updateTransferNote();
     this.updateTransferCurrencyLabels();
@@ -864,6 +874,7 @@ Object.assign(window.BlackBook, {
       const polarity = txType === 'income' ? 1 : -1;
       const txData = { date: txDate, type: txType, amount: polarity * rawAmt, currency: primaryCurrency, accountId: accountVal.startsWith('card:') ? null : accountVal, categoryId: document.getElementById('tx-category').value, note: document.getElementById('tx-note').value };
       const recurringSource = accountVal.startsWith('card:') ? accountVal : 'account:' + accountVal;
+      txData.personIds = this.transactionPeopleDraft();
       const ruleCategory = this.recurringCategoryFor(txData.note, recurringSource);
       if (ruleCategory && this.categorySelectionAllowed(ruleCategory, txDate, txData.categoryId)) txData.categoryId = ruleCategory;
       const original = id ? this.data.transactions.find(t => t.id === id) : null;

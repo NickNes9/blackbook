@@ -3100,6 +3100,25 @@ h1, h2, h3 {
 .yearly-balances-account-series.is-placeholder { visibility:hidden; }
 .yearly-account-toggle { flex:0 0 auto; }
 .bill-change { position:absolute; top:4px; right:5px; font-size:11px; line-height:1; cursor:help; }
+.modal-content.transaction-tools-modal { width:min(1050px,calc(100vw - 24px)); max-width:1050px; max-height:calc(100vh - 32px); overflow:auto; }
+.transaction-tools-modal [hidden] { display:none !important; }
+.tools-grid { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:10px; }
+.tools-grid label, .tools-field { display:flex; flex-direction:column; gap:5px; font-size:12px; color:var(--text-dim); min-width:0; }
+.tools-field { margin:10px 0; }
+.transaction-tools-modal .health-explanation { font-size:12px; color:var(--text-dim); margin:8px 0; }
+.tools-actions, .people-chips, .people-suggestions { display:flex; flex-wrap:wrap; align-items:center; gap:6px; margin:8px 0; }
+.tools-scroll { max-height:40vh; overflow:auto; min-width:0; }
+.replace-row, .person-history-row { display:flex; align-items:center; gap:10px; padding:8px; border-bottom:1px solid var(--divider); font-size:12px; }
+.replace-row:nth-child(even), .person-history-row:nth-child(even) { background:var(--stripe); }
+.replace-row > span, .person-history-row > span { min-width:0; flex:1; overflow-wrap:anywhere; }
+.replace-row small, .replace-before, .replace-after { display:block; }
+.replace-row small, .replace-before { color:var(--text-dim); }
+.replace-after { color:var(--accent); }
+.people-layout { display:grid; grid-template-columns:minmax(150px,1fr) minmax(0,3fr); gap:18px; }
+#people-list { display:flex; flex-direction:column; gap:6px; margin-top:8px; }
+#person-summary { font-size:12px; overflow-wrap:anywhere; }
+.transaction-people:empty { display:none; }
+@media(max-width:650px) { .tools-grid { grid-template-columns:repeat(2,minmax(0,1fr)); } .people-layout { grid-template-columns:1fr; } #people-list { max-height:110px; } }
 .yearly-account-toggle:hover { background:var(--cc, var(--surface-hover)); color:var(--on-fill); }
 .yearly-account-toggle.selected { background:var(--cc, var(--accent)); color:var(--on-fill); }
 .yearly-balances-history { min-height:0; flex:1 1 0; overflow:auto; overscroll-behavior:contain; }

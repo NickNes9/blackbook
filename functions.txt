@@ -377,8 +377,16 @@ Appearance / behavior:
 - Attention bar can be shown/hidden.
 
 Data health:
-- The UNCATEGORIZED count opens Overview with all matching transactions
-  selected and isolated across the profile's full history.
+- Find & Replace is available on Overview and Settings > Data. Filter by
+  description, account, category, type, date range, or person. Preview all
+  changes and exclude rows before applying; Ctrl+Z reverses the batch.
+- Replace matching text literally, or rewrite the full description using
+  #description, #date, #month, #year, #account, #category, and #person.
+- Settings > Data > People manages each profile's directory. Names, optional
+  account numbers, and notes stay in the profile. Type @ in a transaction or
+  transfer description and select a suggestion to associate a person.
+- Person history links to transactions; income, expenses, and transfers are
+  summarized separately by currency. Shared entries show their full amounts.
 - Settings > Data > CHECK DATA opens Data Tools with CHECK DATA and
   RECURRING PAYMENTS tabs.
 - Check Data reviews broken links, duplicate IDs, possible duplicate
