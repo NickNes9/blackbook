@@ -341,6 +341,7 @@ this.connectWebSocket();
         if (this.currentPage === 'forecast') { this.toggleForecastGraph(); return; }
       }
       if (e.key === 'Tab' && this.currentPage === 'overview') { e.preventDefault(); this.cycleAccount(); return; }
+      if (e.key === 'Tab' && this.currentPage === 'reports' && this.reportsState) { e.preventDefault(); this.cycleReportsView(e.shiftKey ? -1 : 1); return; }
       if (e.key === '0') { e.preventDefault(); this.navigateTo('settings'); return; }
       if (/^[1-9]$/.test(e.key)) {
         const idx = parseInt(e.key, 10) - 1;
@@ -672,9 +673,10 @@ this.connectWebSocket();
     }
     if (!editing && ['overview', 'bills', 'budget', 'forecast'].includes(this.currentPage)) add('H', 'GRAPH');
     if (!editing && this.currentPage === 'overview') add('TAB', 'ACCOUNT');
+    if (!editing && this.currentPage === 'reports') add('TAB', 'REPORT');
     if (!editing) add('← →', this.currentPage === 'reports' && this.reportsState && ['categories', 'people'].includes(this.reportsState().view) ? 'YEAR' : 'MONTH');
     const pageCount = this.pageList().filter(page => this.isPageEnabled(page)).length;
-    if (!editing && pageCount > 1) add('1–' + (pageCount - 1) + ' / 0', 'PAGES');
+    if (!editing && pageCount > 1) add('0–9', 'PAGES');
     if (!editing) add('Space', 'COMMAND');
     if (!editing && this._undoReady && !this._undoBusy && this._undoHistory) {
       if (this._undoHistory.undoStack.length) add('Ctrl Z', 'UNDO');
