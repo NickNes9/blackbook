@@ -675,6 +675,7 @@
   overflow: hidden;
 }
 #page-reports .reports-moneyflow-content .reports-history { margin-top: 0; }
+#page-reports .reports-moneyflow-controls { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; min-width: 0; }
 #page-reports .reports-moneyflow-content .reports-flow-wrap {
   flex: 1 1 0;
   min-height: 0;

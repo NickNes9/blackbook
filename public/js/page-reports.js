@@ -14,7 +14,7 @@
       if (!this._reportsState) {
         const [year, month] = this.today().split('-').map(Number);
         const previous = new Date(Date.UTC(year, month - 2, 1));
-        this._reportsState = { view: 'categories', year, month: month - 1, accountIds: null, category: 'all', person: 'all', personIds: null, against: key(previous.getUTCFullYear(), previous.getUTCMonth()), day: null, calendarMode: 'month', calendarYearMonth: null, calendarDisplay: 'totals' };
+        this._reportsState = { view: 'categories', year, month: month - 1, accountIds: null, category: 'all', person: 'all', personIds: null, against: key(previous.getUTCFullYear(), previous.getUTCMonth()), day: null, calendarMode: 'month', calendarYearMonth: null, calendarDisplay: 'totals', flowPeriod: 'month' };
       }
       return this._reportsState;
     },
@@ -48,10 +48,11 @@
       if (!root) return;
       this.destroyReportsCharts();
       const state = this.reportsState();
+      state.flowPeriod = state.flowPeriod === 'year' ? 'year' : 'month';
       const sample = this.reportsCatalog();
       const e = value => this.escapeHtml(String(value));
       const field = (label, id, options, selected) => '<label class="reports-field" for="' + id + '"><span class="sr-only">' + e(label) + '</span><select class="input" id="' + id + '" aria-label="' + e(label) + '" onchange="BlackBook.setReportsFilter(\'' + id.replace('reports-', '') + '\',this.value)">' + options.map(item => '<option value="' + e(item.id) + '"' + (item.id === selected ? ' selected' : '') + '>' + e(item.name) + '</option>').join('') + '</select></label>';
-      const calendar = ['categories', 'compare', 'people'].includes(state.view) ? this.reportsYearPicker() : this.reportsCalendarPicker(state.year, state.month);
+      const calendar = ['categories', 'compare', 'people'].includes(state.view) || (state.view === 'moneyflow' && state.flowPeriod === 'year') ? this.reportsYearPicker() : this.reportsCalendarPicker(state.year, state.month);
       let controls = '';
       const selected = this.reportsSelectedAccounts();
       controls += '<div class="reports-account-picker"><div class="reports-account-filters" role="group" aria-label="Accounts">' + sample.accounts.map(account => '<button type="button" class="cat-filter-chip page-control reports-account-chip' + (selected.has(account.id) ? ' selected' : '') + '" style="--cc:' + this.accountColor(account) + ';' + (selected.has(account.id) ? 'background:var(--cc);color:var(--on-fill);' : 'background:var(--block);color:var(--cc);') + '" aria-pressed="' + selected.has(account.id) + '" title="Click: toggle · Shift-click: keep multiple selected · Alt-click: isolate" onclick="BlackBook.toggleReportsAccount(\'' + account.id + '\',event)">' + e(account.name) + '</button>').join('') + '</div></div>';
@@ -248,14 +249,42 @@
         const displayFractions = this.donutDisplayValues(segments.map(item => Math.sqrt(item.amount)), 4);
         let rotation = -Math.PI / 2, bestScore = Infinity;
         for (let candidate = 0; candidate < Math.PI * 2; candidate += Math.PI / 360) {
-          let left = 0, right = 0, angle = candidate;
-          for (const [index] of segments.entries()) { const middle = angle + displayFractions[index] * Math.PI; Math.cos(middle) >= 0 ? right++ : left++; angle += displayFractions[index] * Math.PI * 2; }
-          const score = Math.abs(left - right) * 100 + Math.max(left, right);
+          let left = 0, right = 0, tangentPenalty = 0, angle = candidate;
+          for (const [index] of segments.entries()) {
+            const middle = angle + displayFractions[index] * Math.PI;
+            Math.cos(middle) >= 0 ? right++ : left++;
+            tangentPenalty += Math.max(0, .5 - Math.abs(Math.cos(middle))) / .5;
+            angle += displayFractions[index] * Math.PI * 2;
+          }
+          const score = Math.abs(left - right) * 100 + Math.max(left, right) + tangentPenalty;
           if (score < bestScore) { bestScore = score; rotation = candidate; }
         }
         let angle = rotation;
         for (const [index, item] of segments.entries()) { item.start = angle; angle += displayFractions[index] * Math.PI * 2; item.end = angle; item.middle = (item.start + item.end) / 2; item.side = Math.cos(item.middle) >= 0 ? 1 : -1; }
-        const sides = [-1, 1].map(side => segments.filter(item => item.side === side).sort((a, b) => Math.sin(a.middle) - Math.sin(b.middle)));
+        const leaderAnchorAngle = item => {
+          const span = item.end - item.start;
+          const inset = Math.min(Math.PI / 360, span * .08);
+          const arcStart = item.start + inset, arcEnd = item.end - inset;
+          const sideAngleWindow = Math.PI * .33;
+          const safeArcs = item.side > 0
+            ? [[0, sideAngleWindow], [Math.PI * 2 - sideAngleWindow, Math.PI * 2]]
+            : [[Math.PI - sideAngleWindow, Math.PI + sideAngleWindow]];
+          let best = item.middle, bestDistance = Infinity;
+          const firstTurn = Math.floor(arcStart / (Math.PI * 2)) - 1;
+          const lastTurn = Math.ceil(arcEnd / (Math.PI * 2)) + 1;
+          for (let turn = firstTurn; turn <= lastTurn; turn++) {
+            for (const [safeStart, safeEnd] of safeArcs) {
+              const low = Math.max(arcStart, safeStart + turn * Math.PI * 2);
+              const high = Math.min(arcEnd, safeEnd + turn * Math.PI * 2);
+              if (low > high) continue;
+              const candidate = Math.max(low, Math.min(high, item.middle));
+              const distance = Math.abs(candidate - item.middle);
+              if (distance < bestDistance) { best = candidate; bestDistance = distance; }
+            }
+          }
+          return best;
+        };
+        const sides = [-1, 1].map(side => segments.filter(item => item.side === side).sort((a, b) => Math.sin(leaderAnchorAngle(a)) - Math.sin(leaderAnchorAngle(b))));
         const cx = Math.round(width / 2), cy = Math.round(height / 2 - 18), radius = Math.round(Math.min(width * .21, (height - 44) / 2)), inner = Math.round(radius * .62);
         const point = (r, a) => [cx + r * Math.cos(a), cy + r * Math.sin(a)];
         const measure = document.createElement('canvas').getContext('2d');
@@ -292,13 +321,13 @@
             const endX = rightSide ? textX - nameWidth - 4 : textX + nameWidth + 4;
             const sideDirection = rightSide ? 1 : -1;
             const bendX = cx + sideDirection * (radius + 12);
-            const [startX, startY] = point(radius - .5, item.middle);
+            const [startX, startY] = point(radius - 2, leaderAnchorAngle(item));
             const exitX = startX + sideDirection * 9;
             leaders += '<polyline class="reports-share-leader" data-report-leader="' + item.donutIndex + '" points="' + startX + ',' + startY + ' ' + exitX + ',' + startY + ' ' + bendX + ',' + labelBaseline + ' ' + endX + ',' + labelBaseline + '" stroke="' + e(item.color) + '"/>';
             labelsSvg += '<g><title>' + e(item.name + ': ' + label) + '</title><text x="' + textX + '" y="' + labelBaseline + '" text-anchor="' + align + '" fill="' + e(item.color) + '" font-size="' + (dense ? '9.5' : '11') + '">' + e(nameText) + '</text><text x="' + textX + '" y="' + (labelY + (dense ? 7 : 8)) + '" text-anchor="' + align + '" fill="' + e(this.reportsColor('--text-dim')) + '" font-size="' + (dense ? '8' : '10') + '">' + e(detailText) + '</text></g>';
           }
         }
-        host.innerHTML = '<svg viewBox="0 0 ' + width + ' ' + height + '" width="100%" height="100%" role="img" aria-label="Category spending shares" style="font-family:inherit">' + svg + leaders + labelsSvg + '</svg>';
+        host.innerHTML = '<svg viewBox="0 0 ' + width + ' ' + height + '" width="100%" height="100%" role="img" aria-label="Category spending shares" style="font-family:inherit">' + leaders + svg + labelsSvg + '</svg>';
         host.querySelectorAll('[data-report-segment]').forEach(segment => {
           const leader = host.querySelector('[data-report-leader="' + segment.dataset.reportSegment + '"]');
           const activate = () => leader?.classList.add('is-active');
@@ -324,13 +353,16 @@
       const info = totals(rows);
       const expenses = MONTHS.map((_, month) => -totals(rows.filter(row => Number(row.date.slice(5, 7)) === month + 1)).expenses);
       const peak = expenses.indexOf(Math.min(...expenses));
+      const [currentYear, currentMonth] = this.today().split('-').map(Number);
+      const visibleMonthCount = state.year < currentYear ? MONTHS.length : state.year === currentYear ? currentMonth : 0;
+      const visibleMonths = MONTHS.slice(0, visibleMonthCount);
       const category = nameOf(this.reportsCatalog().categories, state.category, state.category === 'none' ? 'Uncategorized' : 'All expenses');
       const categoryPanel = state.category === 'all'
         ? this.reportsBreakdownHtml(rows, 'Category share', this.reportsRows(), true)
         : this.reportsCategoryStatsHtml(rows, category, state.year);
       return {
         summary: this.reportsSummaryHtml([['Year expenses', this.reportsMoney(info.expenses), 'negative'], ['Monthly average', this.reportsMoney(info.expenses / 12)], ['Transactions', String(info.count)]]),
-        html: '<div class="reports-grid">' + this.reportsChartHtml('Income vs expenses', category + ' · ' + state.year + ' · ' + this.baseCurrency()) + categoryPanel + '</div><section class="reports-history"><h3 class="reports-section-title">Monthly breakdown</h3>' + this.reportsTableHtml(['Month', 'Income', 'Expenses', 'Net', 'Change', 'Transactions'], MONTHS.map((month, index) => {
+        html: '<div class="reports-grid">' + this.reportsChartHtml('Income vs expenses', category + ' · ' + state.year + ' · ' + this.baseCurrency()) + categoryPanel + '</div><section class="reports-history"><h3 class="reports-section-title">Monthly breakdown</h3>' + this.reportsTableHtml(['Month', 'Income', 'Expenses', 'Net', 'Change', 'Transactions'], visibleMonths.map((month, index) => {
           const monthly = totals(rows.filter(row => Number(row.date.slice(5, 7)) === index + 1));
           const previous = totals(this.reportsMonthRows(index ? state.year : state.year - 1, index ? index - 1 : 11).filter(row => state.category === 'all' || (row.categoryId || 'none') === state.category));
           const change = monthly.count ? monthly.net - previous.net : 0;
@@ -342,7 +374,7 @@
 
     reportsCompareSettings() {
       const state = this.reportsState();
-      if (!state.compare) state.compare = { range: 3, metric: 'expenses', categoryIds: null };
+      if (!state.compare) state.compare = { range: 3, metric: 'net', categoryIds: null };
       return state.compare;
     },
 
@@ -497,11 +529,14 @@
 
     toggleReportsFlowGroup() { const state = this.reportsState(); state.flowGroup = state.flowGroup === 'people' ? 'categories' : 'people'; this.renderPage('reports'); },
 
+    setReportsFlowPeriod(period) { if (!['month', 'year'].includes(period)) return; this.reportsState().flowPeriod = period; this.renderPage('reports'); },
+
     toggleReportsCalendarDisplay() { const state = this.reportsState(); state.calendarDisplay = state.calendarDisplay === 'totals' ? 'transactions' : 'totals'; this.renderPage('reports'); },
 
     reportsMoneyFlowContent() {
       const state = this.reportsState();
-      const rows = this.reportsMonthRows(state.year, state.month), info = totals(rows);
+      const flowPeriod = state.flowPeriod === 'year' ? 'year' : 'month';
+      const rows = flowPeriod === 'year' ? this.reportsRows(state.year) : this.reportsMonthRows(state.year, state.month), info = totals(rows);
       const peopleMode = state.flowGroup === 'people';
       const groups = peopleMode ? [...this.reportsCatalog().people.map(person => ({ ...person, color: this.personColor(person) })), { id: 'none', name: 'No person', color: this.reportsColor('--text-dim') }] : [...this.reportsCatalog().categories.map(category => ({ ...category, color: this.categoryColor(category) })), { id: 'none', name: 'Uncategorized', color: this.reportsColor('--text-dim') }];
       // Shared-person amounts are divided evenly so the flow still balances.
@@ -540,7 +575,7 @@
       svg += '<rect x="490" y="' + centerY + '" width="20" height="' + centerHeight + '" fill="' + e(this.reportsColor('--accent')) + '"/>';
       return {
         summary: this.reportsSummaryHtml([['Income', this.reportsMoney(info.income), 'positive'], ['Expenses', this.reportsMoney(info.expenses), 'negative'], [info.net < 0 ? 'From balance' : 'Money left', this.reportsMoney(Math.abs(info.net)), info.net < 0 ? 'negative' : 'positive'], ['Transactions', String(info.count)]]),
-        html: '<div class="reports-money-grid"><section class="reports-chart-panel"><div class="reports-panel-heading"><button class="btn btn-secondary page-control" style="width:110px" onclick="BlackBook.toggleReportsFlowGroup()">' + (peopleMode ? 'PEOPLE' : 'CATEGORIES') + '</button><span class="reports-panel-note">' + MONTHS[state.month] + ' ' + state.year + ' · ' + this.baseCurrency() + '</span></div>' + (total ? '<div class="reports-flow-wrap"><svg class="reports-flow" viewBox="0 0 1000 ' + height + '" role="img" aria-label="Income sources join and split into expenses and money left. Exact amounts and percentages are listed beside the chart.">' + svg + '</svg></div>' : '<div class="reports-empty">No activity for this period.</div>') + '</section><section class="reports-history"><h3 class="reports-section-title">Flow breakdown</h3>' + this.reportsTableHtml([peopleMode ? 'Person' : 'Category', 'In', 'In %', 'Out', 'Out %', 'TX'], [...incoming.map(item => [item.name, this.reportsMoney(item.amount), total ? (item.amount / total * 100).toFixed(1) + '%' : 'N/A', '—', '—', item.count == null ? '—' : item.count]), ...outgoing.map(item => [item.name, '—', '—', this.reportsMoney(item.amount), total ? (item.amount / total * 100).toFixed(1) + '%' : 'N/A', item.count == null ? '—' : item.count])]) + (peopleMode ? '<div class="reports-panel-note">Shared-person amounts are divided evenly; percentages show each share of total flow, and counts include each tagged transaction.</div>' : '') + '</section></div>',
+        html: '<div class="reports-money-grid"><section class="reports-chart-panel"><div class="reports-panel-heading"><div class="reports-moneyflow-controls"><button class="btn btn-secondary page-control" style="width:110px" onclick="BlackBook.toggleReportsFlowGroup()">' + (peopleMode ? 'PEOPLE' : 'CATEGORIES') + '</button><div class="reports-calendar-mode" role="group" aria-label="Money Flow period">' + ['month', 'year'].map(mode => '<button type="button" class="btn page-control ' + (flowPeriod === mode ? 'btn-primary' : 'btn-secondary') + '" aria-pressed="' + (flowPeriod === mode) + '" onclick="BlackBook.setReportsFlowPeriod(\'' + mode + '\')">' + mode.toUpperCase() + '</button>').join('') + '</div></div><span class="reports-panel-note">' + (flowPeriod === 'year' ? 'YEAR ' + state.year : MONTHS[state.month] + ' ' + state.year) + ' · ' + this.baseCurrency() + '</span></div>' + (total ? '<div class="reports-flow-wrap"><svg class="reports-flow" viewBox="0 0 1000 ' + height + '" role="img" aria-label="Income sources join and split into expenses and money left. Exact amounts and percentages are listed beside the chart.">' + svg + '</svg></div>' : '<div class="reports-empty">No activity for this period.</div>') + '</section><section class="reports-history"><h3 class="reports-section-title">Flow breakdown</h3>' + this.reportsTableHtml([peopleMode ? 'Person' : 'Category', 'In', 'In %', 'Out', 'Out %', 'TX'], [...incoming.map(item => [item.name, this.reportsMoney(item.amount), total ? (item.amount / total * 100).toFixed(1) + '%' : 'N/A', '—', '—', item.count == null ? '—' : item.count]), ...outgoing.map(item => [item.name, '—', '—', this.reportsMoney(item.amount), total ? (item.amount / total * 100).toFixed(1) + '%' : 'N/A', item.count == null ? '—' : item.count])]) + (peopleMode ? '<div class="reports-panel-note">Shared-person amounts are divided evenly; percentages show each share of total flow, and counts include each tagged transaction.</div>' : '') + '</section></div>',
         chart: null
       };
     },
