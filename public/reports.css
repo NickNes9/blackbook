@@ -45,18 +45,6 @@
   color: var(--on-fill);
 }
 
-#page-reports .reports-preview-label {
-  flex: 0 0 auto;
-  padding: 3px 7px;
-  color: var(--accent);
-  border: 1px solid var(--accent-dim);
-  font-size: 10px;
-  font-weight: 700;
-  line-height: 1.2;
-  text-transform: uppercase;
-  white-space: nowrap;
-}
-
 #page-reports .reports-toolbar {
   display: flex;
   align-items: flex-start;
@@ -609,7 +597,6 @@
   #page-reports .reports-calendar-month-total { font-size: 14px; }
   #page-reports .reports-topline { align-items: center; flex: 0 1 auto; flex-wrap: nowrap; margin: 0; padding: 0; }
   #page-reports .reports-tabs { flex: 0 1 auto; }
-  #page-reports .reports-preview-label { margin-top: 2px; }
   #page-reports .reports-summary { gap: 4px 7px; margin-bottom: 8px; }
   #page-reports .reports-summary-values { gap: 4px 7px; }
   #page-reports .reports-toolbar { align-items: stretch; }

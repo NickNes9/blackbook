@@ -1,6 +1,6 @@
 # Builds the Black Book release zips (win/linux/mac) + checksums.sha256 and
 # prints the GitHub release command. Run from the project root:
-#   npm run release -- -Version 0.9.6
+#   npm run release -- -Version 0.9.7
 param(
   [Parameter(Mandatory = $true)][string]$Version
 )

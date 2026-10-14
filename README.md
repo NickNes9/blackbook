@@ -79,8 +79,9 @@ The shortcut bar at the bottom shows the actions available on the current page.
 
 ### In development — 0.9.7 Reports
 
-- A first visual preview of Categories, Compare, People, Cash Flow, and Calendar views, with interactive filters and charts using clearly labeled sample values.
-- The preview is for reviewing the layout; live profile reporting is the next step.
+- Reports now use the active profile's transactions across Categories, Compare, People, Money Flow, and Calendar.
+- Compare spending across years and categories, review per-person totals, follow income and expenses through a money-flow view, and browse transactions by date.
+- Account, category, and person filters update the reports and charts; category history includes yearly totals and monthly changes.
 
 ### 0.9.6
 
@@ -137,5 +138,5 @@ These changes were included in 0.9.5; there was no separate 0.9.4 download.
 
 ---
 
-Created by Nikola Nešić · Black Book 0.9.6
+Created by Nikola Nešić · Black Book 0.9.7
 - Portable downloads include the runtime: extract and open, with no separate Node.js installation. Each launcher opens its own installation; an empty installation prompts you to create a profile.

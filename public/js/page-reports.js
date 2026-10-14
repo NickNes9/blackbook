@@ -9,7 +9,60 @@
   const key = (year, month) => year + '-' + String(month + 1).padStart(2, '0');
   const nameOf = (items, id, fallback) => (items.find(item => item.id === id) || {}).name || fallback;
 
+  function donutLayout(fractions) {
+    const cleanFractions = fractions.map(value => Math.max(0, Number(value) || 0));
+    const total = cleanFractions.reduce((value, fraction) => value + fraction, 0);
+    if (!total) return [];
+    const normalized = cleanFractions.map(value => value / total);
+    let rotation = -Math.PI / 2, bestScore = Infinity;
+    for (let candidate = 0; candidate < Math.PI * 2; candidate += Math.PI / 360) {
+      let left = 0, right = 0, tangentPenalty = 0, angle = candidate;
+      for (const fraction of normalized) {
+        const middle = angle + fraction * Math.PI;
+        Math.cos(middle) >= 0 ? right++ : left++;
+        tangentPenalty += Math.max(0, .5 - Math.abs(Math.cos(middle))) / .5;
+        angle += fraction * Math.PI * 2;
+      }
+      const score = Math.abs(left - right) * 100 + Math.max(left, right) + tangentPenalty;
+      if (score < bestScore) { bestScore = score; rotation = candidate; }
+    }
+
+    const segments = [];
+    let angle = rotation;
+    for (const fraction of normalized) {
+      const start = angle;
+      angle += fraction * Math.PI * 2;
+      const end = angle, middle = (start + end) / 2;
+      segments.push({ start, end, middle, side: Math.cos(middle) >= 0 ? 1 : -1 });
+    }
+
+    for (const item of segments) {
+      const inset = Math.min(Math.PI / 360, (item.end - item.start) * .08);
+      const arcStart = item.start + inset, arcEnd = item.end - inset;
+      const sideAngleWindow = Math.PI * .33;
+      const safeArcs = item.side > 0
+        ? [[0, sideAngleWindow], [Math.PI * 2 - sideAngleWindow, Math.PI * 2]]
+        : [[Math.PI - sideAngleWindow, Math.PI + sideAngleWindow]];
+      let best = item.middle, bestDistance = Infinity;
+      const firstTurn = Math.floor(arcStart / (Math.PI * 2)) - 1;
+      const lastTurn = Math.ceil(arcEnd / (Math.PI * 2)) + 1;
+      for (let turn = firstTurn; turn <= lastTurn; turn++) {
+        for (const [safeStart, safeEnd] of safeArcs) {
+          const low = Math.max(arcStart, safeStart + turn * Math.PI * 2);
+          const high = Math.min(arcEnd, safeEnd + turn * Math.PI * 2);
+          if (low > high) continue;
+          const candidate = Math.max(low, Math.min(high, item.middle));
+          const distance = Math.abs(candidate - item.middle);
+          if (distance < bestDistance) { best = candidate; bestDistance = distance; }
+        }
+      }
+      item.anchorAngle = best;
+    }
+    return segments;
+  }
+
   Object.assign(window.BlackBook, {
+    reportsDonutLayout(fractions) { return donutLayout(fractions); },
     reportsState() {
       if (!this._reportsState) {
         const [year, month] = this.today().split('-').map(Number);
@@ -247,44 +300,9 @@
         segments.splice(0, segments.length, ...distributedSegments);
         const width = Math.max(1, Math.round(host.clientWidth)), height = Math.max(1, Math.round(host.clientHeight));
         const displayFractions = this.donutDisplayValues(segments.map(item => Math.sqrt(item.amount)), 4);
-        let rotation = -Math.PI / 2, bestScore = Infinity;
-        for (let candidate = 0; candidate < Math.PI * 2; candidate += Math.PI / 360) {
-          let left = 0, right = 0, tangentPenalty = 0, angle = candidate;
-          for (const [index] of segments.entries()) {
-            const middle = angle + displayFractions[index] * Math.PI;
-            Math.cos(middle) >= 0 ? right++ : left++;
-            tangentPenalty += Math.max(0, .5 - Math.abs(Math.cos(middle))) / .5;
-            angle += displayFractions[index] * Math.PI * 2;
-          }
-          const score = Math.abs(left - right) * 100 + Math.max(left, right) + tangentPenalty;
-          if (score < bestScore) { bestScore = score; rotation = candidate; }
-        }
-        let angle = rotation;
-        for (const [index, item] of segments.entries()) { item.start = angle; angle += displayFractions[index] * Math.PI * 2; item.end = angle; item.middle = (item.start + item.end) / 2; item.side = Math.cos(item.middle) >= 0 ? 1 : -1; }
-        const leaderAnchorAngle = item => {
-          const span = item.end - item.start;
-          const inset = Math.min(Math.PI / 360, span * .08);
-          const arcStart = item.start + inset, arcEnd = item.end - inset;
-          const sideAngleWindow = Math.PI * .33;
-          const safeArcs = item.side > 0
-            ? [[0, sideAngleWindow], [Math.PI * 2 - sideAngleWindow, Math.PI * 2]]
-            : [[Math.PI - sideAngleWindow, Math.PI + sideAngleWindow]];
-          let best = item.middle, bestDistance = Infinity;
-          const firstTurn = Math.floor(arcStart / (Math.PI * 2)) - 1;
-          const lastTurn = Math.ceil(arcEnd / (Math.PI * 2)) + 1;
-          for (let turn = firstTurn; turn <= lastTurn; turn++) {
-            for (const [safeStart, safeEnd] of safeArcs) {
-              const low = Math.max(arcStart, safeStart + turn * Math.PI * 2);
-              const high = Math.min(arcEnd, safeEnd + turn * Math.PI * 2);
-              if (low > high) continue;
-              const candidate = Math.max(low, Math.min(high, item.middle));
-              const distance = Math.abs(candidate - item.middle);
-              if (distance < bestDistance) { best = candidate; bestDistance = distance; }
-            }
-          }
-          return best;
-        };
-        const sides = [-1, 1].map(side => segments.filter(item => item.side === side).sort((a, b) => Math.sin(leaderAnchorAngle(a)) - Math.sin(leaderAnchorAngle(b))));
+        const layout = donutLayout(displayFractions);
+        segments.forEach((item, index) => Object.assign(item, layout[index]));
+        const sides = [-1, 1].map(side => segments.filter(item => item.side === side).sort((a, b) => Math.sin(a.anchorAngle) - Math.sin(b.anchorAngle)));
         const cx = Math.round(width / 2), cy = Math.round(height / 2 - 18), radius = Math.round(Math.min(width * .21, (height - 44) / 2)), inner = Math.round(radius * .62);
         const point = (r, a) => [cx + r * Math.cos(a), cy + r * Math.sin(a)];
         const measure = document.createElement('canvas').getContext('2d');
@@ -321,7 +339,7 @@
             const endX = rightSide ? textX - nameWidth - 4 : textX + nameWidth + 4;
             const sideDirection = rightSide ? 1 : -1;
             const bendX = cx + sideDirection * (radius + 12);
-            const [startX, startY] = point(radius - 2, leaderAnchorAngle(item));
+            const [startX, startY] = point(radius - 2, item.anchorAngle);
             const exitX = startX + sideDirection * 9;
             leaders += '<polyline class="reports-share-leader" data-report-leader="' + item.donutIndex + '" points="' + startX + ',' + startY + ' ' + exitX + ',' + startY + ' ' + bendX + ',' + labelBaseline + ' ' + endX + ',' + labelBaseline + '" stroke="' + e(item.color) + '"/>';
             labelsSvg += '<g><title>' + e(item.name + ': ' + label) + '</title><text x="' + textX + '" y="' + labelBaseline + '" text-anchor="' + align + '" fill="' + e(item.color) + '" font-size="' + (dense ? '9.5' : '11') + '">' + e(nameText) + '</text><text x="' + textX + '" y="' + (labelY + (dense ? 7 : 8)) + '" text-anchor="' + align + '" fill="' + e(this.reportsColor('--text-dim')) + '" font-size="' + (dense ? '8' : '10') + '">' + e(detailText) + '</text></g>';

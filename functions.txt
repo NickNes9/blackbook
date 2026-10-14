@@ -313,17 +313,16 @@ FORECAST
 - Auto-balanced bill payments are folded into the projection.
 
 ----------------------------------------------------------------------
-REPORTS (0.9.7 LAYOUT PREVIEW)
+REPORTS (0.9.7 WORK IN PROGRESS)
 ----------------------------------------------------------------------
 
 - Switch between Categories, Compare, People, Cash Flow, and Calendar.
-- Review yearly category history, monthly differences, person totals,
-  a cash-flow waterfall, and a calendar with selectable days.
-- Change the account, category, person, and period to try the layouts.
+- Review live profile data: yearly category history, multi-year comparisons,
+  person totals, money flow, and a calendar with selectable days.
+- Filter by account, category, person, and period; charts and summaries
+  update to match the active selection.
 - Account cards use their own colors. Click or Shift-click to toggle
   several accounts, or Alt-click to isolate one; all can be deselected.
-- Controls use illustrative EUR values held only in memory. The preview
-  does not read or modify profile transactions. Live reports come later.
 - Arrow keys change the year for Categories and People, or the month for
   the other views. D returns to the current period; 0 opens Settings.
 

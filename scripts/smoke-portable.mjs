@@ -9,7 +9,7 @@ import { unzipSync } from 'fflate';
 import { NODE_VERSION } from './runtime-spec.mjs';
 
 if (process.platform !== 'win32') throw new Error('The portable Windows launcher check must run on Windows.');
-const archive = resolve(process.argv[2] || 'dist/0.9.6/black-book-v0.9.6-win.zip');
+const archive = resolve(process.argv[2] || 'dist/0.9.7/black-book-v0.9.7-win.zip');
 const temporary = mkdtempSync(join(tmpdir(), 'black-book-portable-'));
 let root = join(temporary, 'Folder With Spaces');
 mkdirSync(root);

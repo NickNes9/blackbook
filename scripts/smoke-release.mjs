@@ -10,7 +10,7 @@ import { unzipSync, zipSync } from 'fflate';
 import { Updater } from '../lib/updater.js';
 import { runtimeExecutable } from '../lib/runtime.js';
 
-const archivePath = resolve(process.argv[2] || 'dist/0.9.6/black-book-v0.9.6-win.zip');
+const archivePath = resolve(process.argv[2] || 'dist/0.9.7/black-book-v0.9.7-win.zip');
 const root = mkdtempSync(join(tmpdir(), 'black-book-clean-install-'));
 let child;
 try {
