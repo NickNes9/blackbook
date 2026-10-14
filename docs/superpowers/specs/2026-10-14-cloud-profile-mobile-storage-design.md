@@ -14,7 +14,10 @@ The first 0.9.8 work is profile portability and safe cross-device saving. Mobile
 
 - Add **Connect to Mobile** to the profile/account menu.
 - Open a short, nontechnical guide explaining that the profile must be placed in an online folder the person already uses, such as iCloud Drive, Google Drive, Dropbox, or another supported file provider.
-- Let the person choose the profile location through the normal file/folder picker. Do not require a Black Book login or ask them to configure a server.
+- In **Settings > Profiles** and while creating a profile, let the person choose that profile’s storage folder through the normal system folder picker. For an existing profile, provide **Move Profile…**, which opens the Windows, macOS, or Linux folder chooser and lets the person choose its new home.
+- Default new profiles to the app’s own `profiles` folder beside the app. Keep a small profile-location map beside the app so Black Book remembers where each profile lives. Use a relative location for folders inside the portable app folder and a saved folder location for external folders.
+- If the app folder is not writable, explain that and let the person choose a writable location; never silently save somewhere else.
+- When moving an existing profile, copy it to the selected folder, validate the copy, update the location map, and switch to the new file. Remove the old active copy only after all those steps succeed, while keeping a recoverable backup. If any step fails, leave the original active and untouched.
 - Explain clearly that Black Book does not host or sync the file itself; their storage provider keeps the folder available on their devices.
 
 ### Phone
@@ -22,6 +25,7 @@ The first 0.9.8 work is profile portability and safe cross-device saving. Mobile
 - Install the Black Book app.
 - Choose **Open Profile**. The phone’s normal file picker lets the person browse supported local or cloud locations and select the same profile file.
 - Remember the selected profile on that phone so the person does not need to find it again each time.
+- Keep the phone’s selected file/provider reference in the phone app’s own settings; the desktop location map is not assumed to sync to the phone.
 - If the provider is not installed or signed in, the operating system or provider handles that setup. Black Book does not collect provider credentials.
 
 The system picker is the integration boundary: support providers exposed by the phone’s file system, rather than promising compatibility with every storage service. On iOS, the document picker supports iCloud and compatible third-party file providers; Android’s Storage Access Framework can open and modify files through supported document providers. The guide lives inside Black Book behind **Connect to Mobile**; users should not have to find a separate technical instruction file.
@@ -52,16 +56,19 @@ Introduce a versioned portable profile document/container and a safe migration p
 ## Acceptance criteria
 
 1. A person can keep a profile in a supported cloud-synced location and open that same profile on a computer and phone.
-2. The setup guide uses ordinary language and does not ask for a Black Book account or server configuration.
-3. A password-protected profile can be opened on another device using the profile password, with all necessary non-secret encryption metadata contained in the portable profile.
-4. If a newer revision is visible before save, the app does not overwrite it silently and preserves the current device’s edits as a recoverable copy.
-5. If the cloud provider is unavailable or sync state is unknown, the app clearly distinguishes local changes from synced changes and keeps local work recoverable until a revision check can run.
+2. A person can choose a folder per profile in Settings or during creation; new profiles default to the app-side `profiles` folder.
+3. **Move Profile…** opens the platform’s normal folder chooser on Windows, macOS, and Linux; it changes the active location only after the new file is verified and the operation is recorded beside the app.
+4. A failed move leaves the original active and intact; a successful move keeps a recoverable backup.
+5. The setup guide uses ordinary language and does not ask for a Black Book account or server configuration.
+6. A password-protected profile can be opened on another device using the profile password, with all necessary non-secret encryption metadata contained in the portable profile.
+7. If a newer revision is visible before save, the app does not overwrite it silently and preserves the current device’s edits as a recoverable copy.
+8. If the cloud provider is unavailable or sync state is unknown, the app clearly distinguishes local changes from synced changes and keeps local work recoverable until a revision check can run.
 
 ## Open implementation details
 
 - Choose the portable file extension/container while retaining a migration path from existing JSON profiles.
 - Implement platform-native document access on iOS and Android so the selected provider file can be edited in place and access can be remembered safely.
-- Decide how desktop portable builds choose and remember a profile folder/file.
+- Define the app-side profile-location map, relative versus external paths, behavior when the portable app folder moves or is read-only, and safe move/backup cleanup.
 - Define conflict-copy naming and recovery UI, including offline and provider-sync-in-progress cases.
 - Validate behavior with supported providers and both mobile operating systems before claiming broad compatibility.
 
