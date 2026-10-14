@@ -39,6 +39,65 @@ Object.assign(window.BlackBook, {
     this._setDebtDir(next);
   },
 
+  debtPersonForName(value) {
+    const normalize = name => String(name || '').trim().replace(/^@+/, '').trim().toLocaleLowerCase();
+    const target = normalize(value);
+    if (!target) return null;
+    const matches = (this.data.people || []).filter(person => normalize(person.name) === target);
+    return matches.length === 1 ? matches[0] : null;
+  },
+
+  populateDebtPersonOptions() {
+    const list = document.getElementById('debt-person-options');
+    if (!list) return;
+    const people = [...(this.data.people || [])].filter(person => person && person.name)
+      .sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }));
+    list.innerHTML = people.map(person => '<option value="@' + this.escapeHtml(person.name) + '"></option>').join('');
+  },
+
+  updateDebtTransactionPeople(debt, previousPersonId) {
+    const nextPersonId = debt.personId || '';
+    const transactions = (this.data.transactions || []).filter(tx => tx && (
+      tx.debtId === debt.id || (debt.openingTransactionId && tx.id === debt.openingTransactionId)
+    ));
+    for (const tx of transactions) {
+      const personIds = [...new Set((Array.isArray(tx.personIds) ? tx.personIds : []).filter(Boolean))];
+      if (previousPersonId && previousPersonId !== nextPersonId) {
+        const oldIndex = personIds.indexOf(previousPersonId);
+        if (oldIndex >= 0) personIds.splice(oldIndex, 1);
+      }
+      if (nextPersonId && !personIds.includes(nextPersonId)) personIds.push(nextPersonId);
+      tx.personIds = personIds;
+    }
+  },
+
+  populateDebtAccountOptions(selectedId = '') {
+    const select = document.getElementById('debt-account');
+    if (!select) return;
+    const accounts = this.visibleAccounts();
+    select.innerHTML = '<option value="">— SELECT ACCOUNT —</option>' + accounts.map(account => '<option value="' + this.escapeHtml(account.id) + '">' + this.escapeHtml(account.name + (account.currency && account.currency !== this.baseCurrency() ? ' (' + account.currency + ')' : '')) + '</option>').join('');
+    select.required = accounts.length > 0;
+    const preferred = selectedId || this.selectedAccount || this.defaultAccountForCurrency(this.baseCurrency());
+    select.value = accounts.some(account => account.id === preferred) ? preferred : '';
+    this.syncCustomSelect(select);
+  },
+
+  debtOpeningTransaction(debt, accountId, id) {
+    const type = debt.type === 'out' ? 'income' : 'expense';
+    const description = debt.type === 'out' ? 'Borrowed from ' + debt.person : 'Loan to ' + debt.person;
+    return {
+      id,
+      date: debt.date,
+      type,
+      amount: (type === 'income' ? 1 : -1) * Math.abs(Number(debt.amount) || 0),
+      currency: debt.currency || this.baseCurrency(),
+      accountId,
+      categoryId: debt.categoryId || null,
+      personIds: debt.personId ? [debt.personId] : [],
+      note: debt.note ? description + ' · ' + debt.note : description
+    };
+  },
+
   debtFilterChipsHtml() {
     const f = this._debtFilter || 'all';
     const chip = (key, label) => '<div class="cat-filter-chip' + (f === key ? ' selected' : '') + '" onclick="BlackBook.setDebtFilter(\x27' + key + '\x27)">' + label + '</div>';
@@ -182,11 +241,13 @@ Object.assign(window.BlackBook, {
     const fill = d.type === 'in' ? 'var(--income)' : 'var(--accent)';
     const typeColor = d.type === 'in' ? 'var(--income)' : 'var(--expense)';
     const cat = d.categoryId ? this.data.categories.find(c => c.id === d.categoryId) : null;
+    const linkedPerson = (this.data.people || []).find(person => person.id === d.personId);
+    const personLabel = linkedPerson ? this.personNameHtml(linkedPerson, false) : this.escapeHtml(d.person);
     const dotColor = cat ? this.categoryColor(cat) : typeColor;
     const payments = this.debtPayments(d);
     let html = '<div class="savings-card debt-card' + this.focusRecordHtml('debt', d.id) + '"' + (settled ? ' style="opacity:0.55;"' : '') + '>';
     html += '<div class="savings-header">' +
-      '<span class="savings-name"><span class="cat-dot" style="background:' + dotColor + ';"></span> ' + this.escapeHtml(d.person) + this.healthMarker('debts', d.id) + '</span>' +
+      '<span class="savings-name"><span class="cat-dot" style="background:' + dotColor + ';"></span> ' + personLabel + this.healthMarker('debts', d.id) + '</span>' +
       '<span class="savings-actions">' +
       '<span class="debt-badge" style="background:' + typeColor + ';color:var(--on-fill);">' + (d.type === 'in' ? 'OWED' : 'OWE') + '</span>' +
       (settled ? '<button class="btn btn-sm btn-danger" onclick="BlackBook.toggleDebtPayment(\x27' + d.id + '\x27)" title="Unpay last payment">UNPAY</button>' : '<button class="btn btn-sm btn-primary" onclick="BlackBook.openDebtPayModal(\x27' + d.id + '\x27)">+ PAY</button>') +
@@ -209,12 +270,15 @@ Object.assign(window.BlackBook, {
   openNewDebt() {
     document.getElementById('debt-id').value = '';
     document.getElementById('debt-person').value = '';
+    this.populateDebtPersonOptions();
     this._setDebtDir('in');
     document.getElementById('debt-amount').value = '';
     document.getElementById('debt-currency').value = this.baseCurrency();
     document.getElementById('debt-date').value = this.fmtDateInput(this.today());
     document.getElementById('debt-paid-date').value = '';
     document.getElementById('debt-note').value = '';
+    document.getElementById('debt-account-field').hidden = false;
+    this.populateDebtAccountOptions();
     const catInput = document.getElementById('debt-category-input');
     const catHidden = document.getElementById('debt-category');
     if (catInput && catHidden) {
@@ -234,12 +298,15 @@ Object.assign(window.BlackBook, {
     const d = this.data.debts.find(x => x.id === id);
     if (!d) return;
     document.getElementById('debt-id').value = d.id;
-    document.getElementById('debt-person').value = d.person;
+    this.populateDebtPersonOptions();
+    const linkedPerson = (this.data.people || []).find(person => person.id === d.personId) || this.debtPersonForName(d.person);
+    document.getElementById('debt-person').value = linkedPerson ? linkedPerson.name : d.person;
     this._setDebtDir(d.type || 'in');
     document.getElementById('debt-amount').value = d.amount;
     document.getElementById('debt-currency').value = d.currency || this.baseCurrency() || 'RSD';
     document.getElementById('debt-date').value = this.fmtDateInput(d.date || '');
     document.getElementById('debt-paid-date').value = this.fmtDateInput(d.paidDate || '');
+    document.getElementById('debt-account-field').hidden = true;
         document.getElementById('debt-note').value = d.note || '';
     const catInput = document.getElementById('debt-category-input');
     const catHidden = document.getElementById('debt-category');
@@ -261,19 +328,23 @@ Object.assign(window.BlackBook, {
     f.addEventListener('submit', async (e) => {
       e.preventDefault();
       const id = document.getElementById('debt-id').value;
-      const person = document.getElementById('debt-person').value.trim();
+      const enteredPerson = document.getElementById('debt-person').value.trim();
+      const linkedPerson = this.debtPersonForName(enteredPerson);
+      const person = linkedPerson ? linkedPerson.name : enteredPerson;
       if (!person) return;
       const parseNum = (v) => { const n = this.evalAmount(v); return isNaN(n) ? 0 : n; };
       const amount = parseNum(document.getElementById('debt-amount').value);
       if (!(amount > 0)) { alert('Enter a valid amount.'); return; }
       const original = id ? this.data.debts.find(item => item.id === id) : null;
+      const accountId = id ? '' : document.getElementById('debt-account').value;
+      if (!id && !accountId) { this.showToast('Select an account for the debt transaction.'); return; }
       let amountPaid = original ? original.amountPaid || 0 : 0;
       if (amountPaid > amount) amountPaid = amount;
       const debtDate = this.parseDateInput(document.getElementById('debt-date').value) || this.today();
       const paidDateText = document.getElementById('debt-paid-date').value.trim();
       const paidDate = this.parseDateInput(paidDateText);
       if (paidDateText && !paidDate) { this.showToast('Enter a valid paid date (' + this.dateFormatPattern() + ').'); return; }
-      const data = { person: person, type: document.getElementById('debt-type').value, amount: amount, currency: document.getElementById('debt-currency').value, date: debtDate, paidDate: paidDate || '', amountPaid: amountPaid, note: document.getElementById('debt-note').value.trim(), categoryId: document.getElementById('debt-category').value || null };
+      const data = { person: person, personId: linkedPerson ? linkedPerson.id : null, type: document.getElementById('debt-type').value, amount: amount, currency: document.getElementById('debt-currency').value, date: debtDate, paidDate: paidDate || '', amountPaid: amountPaid, note: document.getElementById('debt-note').value.trim(), categoryId: document.getElementById('debt-category').value || null };
       if (!this.categorySelectionAllowed(data.categoryId, debtDate, original && original.categoryId)) { alert('That category was archived for this date. Choose another category.'); return; }
       if (!this.data.debts) this.data.debts = [];
       if (id) {
@@ -288,11 +359,17 @@ Object.assign(window.BlackBook, {
             const summed = payTx.reduce((s, t) => s + Math.abs(t.amount), 0);
             data.amountPaid = Math.min(Math.abs(data.amount || 0), summed);
           }
+          const previousPersonId = d.personId || '';
           Object.assign(d, data);
+          this.updateDebtTransactionPeople(d, previousPersonId);
         }
       } else {
         data.id = 'debt-' + Date.now();
         this.data.debts.push(data);
+        if (!this.data.transactions) this.data.transactions = [];
+        const transactionId = 'tx-debt-' + Date.now() + '-' + Math.floor(Math.random() * 10000);
+        data.openingTransactionId = transactionId;
+        this.data.transactions.unshift(this.debtOpeningTransaction(data, accountId, transactionId));
       }
       await this.save({ undoable: true, label: id ? 'Edit debt' : 'Add debt' });
       this.closeModal('debt-modal');
@@ -347,6 +424,7 @@ Object.assign(window.BlackBook, {
       accountId: this.data.settings.defaultAccountId || null,
       categoryId: this.debtCategory() ? this.debtCategory().id : null,
       note: 'Debt payment: ' + d.person,
+      personIds: d.personId ? [d.personId] : [],
       debtId: d.id
     };
     this.data.transactions.push(tx);

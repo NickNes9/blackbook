@@ -271,7 +271,7 @@
       <form id="debt-form">
         <input type="hidden" id="debt-id">
         <div class="form-row-2col">
-          <div class="form-group"><label>Person</label><input type="text" id="debt-person" class="input" required placeholder="Name"></div>
+          <div class="form-group"><label>Person</label><input type="text" id="debt-person" class="input" required list="debt-person-options" placeholder="Name or @person" autocomplete="off"><datalist id="debt-person-options"></datalist></div>
           <div class="form-group"><label>Direction</label><button type="button" id="debt-dir-toggle" class="debt-dir-toggle" data-dir="in" onclick="BlackBook.toggleDebtDir()">THEY OWE ME</button><input type="hidden" id="debt-type" value="in"></div>
         </div>
         <div class="form-row-2col">
@@ -282,6 +282,7 @@
           <div class="form-group"><label>Date</label><input type="text" inputmode="numeric" id="debt-date" class="input" placeholder="DD/MM/YYYY" required autocomplete="off"></div>
           <div class="form-group"><label>Paid Date</label><input type="text" inputmode="numeric" id="debt-paid-date" class="input" placeholder="DD/MM/YYYY" autocomplete="off"></div>
         </div>
+        <div class="form-group" id="debt-account-field"><label>Account for transaction</label><select id="debt-account" class="input" required><option value="">— SELECT ACCOUNT —</option></select></div>
         <div class="form-group"><label>Category</label>
 <div class="category-autocomplete" id="debt-category-autocomplete">
   <input type="text" id="debt-category-input" class="input cat-pick-input" placeholder="CATEGORY..." autocomplete="off">
@@ -583,6 +584,8 @@
       </div>
       <form id="csv-import-form">
         <div id="csv-preview"></div>
+        <p id="csv-import-native-note" class="form-hint hidden"></p>
+        <div id="csv-import-column-options">
         <div class="form-row-2col">
           <div class="form-group"><label>Date Column</label><select id="csv-col-date" class="input"></select></div>
           <div class="form-group"><label>Amount Column</label><select id="csv-col-amount" class="input"></select></div>
@@ -602,6 +605,7 @@
         <div class="form-row-2col">
           <div class="form-group"><label>Category Column</label><select id="csv-col-category" class="input"></select></div>
           <div class="form-group"><label>&nbsp;</label><label style="display:flex;align-items:center;gap:8px;font-size:13px;"><input type="checkbox" id="csv-skip-header"> First row is a header</label></div>
+        </div>
         </div>
         <div class="form-actions">
           <button type="button" class="btn btn-secondary" onclick="BlackBook.closeModal('csv-import-modal')">Cancel</button>

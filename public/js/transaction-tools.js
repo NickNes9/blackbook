@@ -92,7 +92,7 @@
       const actionSelect = modal.querySelector('#replace-mode');
       if (!modal.querySelector('#replace-custom')) {
         const custom = document.createElement('button');
-        custom.type = 'button'; custom.id = 'replace-custom'; custom.className = 'btn btn-secondary'; custom.textContent = 'CUSTOM';
+        custom.type = 'button'; custom.id = 'replace-custom'; custom.className = 'btn btn-secondary'; custom.textContent = 'FILTER';
         custom.title = 'Use these search filters on Overview';
         modal.querySelector('#replace-preview').before(custom);
       }
@@ -225,6 +225,19 @@
       this._overviewCustomFilter = {profile:this.profile,filter};
       clearTimeout(this._replaceLiveTimer);
       this.closeModal('find-replace-modal');
+      this.navigateTo('overview');
+      this.renderPage('overview');
+    },
+    applyCommandSearchFilter(query) {
+      const find = String(query || '').trim();
+      if (!find) return;
+      this.selectedAccount = null;
+      this._ovInc = false; this._ovExp = false;
+      this.selectedCategories = null;
+      this._bulkOnly = false; this._bulkSel = new Set();
+      this._linkedTransactionFocusId = null;
+      this._overviewCustomFilter = { profile:this.profile, filter:{find} };
+      this.closeCommandPalette();
       this.navigateTo('overview');
       this.renderPage('overview');
     },

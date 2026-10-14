@@ -376,10 +376,17 @@ CSV:
   date, type, amount (+ sign detection), currency, account, card,
   category, note. Date formats are normalized; you can also hide the
   import summary preview if wanted.
+- Import a Black Book CSV export directly: the app recognizes its headers
+  and restores account/card assignments, transfers, secondary currency values,
+  categories, descriptions, and people tags. Missing accounts or cards are
+  reported as skipped rows; duplicate rows are flagged before import.
 - Import rules: auto-assign a category when the description matches
   ("IF DESCRIPTION HAS 'x' -> category").
-- Export the current profile to CSV or JSON (also from the command
-  palette).
+- Export the profile to JSON, or all matching transactions to CSV (also from
+  the command palette). CSV export filters mirror Find & Replace:
+  description (partial or whole-word), account, category, type, person, and
+  inclusive date range. Account, category, and person can be excluded; empty
+  filters match everything. A live count previews the export size.
 - Import a JSON profile after reviewing its account/category/transaction
   counts and confirming replacement; the current profile is preserved in
   its BACKUPS folder before the import is written.

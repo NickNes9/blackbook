@@ -41,6 +41,25 @@ test('financial deltas undo and redo linked transaction and payment edits while 
   equalData(current.bills, after.bills);
 });
 
+test('reconciliation adjustment and its record undo and redo together', () => {
+  const UndoHistory = historyClass();
+  const history = new UndoHistory();
+  const before = { transactions: [], reconciliations: [] };
+  const after = {
+    transactions: [{ id: 'reconcile-tx', amount: 25, type: 'income' }],
+    reconciliations: [{ id: 'reconcile-1', adjustmentTransactionId: 'reconcile-tx', difference: 25 }]
+  };
+  const delta = history.diff(history.snapshot(before), history.snapshot(after));
+  const current = structuredClone(after);
+
+  history.apply(current, delta, 'undo');
+  equalData(current.transactions, before.transactions);
+  equalData(current.reconciliations, before.reconciliations);
+  history.apply(current, delta, 'redo');
+  equalData(current.transactions, after.transactions);
+  equalData(current.reconciliations, after.reconciliations);
+});
+
 test('account reordering is undoable without recording unrelated shifted rows', () => {
   const UndoHistory = historyClass();
   const history = new UndoHistory();
@@ -174,7 +193,7 @@ test('footer shortcut set follows the active page, selection, and undo/redo avai
   app._undoReady = true;
   app.currentPage = 'overview';
   let actions = app.footerHotkeys().map(item => item.key);
-  assert.equal(actions.join('|'), 'A|T|D|H|TAB|← →|1–9 / 0|Space');
+  assert.equal(actions.join('|'), 'A|T|D|H|TAB|← →|0–9|Space');
 
   app._bulkSel.add('tx-1');
   actions = app.footerHotkeys().map(item => item.key);

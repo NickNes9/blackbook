@@ -170,9 +170,17 @@ this.connectWebSocket();
         }
         if (e.key === 'Enter') {
           e.preventDefault();
-          if (!this._cmdPaletteItems.length) return;
-          const pick = this._cmdPaletteIndex >= 0 ? this._cmdPaletteIndex : 0;
-          if (this._cmdPaletteItems[pick]) this._cmdPaletteItems[pick].execute();
+          if (this._cmdPaletteIndex >= 0) {
+            if (this._cmdPaletteItems[this._cmdPaletteIndex]) this._cmdPaletteItems[this._cmdPaletteIndex].execute();
+            return;
+          }
+          if (this._cmdPaletteEnterAction && this._cmdPaletteItems.length) {
+            this._cmdPaletteItems[0].execute();
+            return;
+          }
+          const query = cmdInput.value.trim();
+          if (query) this.applyCommandSearchFilter(query);
+          else if (this._cmdPaletteItems.length) this._cmdPaletteItems[0].execute();
         }
       });
     }
@@ -667,7 +675,7 @@ this.connectWebSocket();
       const hovered = !!(this._footerHoveredTxId || this.hoveredTransactionId());
       if (selected === 1 || (!selected && hovered)) add('C', 'COPY TRANSACTION');
       if (selected || hovered) add('E', selected ? 'EDIT SELECTED' : 'EDIT');
-      if (selected >= 2) add('M', 'MERGE SELECTED');
+      if (selected >= 2) add('M', 'MERGE');
       if (selected) add('B', 'FILTER SELECTED');
       if (selected || hovered) add('DEL', selected ? 'DELETE SELECTED' : 'DELETE');
     }
@@ -1488,6 +1496,7 @@ this.connectWebSocket();
     const results = document.getElementById('command-results');
     this._cmdPaletteItems = [];
     this._cmdPaletteIndex = -1;
+    this._cmdPaletteEnterAction = !query.trim();
 
     if (!query) {
       let html = '<div class="command-section"><div style="padding:4px 12px;font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text-muted);">ACTIONS</div>';
@@ -1532,6 +1541,7 @@ this.connectWebSocket();
     const lq0 = query.trim().toLowerCase();
     const kw = lq0.split(/\s+/)[0];
     if (kw === 'csv' || kw === 'json' || kw === 'profiles') {
+      this._cmdPaletteEnterAction = true;
       const actionsMap = {
         csv: ['Export transactions as CSV', () => this.exportCsv()],
         json: ['Export full backup JSON', () => { const blob = new Blob([JSON.stringify(this.data, null, 2)], { type: 'application/json' }); const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'blackbook-backup-' + this.today() + '.json'; a.click(); }],
@@ -1552,6 +1562,7 @@ this.connectWebSocket();
 
     try {
       const parsedT = this.parseTransferCommand(query);
+      this._cmdPaletteEnterAction = true;
       results.innerHTML = '<div class="command-section"><div style="padding:4px 12px;font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text-muted);">COMMAND</div>' +
         this._paletteItemHtml(parsedT.label, 'Enter') + '</div>';
       this._cmdPaletteItems.push({ execute: parsedT.execute });
@@ -1560,6 +1571,7 @@ this.connectWebSocket();
 
     try {
       const parsedB = this.parseBillPayCommand(query);
+      this._cmdPaletteEnterAction = true;
       results.innerHTML = '<div class="command-section">' + this._paletteItemHtml(parsedB.label, 'Enter') + '</div>';
       this._cmdPaletteItems.push({ execute: parsedB.execute });
       return;
@@ -1567,6 +1579,7 @@ this.connectWebSocket();
 
     try {
       const parsedBg = this.parseBudgetCommand(query);
+      this._cmdPaletteEnterAction = true;
       results.innerHTML = '<div class="command-section">' + this._paletteItemHtml(parsedBg.label, 'Enter') + '</div>';
       this._cmdPaletteItems.push({ execute: parsedBg.execute });
       return;
@@ -1574,6 +1587,7 @@ this.connectWebSocket();
 
     try {
       const parsedS = this.parseSavingsMoveCommand(query);
+      this._cmdPaletteEnterAction = true;
       results.innerHTML = '<div class="command-section">' + this._paletteItemHtml(parsedS.label, 'Enter') + '</div>';
       this._cmdPaletteItems.push({ execute: parsedS.execute });
       return;
@@ -1581,6 +1595,7 @@ this.connectWebSocket();
 
     try {
       const parsed = this.parseCommand(query);
+      this._cmdPaletteEnterAction = true;
       const typeLabel = parsed.type === 'expense' ? 'Expense' : 'Income';
       const detail = typeLabel + ': ' + Math.abs(parsed.amount) + ' ' + this.baseCurrency() + (parsed.category ? ' / ' + parsed.category.name : '') + (parsed.date ? ' / ' + parsed.date : '') + (parsed.note ? ' / ' + parsed.note : '');
       let cmdHtml = '<div class="command-section"><div style="padding:4px 12px;font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text-muted);">COMMAND</div>';

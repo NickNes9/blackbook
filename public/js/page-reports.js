@@ -72,7 +72,7 @@
         picker.classList.add('reports-compare-picker');
         picker.append(root.querySelector('.reports-range-controls'), root.querySelector('.reports-metric-control'));
         root.querySelector('.reports-compare-options').remove();
-        if (this.reportsCompareSettings().range > 1) root.querySelectorAll('.reports-history tbody tr').forEach(row => {
+        if (this.reportsCompareSettings().range !== 1) root.querySelectorAll('.reports-history tbody tr').forEach(row => {
           const yearCell = row.querySelector('td');
           const year = Number(yearCell.textContent);
           yearCell.style.color = year === state.year ? this.reportsColor('--accent') : this.colorForName(String(year));
@@ -191,6 +191,21 @@
       }).join('') + (spend.length ? '' : '<div class="reports-empty">No expenses in this selection.</div>') + '</div>') + '</section>';
     },
 
+    reportsCategoryStatsHtml(rows, category, year) {
+      const info = totals(rows);
+      const activeMonths = new Set(rows.map(row => Number(row.date.slice(5, 7)))).size;
+      const averagePerTransaction = info.count ? (info.income + info.expenses) / info.count : 0;
+      const stats = [
+        ['Transactions', String(info.count)],
+        ['Active months', String(activeMonths)],
+        ['Income', this.reportsMoney(info.income), 'positive'],
+        ['Expenses', this.reportsMoney(-info.expenses), 'negative'],
+        ['Net', this.reportsMoney(info.net), info.net < 0 ? 'negative' : 'positive'],
+        ['Average / transaction', this.reportsMoney(averagePerTransaction)]
+      ];
+      return '<section class="reports-side-panel reports-category-stats-panel"><div class="reports-panel-heading"><h3 class="reports-section-title">Category stats</h3><span class="reports-panel-note">' + this.escapeHtml(category + ' · ' + year) + '</span></div><div class="reports-category-stats" aria-label="' + this.escapeHtml(category + ' statistics for ' + year) + '">' + stats.map(([label, value, color]) => '<div class="reports-category-stat"><span class="reports-category-stat-label">' + this.escapeHtml(label) + '</span><span class="reports-category-stat-value' + (color ? ' amount-' + color : '') + '">' + this.escapeHtml(value) + '</span></div>').join('') + '</div></section>';
+    },
+
     bindReportsChartPopups(root) {
       root.querySelectorAll('[data-report-hover]').forEach(target => {
         if (target.dataset.reportHoverBound) return;
@@ -230,7 +245,7 @@
         }
         segments.splice(0, segments.length, ...distributedSegments);
         const width = Math.max(1, Math.round(host.clientWidth)), height = Math.max(1, Math.round(host.clientHeight));
-        const displayFractions = this.donutDisplayValues(segments.map(item => item.amount), 4);
+        const displayFractions = this.donutDisplayValues(segments.map(item => Math.sqrt(item.amount)), 4);
         let rotation = -Math.PI / 2, bestScore = Infinity;
         for (let candidate = 0; candidate < Math.PI * 2; candidate += Math.PI / 360) {
           let left = 0, right = 0, angle = candidate;
@@ -310,9 +325,12 @@
       const expenses = MONTHS.map((_, month) => -totals(rows.filter(row => Number(row.date.slice(5, 7)) === month + 1)).expenses);
       const peak = expenses.indexOf(Math.min(...expenses));
       const category = nameOf(this.reportsCatalog().categories, state.category, state.category === 'none' ? 'Uncategorized' : 'All expenses');
+      const categoryPanel = state.category === 'all'
+        ? this.reportsBreakdownHtml(rows, 'Category share', this.reportsRows(), true)
+        : this.reportsCategoryStatsHtml(rows, category, state.year);
       return {
         summary: this.reportsSummaryHtml([['Year expenses', this.reportsMoney(info.expenses), 'negative'], ['Monthly average', this.reportsMoney(info.expenses / 12)], ['Transactions', String(info.count)]]),
-        html: '<div class="reports-grid">' + this.reportsChartHtml('Income vs expenses', category + ' · ' + state.year + ' · ' + this.baseCurrency()) + this.reportsBreakdownHtml(rows, 'Category share', this.reportsRows(), true) + '</div><section class="reports-history"><h3 class="reports-section-title">Monthly breakdown</h3>' + this.reportsTableHtml(['Month', 'Income', 'Expenses', 'Net', 'Change', 'Transactions'], MONTHS.map((month, index) => {
+        html: '<div class="reports-grid">' + this.reportsChartHtml('Income vs expenses', category + ' · ' + state.year + ' · ' + this.baseCurrency()) + categoryPanel + '</div><section class="reports-history"><h3 class="reports-section-title">Monthly breakdown</h3>' + this.reportsTableHtml(['Month', 'Income', 'Expenses', 'Net', 'Change', 'Transactions'], MONTHS.map((month, index) => {
           const monthly = totals(rows.filter(row => Number(row.date.slice(5, 7)) === index + 1));
           const previous = totals(this.reportsMonthRows(index ? state.year : state.year - 1, index ? index - 1 : 11).filter(row => state.category === 'all' || (row.categoryId || 'none') === state.category));
           const change = monthly.count ? monthly.net - previous.net : 0;
@@ -328,6 +346,14 @@
       return state.compare;
     },
 
+    reportsCompareStartYear() {
+      const state = this.reportsState(), range = this.reportsCompareSettings().range;
+      if (range !== 'lifetime') return state.year - Number(range) + 1;
+      const selected = this.reportsSelectedAccounts();
+      const years = (this.data.transactions || []).filter(tx => selected.has(tx.accountId) && !this.isTransfer(tx) && /^\d{4}-/.test(tx.date || '') && Number(tx.date.slice(0, 4)) <= state.year).map(tx => Number(tx.date.slice(0, 4)));
+      return years.length ? Math.min(...years) : state.year;
+    },
+
     reportsYearPicker() {
       const state = this.reportsState();
       return '<div class="month-picker"><span class="mp-year"><button class="mp-year-btn" onclick="BlackBook.changeReportsCalendar(\'period\',' + (state.year - 1) + ',' + state.month + ')">◀</button><span class="mp-year-label">' + state.year + '</span><button class="mp-year-btn" onclick="BlackBook.changeReportsCalendar(\'period\',' + (state.year + 1) + ',' + state.month + ')">▶</button></span><button class="mp-today" onclick="BlackBook.reportsToday()">TODAY</button></div>';
@@ -336,7 +362,7 @@
     reportsCompareCategories() {
       const state = this.reportsState(), settings = this.reportsCompareSettings();
       const ids = new Set();
-      for (let y = state.year - settings.range + 1; y <= state.year; y++) {
+      for (let y = this.reportsCompareStartYear(); y <= state.year; y++) {
         this.reportsRows(y).forEach(row => {
           if (settings.metric === 'net' || (settings.metric === 'income' ? row.amount > 0 : row.amount < 0)) ids.add(row.categoryId || 'none');
         });
@@ -346,7 +372,8 @@
 
     reportsCompareControls() {
       const settings = this.reportsCompareSettings(), e = value => this.escapeHtml(String(value));
-      return '<div class="reports-compare-options"><div class="reports-account-filters reports-range-controls" role="group" aria-label="Comparison range">' + [1,3,5,10].map(range => '<button class="btn page-control ' + (range === settings.range ? 'btn-primary' : 'btn-secondary') + '" onclick="BlackBook.setReportsCompare(\'range\',' + range + ')">' + range + 'Y</button>').join('') + '</div><button class="btn btn-secondary page-control reports-metric-control" style="width:110px" onclick="BlackBook.cycleReportsCompareMetric()">' + settings.metric.toUpperCase() + '</button></div><div class="reports-chip-field"><div class="reports-account-filters" role="group" aria-label="Comparison categories"><button type="button" class="cat-filter-chip page-control" style="background:var(--accent);color:var(--on-fill)" aria-pressed="' + (settings.categoryIds == null || this.reportsCompareCategories().every(category => settings.categoryIds.includes(category.id))) + '" onclick="BlackBook.setReportsCompare(\'all\')">ALL</button>' + this.reportsCompareCategories().map(category => {
+      const ranges = [[1, '1Y'], [3, '3Y'], [5, '5Y'], [10, '10Y'], ['lifetime', 'LIFETIME']];
+      return '<div class="reports-compare-options"><div class="reports-account-filters reports-range-controls" role="group" aria-label="Comparison range">' + ranges.map(([range, label]) => '<button class="btn page-control ' + (range === settings.range ? 'btn-primary' : 'btn-secondary') + '" onclick="BlackBook.setReportsCompare(\'range\',\'' + range + '\')">' + label + '</button>').join('') + '</div><button class="btn btn-secondary page-control reports-metric-control" style="width:110px" onclick="BlackBook.cycleReportsCompareMetric()">' + settings.metric.toUpperCase() + '</button></div><div class="reports-chip-field"><div class="reports-account-filters" role="group" aria-label="Comparison categories"><button type="button" class="cat-filter-chip page-control" style="background:var(--accent);color:var(--on-fill)" aria-pressed="' + (settings.categoryIds == null || this.reportsCompareCategories().every(category => settings.categoryIds.includes(category.id))) + '" onclick="BlackBook.setReportsCompare(\'all\')">ALL</button>' + this.reportsCompareCategories().map(category => {
         const active = settings.categoryIds == null || settings.categoryIds.includes(category.id);
         return '<button class="cat-filter-chip page-control' + (active ? ' selected' : '') + '" style="--cc:' + this.categoryColor(category) + ';background:' + (active ? 'var(--cc);color:var(--on-fill)' : 'var(--block);color:var(--cc)') + '" aria-pressed="' + active + '" onclick="BlackBook.toggleReportsCompareCategory(\'' + e(category.id) + '\',event)">' + e(category.name) + '</button>';
       }).join('') + '</div></div>';
@@ -354,7 +381,7 @@
 
     setReportsCompare(name, value) {
       if (name === 'all') this.reportsCompareSettings().categoryIds = null;
-      if (name === 'range' && [1,3,5,10].includes(value)) this.reportsCompareSettings().range = value;
+      if (name === 'range' && ([1,3,5,10].includes(Number(value)) || value === 'lifetime')) this.reportsCompareSettings().range = value === 'lifetime' ? value : Number(value);
       this.renderPage('reports');
     },
     cycleReportsCompareMetric() {
@@ -373,7 +400,8 @@
       const state = this.reportsState(), settings = this.reportsCompareSettings();
       const matches = row => settings.categoryIds == null || settings.categoryIds.includes(row.categoryId || 'none');
       const metric = rows => { const values = totals(rows); return settings.metric === 'expenses' ? -values.expenses : settings.metric === 'income' ? values.income : values.net; };
-      const years = Array.from({ length: settings.range }, (_, index) => state.year - settings.range + 1 + index);
+      const startYear = this.reportsCompareStartYear();
+      const years = Array.from({ length: Math.max(1, state.year - startYear + 1) }, (_, index) => startYear + index);
       const data = years.map(year => {
         const rows = this.reportsRows(year).filter(matches);
         return { year, rows, total: metric(rows), monthly: MONTHS.map((_, month) => {
@@ -385,18 +413,22 @@
       const line = (label, values, color, extra = {}) => ({ label, data: values, borderColor: color, tension: .3, cubicInterpolationMode: 'monotone', ...extra });
       let datasets;
       if (settings.range === 1) datasets = this.reportsCompareCategories().filter(category => settings.categoryIds == null || settings.categoryIds.includes(category.id)).map(category => line(category.name, data[0].monthly.map((value, month) => value == null ? null : metric(data[0].rows.filter(row => (row.categoryId || 'none') === category.id && Number(row.date.slice(5,7)) === month + 1))), this.categoryColor(category)));
-      else if (settings.range < 10) datasets = data.map((year, index) => line(String(year.year), year.monthly, index === data.length - 1 ? this.reportsColor('--accent') : this.colorForName(String(year.year)), { borderWidth: index === data.length - 1 ? 3 : 1.5 }));
+      else if (settings.range !== 10 && settings.range !== 'lifetime') datasets = data.map((year, index) => line(String(year.year), year.monthly, index === data.length - 1 ? this.reportsColor('--accent') : this.colorForName(String(year.year)), { borderWidth: index === data.length - 1 ? 3 : 1.5 }));
       else {
         const history = data.slice(0,-1);
         const values = month => history.map(year => year.monthly[month]).filter(value => value != null);
-        datasets = [
-          line('Historical minimum', MONTHS.map((_, m) => Math.min(...values(m))), this.reportsColor('--text-muted'), { pointRadius: 0, borderWidth: 0 }),
-          line('Historical maximum', MONTHS.map((_, m) => Math.max(...values(m))), this.reportsColor('--text-muted'), { pointRadius: 0, borderWidth: 0, fill: '-1', backgroundColor: this.hexToRgba(this.reportsColor('--text-dim'), .15) }),
-          line('Historical average', MONTHS.map((_, m) => values(m).reduce((sum,value) => sum + value, 0) / values(m).length), '#7bb4cc', { borderDash: [5,4] }),
+        const averageLabel = settings.range === 'lifetime' ? 'Lifetime average' : 'Historical average';
+        datasets = history.length ? [
+          line(settings.range === 'lifetime' ? 'Lifetime minimum' : 'Historical minimum', MONTHS.map((_, m) => values(m).length ? Math.min(...values(m)) : null), this.reportsColor('--text-muted'), { pointRadius: 0, borderWidth: 0 }),
+          line(settings.range === 'lifetime' ? 'Lifetime maximum' : 'Historical maximum', MONTHS.map((_, m) => values(m).length ? Math.max(...values(m)) : null), this.reportsColor('--text-muted'), { pointRadius: 0, borderWidth: 0, fill: '-1', backgroundColor: this.hexToRgba(this.reportsColor('--text-dim'), .15) }),
+          line(averageLabel, MONTHS.map((_, m) => values(m).length ? values(m).reduce((sum,value) => sum + value, 0) / values(m).length : null), '#7bb4cc', { borderDash: [5,4] }),
           line(String(state.year), data[data.length - 1].monthly, this.reportsColor('--accent'), { borderWidth: 3 })
-        ];
+        ] : [line(String(state.year), data[data.length - 1].monthly, this.reportsColor('--accent'), { borderWidth: 3 })];
       }
       const current = data[data.length - 1];
+      const comparedRows = data.flatMap(year => year.rows);
+      const comparedTotal = metric(comparedRows);
+      const comparedColor = settings.metric === 'expenses' ? 'negative' : settings.metric === 'income' ? 'positive' : comparedTotal < 0 ? 'negative' : 'positive';
       const barMode = settings.chart === 'bars';
       const barCategories = this.reportsCompareCategories().filter(category => settings.categoryIds == null || settings.categoryIds.includes(category.id));
       let barDatasets;
@@ -422,8 +454,9 @@
           const good = difference > 0;
           return [String(year.year), this.reportsMoney(year.total), difference == null ? 'N/A' : (good ? '↑ ' : difference ? '↓ ' : '') + this.reportsMoney(Math.abs(difference)) + this.reportsChangePercent(difference, data[index - 1].total), year.rows.length];
         }).reverse();
+      const lifetimeAverage = data.length > 1 ? data.slice(0, -1).reduce((value, year) => value + year.total, 0) / (data.length - 1) : null;
       return {
-        summary: this.reportsSummaryHtml([['Selected year', String(state.year)], ['Years compared', String(settings.range)], [settings.metric, this.reportsMoney(current.total)], ['Transactions', String(current.rows.length)]]),
+        summary: this.reportsSummaryHtml([['Selected year', String(state.year)], [settings.range === 'lifetime' ? 'Lifetime avg/year' : 'Years compared', settings.range === 'lifetime' ? (lifetimeAverage == null ? 'N/A' : this.reportsMoney(lifetimeAverage)) : String(settings.range)], [settings.metric, this.reportsMoney(comparedTotal), comparedColor], ['Transactions', String(comparedRows.length)]]),
         html: this.reportsChartHtml(barMode ? 'Category totals by year' : settings.range === 1 ? 'Monthly category comparison' : 'Year comparison', settings.metric.toUpperCase() + ' · ' + this.baseCurrency(), this.reportsChartToggleHtml(barMode ? 'vertical' : 'graph', 'toggleReportsCompareChart', barMode ? 'graph' : 'bars')) + '<section class="reports-history"><h3 class="reports-section-title">' + (settings.range === 1 ? 'Monthly totals · current month is month to date' : 'Yearly totals · current year is year to date') + '</h3>' + this.reportsTableHtml([settings.range === 1 ? 'Month' : 'Year', settings.metric, 'Change', 'Transactions'], historyRows, settings.range === 1 ? 'reports-month-table' : '') + '</section>',
         chart: barMode ? { type: 'bar', labels: settings.range === 1 ? barCategories.map(category => category.name) : data.map(year => String(year.year)), datasets: barDatasets, reverseY: settings.metric === 'expenses' } : { type: 'line', labels: MONTHS, datasets }
       };

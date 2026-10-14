@@ -337,6 +337,20 @@ Object.assign(window.BlackBook, {
   openCsvImportModal(textOrRows) {
     this._csvRows = Array.isArray(textOrRows) ? textOrRows : this.parseCsvText(textOrRows);
     if (!this._csvRows.length) { alert('No rows found in CSV.'); return; }
+    const headerIndexes = new Map(this._csvRows[0].map((value, index) => [String(value || '').replace(/^\uFEFF/, '').trim().toLowerCase(), index]));
+    const nativeHeaders = ['date', 'type', 'amount', 'currency', 'account', 'card', 'category', 'note'];
+    this._csvBlackBookExport = nativeHeaders.every(header => headerIndexes.has(header))
+      ? Object.fromEntries([...headerIndexes.entries()].map(([header, index]) => [header, index]))
+      : null;
+    const nativeNote = document.getElementById('csv-import-native-note');
+    const columnOptions = document.getElementById('csv-import-column-options');
+    if (nativeNote) {
+      nativeNote.hidden = !this._csvBlackBookExport;
+      nativeNote.textContent = this._csvBlackBookExport
+        ? 'Black Book export detected. Accounts, cards, categories, transfers, secondary currency amounts, and people tags will be matched automatically; account/card names missing from this profile are skipped.'
+        : '';
+    }
+    if (columnOptions) columnOptions.hidden = !!this._csvBlackBookExport;
     const maxCols = Math.max(...this._csvRows.slice(0, 20).map(r => r.length));
     const colOpts = Array.from({ length: maxCols }, (_, i) => '<option value="' + i + '">COL ' + (i + 1) + (this._csvRows[0][i] ? ' (' + this.escapeHtml(String(this._csvRows[0][i]).slice(0, 18)) + ')' : '') + '</option>').join('');
     document.getElementById('csv-col-date').innerHTML = colOpts;
@@ -377,6 +391,7 @@ Object.assign(window.BlackBook, {
 
   async doCsvImport() {
     const rows = this._csvRows || [];
+    if (this._csvBlackBookExport) { await this.doBlackBookCsvImport(); return; }
     const g = (r, sel) => { const i = parseInt(sel, 10); return (sel !== '-' && !isNaN(i) && i >= 0 && i < r.length) ? String(r[i]).trim() : ''; };
     const dateCol = document.getElementById('csv-col-date').value;
     const amtCol = document.getElementById('csv-col-amount').value;
@@ -455,6 +470,118 @@ Object.assign(window.BlackBook, {
     alert('Imported ' + imported + ' transaction' + (imported === 1 ? '' : 's') + (skipped ? ' \u00b7 skipped ' + skipped + ' unparseable row' + (skipped === 1 ? '' : 's') : '') + '.');
   },
 
+  async doBlackBookCsvImport() {
+    const rows = this._csvRows || [];
+    const columns = this._csvBlackBookExport || {};
+    const get = (row, name) => columns[name] == null ? '' : String(row[columns[name]] == null ? '' : row[columns[name]]).trim();
+    const key = value => String(value || '').trim().toLocaleLowerCase();
+    const byName = items => {
+      const map = new Map();
+      for (const item of items || []) if (key(item.name) && !map.has(key(item.name))) map.set(key(item.name), item);
+      return map;
+    };
+    const accounts = byName(this.data.accounts);
+    const cards = byName(this.data.creditCards);
+    const categories = byName(this.data.categories);
+    const people = byName(this.data.people);
+    const newCategories = [];
+    const newPeople = [];
+    const categoryId = name => {
+      if (!name) return null;
+      const normalized = key(name);
+      let item = categories.get(normalized);
+      if (!item) {
+        item = { id: crypto.randomUUID(), name, color: this.nextCategoryColor() };
+        newCategories.push(item);
+        categories.set(normalized, item);
+      }
+      return item.id;
+    };
+    const personIds = names => names.split(';').map(name => name.trim()).filter(Boolean).map(name => {
+      const normalized = key(name);
+      let person = people.get(normalized) || newPeople.find(item => key(item.name) === normalized);
+      if (!person) {
+        person = { id: crypto.randomUUID(), name, color: this.colorForName(name), accountNumber: '', notes: '' };
+        newPeople.push(person);
+      }
+      return person.id;
+    });
+    const staged = [];
+    let skipped = 0, unmapped = 0;
+    for (let i = 1; i < rows.length; i++) {
+      const row = rows[i];
+      const date = this.normalizeCsvDate(get(row, 'date'), 'ymd');
+      const type = key(get(row, 'type'));
+      const amount = this.parseCsvAmount(get(row, 'amount'));
+      if (!date || !Number.isFinite(amount) || !['income', 'expense', 'transfer'].includes(type)) { skipped++; continue; }
+      const currency = get(row, 'currency').toUpperCase() || this.baseCurrency();
+      const note = get(row, 'note');
+      if (type === 'transfer') {
+        const from = accounts.get(key(get(row, 'from_account')));
+        const to = accounts.get(key(get(row, 'to_account')));
+        if (!from || !to || from.id === to.id) { skipped++; unmapped++; continue; }
+        const amountInText = get(row, 'transfer_to_amount');
+        const amountIn = amountInText ? this.parseCsvAmount(amountInText) : Math.abs(amount);
+        if (!Number.isFinite(amountIn)) { skipped++; continue; }
+        const pairId = 'pair-' + crypto.randomUUID();
+        staged.push({
+          id: 'tx-' + pairId, pairId, date, type,
+          amount: Math.abs(amount), currency,
+          amountIn: Math.abs(amountIn), currencyIn: get(row, 'transfer_to_currency').toUpperCase() || currency,
+          fromAccountId: from.id, toAccountId: to.id,
+          categoryId: categoryId(get(row, 'category')), note, personIds: personIds(get(row, 'people'))
+        });
+        continue;
+      }
+      const accountName = get(row, 'account'), cardName = get(row, 'card');
+      const account = accountName ? accounts.get(key(accountName)) : null;
+      const card = cardName ? cards.get(key(cardName)) : null;
+      if ((accountName && !account) || (cardName && !card) || (!accountName && !cardName)) { skipped++; unmapped++; continue; }
+      const secondaryText = get(row, 'secondary_amount');
+      const secondaryAmount = secondaryText ? this.parseCsvAmount(secondaryText) : null;
+      if (secondaryText && !Number.isFinite(secondaryAmount)) { skipped++; continue; }
+      const transaction = {
+        id: crypto.randomUUID(), date, type,
+        amount: Object.is(amount, -0) ? 0 : amount, currency,
+        accountId: card ? null : account.id, cardId: card ? card.id : null,
+        categoryId: categoryId(get(row, 'category')), note, personIds: personIds(get(row, 'people'))
+      };
+      if (secondaryText) {
+        transaction.nativeAmount = Object.is(secondaryAmount, -0) ? 0 : secondaryAmount;
+        transaction.nativeCurrency = get(row, 'secondary_currency').toUpperCase() || currency;
+      }
+      staged.push(transaction);
+    }
+    if (!staged.length) { alert('No valid Black Book transactions found. Check that account and card names in the CSV exist in this profile.'); return; }
+    const existing = this.data.transactions || [];
+    const peopleMatch = (a, b) => JSON.stringify([...(a.personIds || [])].sort()) === JSON.stringify([...(b.personIds || [])].sort());
+    const duplicateCount = staged.filter(candidate => existing.some(tx =>
+      tx.date === candidate.date && tx.type === candidate.type && Number(tx.amount) === Number(candidate.amount) &&
+      (tx.currency || this.baseCurrency()) === (candidate.currency || this.baseCurrency()) &&
+      (tx.accountId || '') === (candidate.accountId || '') && (tx.cardId || '') === (candidate.cardId || '') &&
+      (tx.fromAccountId || '') === (candidate.fromAccountId || '') && (tx.toAccountId || '') === (candidate.toAccountId || '') &&
+      Number(tx.amountIn || 0) === Number(candidate.amountIn || 0) && (tx.currencyIn || '') === (candidate.currencyIn || '') &&
+      Number(tx.nativeAmount || 0) === Number(candidate.nativeAmount || 0) && (tx.nativeCurrency || '') === (candidate.nativeCurrency || '') &&
+      (tx.categoryId || '') === (candidate.categoryId || '') && (tx.note || '') === (candidate.note || '') && peopleMatch(tx, candidate)
+    )).length;
+    const message = staged.length + ' valid Black Book row' + (staged.length === 1 ? '' : 's') + ' ready. ' +
+      (duplicateCount ? duplicateCount + ' exact duplicate' + (duplicateCount === 1 ? ' may' : 's may') + ' already exist. ' : '') +
+      (skipped ? skipped + ' row' + (skipped === 1 ? '' : 's') + ' will be skipped' + (unmapped ? ' because account/card names could not be matched' : '') + '. ' : '') +
+      'Import the matched rows?';
+    const ok = await this.confirmModal({ title: 'Review Black Book import', message, confirmText: 'Import matched', danger: false });
+    if (!ok) return;
+    this.data.categories ||= [];
+    this.data.categories.push(...newCategories);
+    this.data.people ||= [];
+    this.data.people.push(...newPeople);
+    this.data.transactions ||= [];
+    this.data.transactions.push(...staged);
+    await this.save();
+    this.closeModal('csv-import-modal');
+    this.renderPage(this.currentPage);
+    alert('Imported ' + staged.length + ' transaction' + (staged.length === 1 ? '' : 's') + (skipped ? ' · skipped ' + skipped + ' invalid or unmatched row' + (skipped === 1 ? '' : 's') : '') + '.');
+  },
+
   async openImportRule() {
     const category = document.getElementById('import-rule-category');
     if (!category) return;
@@ -470,21 +597,175 @@ Object.assign(window.BlackBook, {
     await this.save(); this.renderSettings();
   },
 
-  exportCsv() {
-    const esc = (v) => '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"';
-    const rows = [['date', 'type', 'amount', 'currency', 'account', 'card', 'category', 'note']];
-    for (const t of this.data.transactions.slice().sort((a, b) => (a.date < b.date ? -1 : 1))) {
-      const acc = this.data.accounts.find(a => a.id === t.accountId);
-      const card = t.cardId ? this.cardById(t.cardId) : null;
-      const cat = this.data.categories.find(c => c.id === t.categoryId);
-      rows.push([t.date, t.type, t.amount, t.currency || this.baseCurrency(), acc ? acc.name : '', card ? card.name : '', cat ? cat.name : '', t.note || '']);
+  exportCsv() { this.openCsvExport(); },
+
+  openCsvExport() {
+    let modal = document.getElementById('csv-export-modal');
+    if (!modal) {
+      modal = document.createElement('div');
+      modal.id = 'csv-export-modal';
+      modal.className = 'modal hidden';
+      modal.setAttribute('role', 'dialog');
+      modal.setAttribute('aria-modal', 'true');
+      modal.setAttribute('aria-labelledby', 'csv-export-title');
+      modal.innerHTML = '<div class="modal-backdrop" onclick="BlackBook.closeModal(\'csv-export-modal\')"></div><div class="modal-content wide"><div class="modal-header"><h2 id="csv-export-title">Export transactions</h2><button type="button" class="modal-close" aria-label="Close" onclick="BlackBook.closeModal(\'csv-export-modal\')">&times;</button></div><form id="csv-export-form"><div class="csv-export-grid"><label class="form-group csv-export-wide">Description contains<input id="csv-export-description" class="input" type="text" placeholder="Search transaction descriptions"></label><label class="form-group">Account<select id="csv-export-account" class="input"></select></label><label class="form-group">Category<select id="csv-export-category" class="input"></select></label><label class="form-group">Type<select id="csv-export-type" class="input"></select></label><label class="form-group">From date<input id="csv-export-from" class="input" type="text" data-date-input placeholder="' + this.escapeHtml(this.dateFormatPattern()) + '"></label><label class="form-group">Through date<input id="csv-export-to" class="input" type="text" data-date-input placeholder="' + this.escapeHtml(this.dateFormatPattern()) + '"></label><label class="form-group">Person<select id="csv-export-person" class="input"></select></label></div><p class="form-hint">Filters combine together, just like Find &amp; Replace. Leave a filter open to include everything; “Through date” is inclusive.</p><p id="csv-export-count" class="form-hint" role="status" aria-live="polite"></p><div class="form-actions"><button type="button" class="btn btn-secondary" onclick="BlackBook.closeModal(\'csv-export-modal\')">Cancel</button><button type="submit" class="btn btn-primary">Export CSV</button></div></form></div>';
+      document.body.appendChild(modal);
+      const form = modal.querySelector('#csv-export-form');
+      form.addEventListener('submit', event => { event.preventDefault(); this.downloadCsv(); });
+      modal.querySelectorAll('#csv-export-from,#csv-export-to,#csv-export-account,#csv-export-type,#csv-export-category,#csv-export-person,#csv-export-description').forEach(input => {
+        input.addEventListener('input', () => this.updateCsvExportCount());
+        input.addEventListener('change', () => this.updateCsvExportCount());
+      });
     }
-    const csv = rows.map(r => r.map(esc).join(',')).join('\r\n');
+    this._csvExportNegated = { account: false, category: false, person: false };
+    this._csvExportWholeWord = false;
+    const account = modal.querySelector('#csv-export-account');
+    const accountOptions = ['<option value="">Entire profile · all accounts</option>']
+      .concat((this.data.accounts || []).map(item => '<option value="' + this.escapeHtml(item.id) + '">' + this.escapeHtml(item.name || 'Account') + '</option>'))
+      .concat((this.data.creditCards || []).map(item => '<option value="card:' + this.escapeHtml(item.id) + '">' + this.escapeHtml(item.name || 'Credit card') + '</option>'))
+      .concat(['<option value="__none__">No account</option>']);
+    account.innerHTML = accountOptions.join('');
+    const type = modal.querySelector('#csv-export-type');
+    type.innerHTML = '<option value="">All types</option><option value="income">Income</option><option value="expense">Expenses</option><option value="transfer">Transfers</option>';
+    const category = modal.querySelector('#csv-export-category');
+    category.innerHTML = '<option value="">All categories</option><option value="__none__">No category</option>' + (this.data.categories || []).slice().sort((a, b) => a.name.localeCompare(b.name)).map(item => '<option value="' + this.escapeHtml(item.id) + '">' + this.escapeHtml(item.name) + '</option>').join('');
+    const person = modal.querySelector('#csv-export-person');
+    person.innerHTML = '<option value="">Any person</option><option value="__none__">No person</option>' + (this.data.people || []).slice().sort((a, b) => a.name.localeCompare(b.name)).map(item => '<option value="' + this.escapeHtml(item.id) + '">@' + this.escapeHtml(item.name) + '</option>').join('');
+    const addFilterButton = (field, label, svg) => {
+      const id = 'csv-export-not-' + field;
+      let button = modal.querySelector('#' + id);
+      if (!button) {
+        const select = modal.querySelector('#csv-export-' + field);
+        const row = document.createElement('div'); row.className = 'csv-filter-control';
+        button = document.createElement('button'); button.type = 'button'; button.id = id;
+        button.style.cssText = 'width:var(--control-h,32px);min-width:var(--control-h,32px);height:var(--control-h,32px);flex-shrink:0;padding:4px;';
+        button.innerHTML = svg;
+        select.before(row); row.append(select, button);
+      }
+      const update = () => {
+        const negated = !!this._csvExportNegated[field];
+        button.className = 'btn btn-icon ' + (negated ? 'btn-primary' : 'btn-secondary');
+        button.setAttribute('aria-pressed', String(negated));
+        button.setAttribute('aria-label', 'Exclude selected ' + label);
+        button.title = (negated ? 'Exclude' : 'Include') + ' selected ' + label + ' · click to invert';
+      };
+      update();
+      button.onclick = () => { this._csvExportNegated[field] = !this._csvExportNegated[field]; update(); this.updateCsvExportCount(); };
+    };
+    const notIcon = '<svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 9h14M5 15h14M16 4L8 20" fill="none" stroke="currentColor" stroke-width="2"/></svg>';
+    for (const field of ['account', 'category', 'person']) addFilterButton(field, field, notIcon);
+    const description = modal.querySelector('#csv-export-description');
+    let matchButton = modal.querySelector('#csv-export-match-mode');
+    if (!matchButton) {
+      matchButton = document.createElement('button');
+      matchButton.id = 'csv-export-match-mode'; matchButton.type = 'button'; matchButton.className = 'btn btn-icon btn-secondary';
+      matchButton.style.cssText = 'width:var(--control-h,32px);min-width:var(--control-h,32px);height:var(--control-h,32px);flex-shrink:0;padding:4px;';
+      matchButton.innerHTML = '<svg width="22" height="22" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6v12M21 6v12" fill="none" stroke="currentColor" stroke-width="1.5"/><text x="12" y="16" text-anchor="middle" fill="currentColor" font-family="monospace" font-size="12" font-weight="700">ab</text></svg>';
+      const row = document.createElement('div'); row.className = 'csv-filter-control';
+      description.before(row); row.append(description, matchButton);
+    }
+    const updateMatchButton = () => {
+      matchButton.title = this._csvExportWholeWord ? 'Whole word: match complete words or phrases' : 'Partial: match text anywhere, including inside words';
+      matchButton.setAttribute('aria-label', 'Whole-word matching');
+      matchButton.setAttribute('aria-pressed', String(this._csvExportWholeWord));
+      matchButton.classList.toggle('btn-primary', this._csvExportWholeWord);
+      matchButton.classList.toggle('btn-secondary', !this._csvExportWholeWord);
+    };
+    updateMatchButton();
+    matchButton.onclick = () => { this._csvExportWholeWord = !this._csvExportWholeWord; updateMatchButton(); this.updateCsvExportCount(); };
+    const from = modal.querySelector('#csv-export-from'), to = modal.querySelector('#csv-export-to');
+    from.value = ''; to.value = '';
+    from.placeholder = to.placeholder = this.dateFormatPattern();
+    type.value = '';
+    account.value = '';
+    category.value = '';
+    person.value = '';
+    description.value = '';
+    this.updateCsvExportCount();
+    this.openModal('csv-export-modal');
+  },
+
+  csvExportRows() {
+    const modal = document.getElementById('csv-export-modal');
+    if (!modal) return [];
+    const fromInput = modal.querySelector('#csv-export-from'), toInput = modal.querySelector('#csv-export-to');
+    const from = fromInput.value.trim() ? this.parseDateInput(fromInput.value) : '';
+    const to = toInput.value.trim() ? this.parseDateInput(toInput.value) : '';
+    if ((fromInput.value.trim() && !from) || (toInput.value.trim() && !to)) return null;
+    if (from && to && from > to) return null;
+    const filter = {
+      find: modal.querySelector('#csv-export-description').value.trim(),
+      account: modal.querySelector('#csv-export-account').value,
+      category: modal.querySelector('#csv-export-category').value,
+      type: modal.querySelector('#csv-export-type').value,
+      person: modal.querySelector('#csv-export-person').value,
+      from,
+      to,
+      wholeWord: !!this._csvExportWholeWord,
+      notAccount: !!this._csvExportNegated?.account,
+      notCategory: !!this._csvExportNegated?.category,
+      notPerson: !!this._csvExportNegated?.person
+    };
+    const matches = window.TransactionTools && window.TransactionTools.matches;
+    const filterMatch = (value, condition, negated) => !value || (negated ? !condition : condition);
+    const escapeRegex = value => String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    return (this.data.transactions || []).filter(tx => {
+      if (matches) return matches(tx, filter);
+      if (filter.find && !(filter.wholeWord
+        ? new RegExp('(^|[^\\p{L}\\p{N}_])' + escapeRegex(filter.find) + '(?=$|[^\\p{L}\\p{N}_])', 'iu').test(String(tx.note || ''))
+        : String(tx.note || '').toLocaleLowerCase().includes(filter.find.toLocaleLowerCase()))) return false;
+      if (filter.type && tx.type !== filter.type) return false;
+      const categoryMatches = filter.category === '__none__' ? !tx.categoryId : tx.categoryId === filter.category;
+      if (filterMatch(filter.category, categoryMatches, filter.notCategory)) return false;
+      const accountMatches = filter.account === '__none__' ? ![tx.accountId, tx.fromAccountId, tx.toAccountId, tx.cardId].some(Boolean)
+        : [tx.accountId, tx.fromAccountId, tx.toAccountId, tx.cardId && 'card:' + tx.cardId].includes(filter.account);
+      if (filterMatch(filter.account, accountMatches, filter.notAccount)) return false;
+      const personIds = [...new Set([...(Array.isArray(tx.personIds) ? tx.personIds : []), tx.personId].filter(Boolean))];
+      const personMatches = filter.person === '__none__' ? !personIds.length : personIds.includes(filter.person);
+      if (filterMatch(filter.person, personMatches, filter.notPerson)) return false;
+      if (filter.from && String(tx.date || '') < filter.from) return false;
+      if (filter.to && String(tx.date || '') > filter.to) return false;
+      return true;
+    }).sort((a, b) => String(a.date || '').localeCompare(String(b.date || '')) || String(a.id || '').localeCompare(String(b.id || '')));
+  },
+
+  updateCsvExportCount() {
+    const modal = document.getElementById('csv-export-modal');
+    const count = modal && modal.querySelector('#csv-export-count');
+    if (!count) return;
+    const rows = this.csvExportRows();
+    const button = modal.querySelector('button[type="submit"]');
+    if (!rows) {
+      count.textContent = 'Enter valid dates in ' + this.dateFormatPattern() + ' order, with the start no later than the end.';
+      button.disabled = true;
+      return;
+    }
+    count.textContent = rows.length + ' transaction' + (rows.length === 1 ? '' : 's') + ' match these filters.';
+    button.disabled = !rows.length;
+  },
+
+  downloadCsv() {
+    const modal = document.getElementById('csv-export-modal');
+    const transactions = this.csvExportRows();
+    if (!transactions) { this.updateCsvExportCount(); return; }
+    if (!transactions.length) return;
+    const esc = value => '"' + String(value == null ? '' : value).replace(/"/g, '""') + '"';
+    const accountName = id => (this.data.accounts || []).find(item => item.id === id)?.name || '';
+    const cardName = id => (this.data.creditCards || []).find(item => item.id === id)?.name || '';
+    const categoryName = id => (this.data.categories || []).find(item => item.id === id)?.name || '';
+    const personNames = ids => (ids || []).map(id => (this.data.people || []).find(item => item.id === id)?.name).filter(Boolean).join('; ');
+    const rows = [['date', 'type', 'amount', 'currency', 'account', 'card', 'category', 'secondary_amount', 'secondary_currency', 'transfer_to_amount', 'transfer_to_currency', 'from_account', 'to_account', 'people', 'note']];
+    for (const tx of transactions) rows.push([
+      tx.date, tx.type, tx.amount, tx.currency || this.baseCurrency(), accountName(tx.accountId), cardName(tx.cardId), categoryName(tx.categoryId),
+      tx.nativeAmount, tx.nativeCurrency, tx.type === 'transfer' ? (tx.amountIn ?? tx.amount) : '', tx.type === 'transfer' ? (tx.currencyIn || tx.currency || this.baseCurrency()) : '',
+      accountName(tx.fromAccountId), accountName(tx.toAccountId), personNames([...new Set([...(Array.isArray(tx.personIds) ? tx.personIds : []), tx.personId].filter(Boolean))]), tx.note || tx.description || tx.details || ''
+    ]);
+    const csv = rows.map(row => row.map(esc).join(',')).join('\r\n');
     const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8' });
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = 'blackbook-transactions-' + this.today() + '.csv';
-    a.click();
+    const url = URL.createObjectURL(blob), anchor = document.createElement('a');
+    anchor.href = url; anchor.download = 'blackbook-transactions-' + this.today() + '.csv'; anchor.click();
+    setTimeout(() => URL.revokeObjectURL(url), 60000);
+    this.closeModal('csv-export-modal');
   },
 
   refreshIcon() {
@@ -1145,7 +1426,7 @@ Object.assign(window.BlackBook, {
       '<div class="settings-section-header"><span class="settings-section-title">DATA</span></div>' +
       '<div class="settings-data-actions">' + this.healthSummaryHtml() + '</div>' +
       '<div class="settings-data-actions"><button class="btn btn-secondary" id="settings-export">EXPORT JSON</button>' +
-      '<button class="btn btn-secondary" id="settings-export-csv">EXPORT CSV</button>' +
+      '<button class="btn btn-secondary" id="settings-export-csv">EXPORT CSV...</button>' +
       '<button class="btn btn-secondary" id="settings-import-btn">IMPORT JSON</button>' +
       '<input type="file" id="settings-import-file" accept=".json" style="display:none;">' +
 '<button class="btn btn-secondary" id="settings-import-csv-btn">IMPORT CSV/XLSX</button>' +

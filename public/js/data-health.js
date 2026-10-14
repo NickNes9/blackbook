@@ -1,7 +1,7 @@
 (function () {
   function scan(data) {
     const issues = [], lists = {}, ids = {};
-    for (const name of ['accounts', 'creditCards', 'categories', 'transactions', 'bills', 'invoices', 'debts', 'savingsGoals', 'installments']) {
+    for (const name of ['accounts', 'creditCards', 'categories', 'transactions', 'bills', 'invoices', 'debts', 'savingsGoals', 'installments', 'people']) {
       lists[name] = Array.isArray(data[name]) ? data[name].filter(Boolean) : [];
       ids[name] = new Set();
       for (const item of lists[name]) {
@@ -15,7 +15,7 @@
       return issue;
     };
     const ref = (collection, item, field, target) => {
-      const label = { accounts: 'account', creditCards: 'credit card', categories: 'category', debts: 'debt', invoices: 'invoice', bills: 'bill', installments: 'installment plan' }[target] || target;
+      const label = { accounts: 'account', creditCards: 'credit card', categories: 'category', debts: 'debt', invoices: 'invoice', bills: 'bill', installments: 'installment plan', people: 'person', transactions: 'transaction' }[target] || target;
       if (item[field] && !ids[target].has(item[field])) {
         const issue = add(collection, item, 'Linked ' + label + ' no longer exists (' + item[field] + ').');
         issue.field = field;
@@ -26,6 +26,9 @@
     const entries = new Set(lists.savingsGoals.flatMap(g => (g.entries || []).map(e => e.id)));
     for (const tx of lists.transactions) {
       for (const [field, target] of Object.entries({ accountId: 'accounts', fromAccountId: 'accounts', toAccountId: 'accounts', cardId: 'creditCards', categoryId: 'categories', debtId: 'debts', invoiceId: 'invoices', billId: 'bills', installId: 'installments' })) ref('transactions', tx, field, target);
+      for (const personId of (Array.isArray(tx.personIds) ? tx.personIds : [])) {
+        if (personId && !ids.people.has(personId)) add('transactions', tx, 'Linked person no longer exists (' + personId + ').');
+      }
       if (tx.linkId && !entries.has(tx.linkId)) add('transactions', tx, 'Missing savings entry.');
       const slot = /^inst-(.+)-s\d+$/.exec(tx.pairId || '');
       if (slot && !ids.installments.has(slot[1])) add('transactions', tx, 'Missing installment plan.');
@@ -53,6 +56,10 @@
     }
     for (const collection of ['invoices', 'debts']) for (const item of lists[collection]) {
       for (const pay of (item.payments || [])) if (pay.txId && !ids.transactions.has(pay.txId)) add(collection, item, 'Missing payment transaction: ' + pay.txId);
+    }
+    for (const debt of lists.debts) {
+      ref('debts', debt, 'personId', 'people');
+      ref('debts', debt, 'openingTransactionId', 'transactions');
     }
     for (const item of lists.bills) {
       ref('bills', item, 'categoryId', 'categories');
@@ -85,6 +92,7 @@
     const linked = new Set();
     for (const item of [...(data.billPayments || []), ...(data.invoices || []), ...(data.debts || [])]) {
       if (item.txId) linked.add(item.txId);
+      if (item.openingTransactionId) linked.add(item.openingTransactionId);
       if (Array.isArray(item.relatedTxIds)) for (const txId of item.relatedTxIds) if (txId) linked.add(txId);
       for (const payment of item.payments || []) if (payment && payment.txId) linked.add(payment.txId);
     }

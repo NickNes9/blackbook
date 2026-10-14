@@ -31,3 +31,14 @@ test('missing funding accounts and savings-entry transactions are reported at th
   const issues = scan({ bills: [{ id: 'b', payAccountId: 'gone' }], creditCards: [{ id: 'c', payAccountId: 'gone' }], savingsGoals: [{ id: 's', entries: [{ id: 'e' }] }] });
   for (const collection of ['bills', 'creditCards', 'savingsGoals']) assert.ok(issues.some(i => i.collection === collection && i.kind === 'broken-link'));
 });
+
+test('debt and transaction people references are checked', () => {
+  const issues = scan({
+    people: [{ id: 'person-1' }],
+    debts: [{ id: 'debt-1', personId: 'missing-person', openingTransactionId: 'missing-tx' }],
+    transactions: [{ id: 'tx-1', personIds: ['missing-person'], date: '2026-01-01', amount: -1 }]
+  });
+  assert.ok(issues.some(i => i.collection === 'debts' && /Linked person/.test(i.message)));
+  assert.ok(issues.some(i => i.collection === 'debts' && /Linked transaction/.test(i.message)));
+  assert.ok(issues.some(i => i.collection === 'transactions' && /Linked person/.test(i.message)));
+});

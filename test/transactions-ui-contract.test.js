@@ -20,7 +20,7 @@ test('overview exposes an end-of-month balance and a visible merge action for se
   assert.match(overview, /monthEndBalanceAt\(/);
   assert.match(overview, /String\(lastDay\)\.padStart\(2, '0'\)/);
   assert.match(overview, /END OF MONTH/);
-  assert.match(overview, /MERGE SELECTED/);
+  assert.match(overview, /onclick="BlackBook\.openMergeModal\(\)">MERGE<\/button>/);
 });
 
 test('the selected account retains its full presentation while other account chips compact first', () => {

@@ -1,5 +1,5 @@
 (function (root) {
-  const KEYS = ['accounts', 'creditCards', 'transactions', 'bills', 'billPayments', 'savingsGoals', 'installments', 'debts', 'invoices', 'people'];
+  const KEYS = ['accounts', 'creditCards', 'transactions', 'reconciliations', 'bills', 'billPayments', 'savingsGoals', 'installments', 'debts', 'invoices', 'people'];
   const clone = value => value == null ? value : JSON.parse(JSON.stringify(value));
   const keyOf = (collection, item, index) => {
     if (collection === 'billPayments') return String(item.billId || '') + '::' + String(item.month || '');

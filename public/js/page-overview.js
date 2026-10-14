@@ -194,7 +194,7 @@ Object.assign(window.BlackBook, {
     const monthEnd = this.monthEndBalanceAt();
     const sortLabel = this._ovSortBy === 'date' ? 'DATE' : this._ovSortBy === 'value' ? 'VALUE' : this._ovSortBy === 'name' ? 'NAME' : 'DATE';
     const mergeButton = this._bulkSel && this._bulkSel.size >= 2
-      ? '<button class="btn btn-sm btn-primary page-control ov-merge-selected" onclick="BlackBook.openMergeModal()">MERGE SELECTED</button>'
+      ? '<button class="btn btn-sm btn-primary page-control ov-merge-selected" onclick="BlackBook.openMergeModal()">MERGE</button>'
       : '';
     return '<div class="month-summary"><div class="month-summary-item"><span class="month-summary-label">INCOME</span><span class="month-summary-value amount-positive">' + this.fmtBase(income) + '</span></div><div class="month-summary-item"><span class="month-summary-label">EXPENSES</span><span class="month-summary-value amount-negative">' + this.fmtBase(expenses) + '</span></div><div class="month-summary-item"><span class="month-summary-label">NET</span><span class="month-summary-value ' + (income - expenses >= 0 ? 'amount-positive' : 'amount-negative') + '">' + this.fmtBase(income - expenses) + '</span></div><div class="month-summary-item month-end-balance"><span class="month-summary-label">END OF MONTH</span><span class="month-summary-value ' + (monthEnd.amount >= 0 ? 'amount-positive' : 'amount-negative') + '">' + this.fmtAmount(monthEnd.amount, monthEnd.currency) + '</span></div>' +
       '<span style="flex:1;"></span>' +
@@ -607,7 +607,7 @@ Object.assign(window.BlackBook, {
       rows +
       '<div class="ap-footer"><button class="btn btn-sm btn-primary" onclick="BlackBook.closeAccountsPanel();BlackBook.openNewAccount()">+ ADD</button>' +
       '<button class="btn btn-sm btn-secondary" onclick="BlackBook.closeAccountsPanel();BlackBook.navigateTo(\x27settings\x27)">MANAGE IN SETTINGS</button>' +
-      '<button class="btn btn-sm btn-secondary yearly-balances-open" onclick="BlackBook.openYearlyBalances()">YEARLY BALANCES</button></div>';
+      '<button class="btn btn-sm btn-secondary" onclick="BlackBook.closeAccountsPanel();BlackBook.openAccountReconcile()">RECONCILE BALANCE</button></div>';
   },
 
   yearlyBalanceAccounts() {
@@ -684,6 +684,102 @@ Object.assign(window.BlackBook, {
     if (hasOpening) parts.push('Opening checkpoint recorded; applied before January 1 activity');
     if (currentRecorded) parts.push('current balance checkpoint recorded');
     return parts.join(' · ');
+  },
+
+  openAccountReconcile(accountId = null) {
+    const accounts = this.yearlyBalanceAccounts();
+    if (!accounts.length) { this.showToast('Create an account before reconciling a balance'); return; }
+    let modal = document.getElementById('account-reconcile-modal');
+    if (!modal) {
+      modal = document.createElement('div');
+      modal.id = 'account-reconcile-modal';
+      modal.className = 'modal hidden';
+      modal.setAttribute('role', 'dialog');
+      modal.setAttribute('aria-modal', 'true');
+      modal.setAttribute('aria-labelledby', 'account-reconcile-title');
+      modal.innerHTML = '<div class="modal-backdrop" onclick="BlackBook.closeModal(\'account-reconcile-modal\')"></div><div class="modal-content wide"><div class="modal-header"><h2 id="account-reconcile-title">Reconcile account</h2><button type="button" class="modal-close" aria-label="Close" onclick="BlackBook.closeModal(\'account-reconcile-modal\')">&times;</button></div><form id="account-reconcile-form"><div style="display:grid;grid-template-columns:1fr 1fr;gap:12px"><label class="form-group">Account<select id="account-reconcile-account" class="input"></select></label><label class="form-group">Statement date<input id="account-reconcile-date" class="input" type="text" data-date-input></label><label class="form-group" style="grid-column:1 / -1">Balance on statement<input id="account-reconcile-balance" class="input" type="text" inputmode="decimal" placeholder="0.00"></label></div><div id="account-reconcile-preview" class="form-hint" aria-live="polite"></div><div class="form-actions"><button type="button" class="btn btn-secondary" onclick="BlackBook.closeModal(\'account-reconcile-modal\')">Cancel</button><button type="submit" class="btn btn-primary">Add adjustment</button></div></form></div>';
+      document.body.appendChild(modal);
+      modal.querySelector('#account-reconcile-form').addEventListener('submit', event => { event.preventDefault(); this.saveAccountReconciliation(); });
+      modal.querySelectorAll('#account-reconcile-account,#account-reconcile-date,#account-reconcile-balance').forEach(input => {
+        input.addEventListener('input', () => this.updateAccountReconcilePreview());
+        input.addEventListener('change', () => this.updateAccountReconcilePreview());
+      });
+    }
+    const select = modal.querySelector('#account-reconcile-account');
+    select.innerHTML = accounts.map(account => '<option value="' + this.escapeHtml(account.id) + '">' + this.escapeHtml(account.name || 'Account') + ' · ' + this.escapeHtml(account.currency || this.baseCurrency()) + '</option>').join('');
+    const preferred = accountId || this.selectedAccount;
+    select.value = accounts.some(account => account.id === preferred) ? preferred : accounts[0].id;
+    const date = modal.querySelector('#account-reconcile-date');
+    date.value = this.fmtDateInput(this.today());
+    date.placeholder = this.dateFormatPattern();
+    modal.querySelector('#account-reconcile-balance').value = '';
+    this.updateAccountReconcilePreview();
+    this.openModal('account-reconcile-modal');
+  },
+
+  updateAccountReconcilePreview() {
+    const modal = document.getElementById('account-reconcile-modal');
+    if (!modal) return;
+    const accountId = modal.querySelector('#account-reconcile-account').value;
+    const account = (this.data.accounts || []).find(item => item.id === accountId);
+    const dateInput = modal.querySelector('#account-reconcile-date');
+    const date = this.parseDateInput(dateInput.value);
+    const statementInput = modal.querySelector('#account-reconcile-balance');
+    const statement = statementInput.value.trim() ? this.evalAmount(statementInput.value) : NaN;
+    const preview = modal.querySelector('#account-reconcile-preview');
+    const button = modal.querySelector('button[type="submit"]');
+    if (!account || !date || !Number.isFinite(statement)) {
+      preview.textContent = !date ? 'Enter a valid statement date (' + this.dateFormatPattern() + ').' : !Number.isFinite(statement) ? 'Enter the balance shown on the statement.' : '';
+      button.disabled = true;
+      return;
+    }
+    const book = this.accountBalanceNative(accountId, date).amount;
+    const difference = this.round2(statement - book);
+    const normalized = Math.abs(difference) < 0.005 ? 0 : difference;
+    const currency = account.currency || this.baseCurrency();
+    preview.innerHTML = '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px 18px;margin:10px 0"><span>BLACK BOOK</span><strong>' + this.escapeHtml(this.fmtAmount(book, currency)) + '</strong><span>STATEMENT</span><strong>' + this.escapeHtml(this.fmtAmount(statement, currency)) + '</strong><span>DIFFERENCE</span><strong class="' + (normalized < 0 ? 'amount-negative' : 'amount-positive') + '">' + this.escapeHtml(this.fmtAmount(normalized, currency)) + '</strong></div><span>' + (normalized ? 'Confirm to add a dated adjustment transaction.' : 'The balances match; no adjustment is needed.') + '</span>';
+    button.textContent = normalized ? 'ADD ADJUSTMENT' : 'RECORD CHECK';
+    button.disabled = false;
+  },
+
+  async saveAccountReconciliation() {
+    const modal = document.getElementById('account-reconcile-modal');
+    if (!modal) return;
+    const accountId = modal.querySelector('#account-reconcile-account').value;
+    const account = (this.data.accounts || []).find(item => item.id === accountId);
+    const date = this.parseDateInput(modal.querySelector('#account-reconcile-date').value);
+    const statement = this.evalAmount(modal.querySelector('#account-reconcile-balance').value);
+    if (!account || !date || !Number.isFinite(statement)) return this.updateAccountReconcilePreview();
+    const bookBalance = this.accountBalanceNative(accountId, date).amount;
+    const difference = Math.abs(this.round2(statement - bookBalance)) < 0.005 ? 0 : this.round2(statement - bookBalance);
+    const reconciliationId = crypto.randomUUID();
+    const priorTransactions = this.data.transactions.slice();
+    const priorReconciliations = (this.data.reconciliations || []).slice();
+    let adjustmentTransactionId = null;
+    if (difference) {
+      adjustmentTransactionId = crypto.randomUUID();
+      this.data.transactions.push({
+        id: adjustmentTransactionId,
+        date,
+        type: difference > 0 ? 'income' : 'expense',
+        amount: difference,
+        currency: account.currency || this.baseCurrency(),
+        accountId,
+        categoryId: '',
+        note: 'Balance reconciliation · ' + this.fmtDateInput(date),
+        balanceCorrection: { kind: 'reconciliation', reconciliationId, statementBalance: this.round2(statement), bookBalance: this.round2(bookBalance) }
+      });
+    }
+    this.data.reconciliations = this.data.reconciliations || [];
+    this.data.reconciliations.push({ id: reconciliationId, accountId, date, statementBalance: this.round2(statement), bookBalance: this.round2(bookBalance), difference, adjustmentTransactionId });
+    if (!(await this.save({ undoable: true, label: 'Reconcile account' }))) {
+      this.data.transactions = priorTransactions;
+      this.data.reconciliations = priorReconciliations;
+      return;
+    }
+    this.closeModal('account-reconcile-modal');
+    this.renderPage(this.currentPage);
+    this.showToast(difference ? 'Balance reconciled with a dated adjustment' : 'Account balance check recorded');
   },
 
   openYearlyBalances() {

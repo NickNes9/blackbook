@@ -6,7 +6,9 @@ test('Bills donut reflects the yearly series and excludes TOTAL', () => {
   const canvas = { getContext: () => ({}), setAttribute: () => {} };
   let chart;
   const window = { BlackBook: {} };
-  runInNewContext(readFileSync(new URL('../public/js/page-bills.js', import.meta.url), 'utf8'), { window, document: { getElementById: () => canvas }, Chart: function (_ctx, config) { chart = config; } });
+  const context = { window, localStorage: { getItem: () => '' }, document: { getElementById: () => canvas }, getComputedStyle: () => ({ getPropertyValue: () => '#111' }), Chart: function (_ctx, config) { chart = config; } };
+  runInNewContext(readFileSync(new URL('../public/js/core.js', import.meta.url), 'utf8'), context);
+  runInNewContext(readFileSync(new URL('../public/js/page-bills.js', import.meta.url), 'utf8'), context);
   const app = window.BlackBook;
   app.billsChart = { data: { datasets: [{ label: 'TOTAL', data: [30], _total: true }, { label: 'Rent', data: [10, 10], backgroundColor: '#abc' }, { label: 'Internet', data: [5, 5], backgroundColor: '#def' }] } };
   app.vm = () => 0; app.vy = () => 2026;
@@ -14,8 +16,8 @@ test('Bills donut reflects the yearly series and excludes TOTAL', () => {
   app.renderBillsDonut();
   assert.equal(chart.type, 'doughnut');
   assert.deepEqual(Array.from(chart.data.labels), ['Rent', 'Internet']);
-  assert.deepEqual(Array.from(chart.data.datasets[0].data), [20, 10]);
-  assert.equal(chart.options.cutout, '67%');
+  assert.deepEqual(Array.from(chart.data.datasets[0].data), [0.6648148148148149, 0.3351851851851852]);
+  assert.equal(chart.options.cutout, '52.5%');
 });
 test('sticky Bills totals keep their own header on narrow screens', () => {
   const css = readFileSync(new URL('../public/style.css', import.meta.url), 'utf8');
