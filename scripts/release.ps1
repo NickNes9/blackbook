@@ -38,7 +38,11 @@ $ReadmeText = $ReadmeText.Replace("Black Book $OldVersion", "Black Book $Version
 # Refuse to package a build that fails its restored release gates.
 node scripts/provision-runtime.mjs "$Root"
 if ($LASTEXITCODE -ne 0) { throw 'Bundled runtime preparation failed; release cancelled.' }
-$Compiler = Join-Path $env:WINDIR 'Microsoft.NET\Framework64\v4.0.30319\csc.exe'
+$Compiler = @(
+  (Join-Path $env:WINDIR 'Microsoft.NET\Framework64\v4.0.30319\csc.exe'),
+  (Join-Path $env:WINDIR 'Microsoft.NET\Framework\v4.0.30319\csc.exe')
+) | Where-Object { Test-Path -LiteralPath $_ } | Select-Object -First 1
+if (-not $Compiler) { throw 'Could not find the .NET Framework C# compiler (csc.exe).' }
 $LauncherPath = Join-Path $Root 'launcher.cs'
 $LauncherText = [System.IO.File]::ReadAllText($LauncherPath)
 $LauncherText = $LauncherText -replace 'AssemblyVersion\("[0-9.]+"\)', "AssemblyVersion(`"$Version.0`")"

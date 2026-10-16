@@ -8,7 +8,7 @@ Your finances, on your computer. Black Book is a free personal finance app for t
 
 [Download the latest release](https://github.com/NickNes9/blackbook/releases/latest) · [Report a problem](https://github.com/NickNes9/blackbook/issues) · [Full feature guide](functions.txt)
 
-[Download Windows](https://github.com/NickNes9/blackbook/releases/download/v0.9.6/black-book-v0.9.6-win.zip) · [Download macOS](https://github.com/NickNes9/blackbook/releases/download/v0.9.6/black-book-v0.9.6-mac.zip) · [Download Linux](https://github.com/NickNes9/blackbook/releases/download/v0.9.6/black-book-v0.9.6-linux.zip)
+[Download Windows](https://github.com/NickNes9/blackbook/releases/download/v0.9.7/black-book-v0.9.7-win.zip) · [Download macOS](https://github.com/NickNes9/blackbook/releases/download/v0.9.7/black-book-v0.9.7-mac.zip) · [Download Linux](https://github.com/NickNes9/blackbook/releases/download/v0.9.7/black-book-v0.9.7-linux.zip)
 
 ## What you can do
 
@@ -77,11 +77,12 @@ The shortcut bar at the bottom shows the actions available on the current page.
 
 ## What's new
 
-### In development — 0.9.7 Reports
+### 0.9.7
 
-- Reports now use the active profile's transactions across Categories, Compare, People, Money Flow, and Calendar.
-- Compare spending across years and categories, review per-person totals, follow income and expenses through a money-flow view, and browse transactions by date.
-- Account, category, and person filters update the reports and charts; category history includes yearly totals and monthly changes.
+- **Reports** — Explore Categories, Compare, People, Money Flow, and Calendar using live profile data, with filters for accounts, categories, people, and periods.
+- Compare yearly totals and category trends, review income, expenses, net and monthly averages, and follow the transactions behind each result.
+- **Debt tracking** — New debts create linked account transactions, keeping recorded balances aligned.
+- Category filters are cleaner: duplicate category names are blocked and categories without activity are hidden.
 
 ### 0.9.6
 

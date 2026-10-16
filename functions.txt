@@ -313,10 +313,10 @@ FORECAST
 - Auto-balanced bill payments are folded into the projection.
 
 ----------------------------------------------------------------------
-REPORTS (0.9.7 WORK IN PROGRESS)
+REPORTS (0.9.7)
 ----------------------------------------------------------------------
 
-- Switch between Categories, Compare, People, Cash Flow, and Calendar.
+- Switch between Categories, Compare, People, Money Flow, and Calendar.
 - Review live profile data: yearly category history, multi-year comparisons,
   person totals, money flow, and a calendar with selectable days.
 - Filter by account, category, person, and period; charts and summaries
