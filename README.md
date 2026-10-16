@@ -62,19 +62,6 @@ Optional profile passwords encrypt your saved data. Keep a backup and remember y
 
 Charts, fonts, and spreadsheet importing are bundled for offline use. Refreshing exchange rates and downloading updates require an internet connection.
 
-## Useful shortcuts
-
-| Key | Action |
-| --- | --- |
-| `A` / `T` | Add a transaction / transfer |
-| `E` / `Delete` | Edit / delete selected transactions, or the hovered row |
-| `Ctrl+Z` / `Ctrl+Shift+Z` | Undo / redo |
-| `H` | Show or hide the graph |
-| `/` or `Ctrl+K` | Open the command palette |
-| `Esc` | Close a dialog |
-
-The shortcut bar at the bottom shows the actions available on the current page.
-
 ## What's new
 
 ### 0.9.7
