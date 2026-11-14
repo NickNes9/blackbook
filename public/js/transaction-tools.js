@@ -1,19 +1,67 @@
 (function () {
   const escapeRegex = value => String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const ITEM_TAG_END = '\u2063';
+  const cleanDescription = value => String(value || '').replace(/\u2063/g, '');
+  const replaceItemText = (text, oldName, newName, wholeWord = false) => {
+    const name = String(oldName || '').trim().replace(/^\$\s*/, '').replace(/\s+/g, ' ');
+    if (!name) return { value:String(text || ''), replaced:false };
+    const original = String(text || '');
+    const tagPattern = new RegExp('(^|[^\\p{L}\\p{N}_])\\$\\s*' + escapeRegex(name) + '(?:\\u2063|(?=$|\\s+\\$|\\s+@[\\p{L}]))', 'giu');
+    let tagReplaced = false;
+    const taggedValue = original.replace(tagPattern, (_, prefix) => {
+      tagReplaced = true;
+      return prefix + '$' + newName + ITEM_TAG_END;
+    });
+    if (tagReplaced) return { value:taggedValue, replaced:true };
+    const textPattern = wholeWord
+      ? new RegExp('(^|[^\\p{L}\\p{N}_])\\$?' + escapeRegex(name) + '(?=$|[^\\p{L}\\p{N}_])', 'giu')
+      : new RegExp('(^|[^$])\\$?' + escapeRegex(name), 'giu');
+    let replaced = false;
+    const value = original.replace(textPattern, (match, prefix) => {
+      replaced = true;
+      return prefix + '$' + newName + ITEM_TAG_END;
+    });
+    return { value, replaced };
+  };
   const tokens = /#(description|date|month|year|account|category|person)\b/g;
   const descriptionMatches = (note, text, wholeWord) => !text || (wholeWord
     ? new RegExp('(^|[^\\p{L}\\p{N}_])' + escapeRegex(text) + '(?=$|[^\\p{L}\\p{N}_])', 'iu').test(String(note || ''))
     : String(note || '').toLocaleLowerCase().includes(text.toLocaleLowerCase()));
   const filterMatch = (value, condition, negated) => !value || (negated ? !condition : condition);
-  const matches = (tx, filter) => (!filter.ids || filter.ids.includes(tx.id)) && descriptionMatches(tx.note, filter.find, filter.wholeWord) &&
-    (!filter.type || tx.type === filter.type) && filterMatch(filter.category, filter.category === '__none__' ? !tx.categoryId : tx.categoryId === filter.category, filter.notCategory) &&
+  const splitParts = tx => Array.isArray(tx.parts) ? tx.parts : [];
+  const categoryIds = tx => splitParts(tx).length ? splitParts(tx).map(part => part.categoryId).filter(Boolean) : [tx.categoryId].filter(Boolean);
+  const peopleIds = tx => [...new Set([...(tx.personIds || []), ...splitParts(tx).flatMap(part => part.personIds || [])])];
+  const descriptions = tx => [tx.note, ...splitParts(tx).map(part => part.description)].filter(Boolean).map(cleanDescription).join('\n');
+  const itemTags = value => {
+    const names = new Set();
+    const pattern = /(?:^|\s)\$\s*([\p{L}][^$\u2063]*?)(?=\u2063|\s+\$|\s+@[\p{L}]|$)/giu;
+    for (const match of String(value || '').matchAll(pattern)) {
+      const name = String(match[1] || '').replace(/\s+/g, ' ').trim();
+      if (name) names.add(name.toLocaleLowerCase());
+    }
+    return names;
+  };
+  const itemKeys = tx => {
+    const keys = new Set(itemTags(tx.note));
+    for (const part of splitParts(tx)) for (const key of itemTags(part.description)) keys.add(key);
+    return keys;
+  };
+  const matchesItem = (tx, filter) => {
+    if (!filter.item) return true;
+    const keys = itemKeys(tx);
+    const condition = filter.item === '__none__' ? !keys.size : keys.has(filter.item);
+    return filter.notItem ? !condition : condition;
+  };
+  const matches = (tx, filter) => (!filter.ids || filter.ids.includes(tx.id)) && descriptionMatches(descriptions(tx), filter.find, filter.wholeWord) &&
+    (!filter.type || tx.type === filter.type) && filterMatch(filter.category, filter.category === '__none__' ? !categoryIds(tx).length : filter.category === '__split__' ? splitParts(tx).length > 0 : categoryIds(tx).includes(filter.category), filter.notCategory) &&
     filterMatch(filter.account, filter.account === '__none__' ? ![tx.accountId, tx.fromAccountId, tx.toAccountId, tx.cardId].some(Boolean) : [tx.accountId, tx.fromAccountId, tx.toAccountId, tx.cardId && 'card:' + tx.cardId].includes(filter.account), filter.notAccount) &&
-    filterMatch(filter.person, filter.person === '__none__' ? !(tx.personIds || []).length : (tx.personIds || []).includes(filter.person), filter.notPerson) && (!filter.from || tx.date >= filter.from) && (!filter.to || tx.date <= filter.to);
+    filterMatch(filter.person, filter.person === '__none__' ? !peopleIds(tx).length : peopleIds(tx).includes(filter.person), filter.notPerson) &&
+    matchesItem(tx, filter) && (!filter.from || tx.date >= filter.from) && (!filter.to || tx.date <= filter.to);
   const rewrite = (tx, find, replacement, mode, values) => {
     const expanded = replacement.replace(tokens, (_, token) => String(values[token] ?? ''));
     return mode === 'rewrite' ? expanded : String(tx.note || '').replace(new RegExp(escapeRegex(find), 'gi'), () => expanded);
   };
-  window.TransactionTools = { matches, rewrite };
+  window.TransactionTools = { matches, rewrite, cleanDescription };
   Object.assign(window.BlackBook, {
     personColor(person) {
       return /^#[0-9a-f]{6}$/i.test(person.color || '') ? person.color : this.colorForName(person.name || person.id);
@@ -23,17 +71,36 @@
     },
     transactionDescriptionHtml(tx, fallback = '') {
       const note = String(tx.note || fallback);
-      const people = (this.data.people || []).filter(p => p.name).slice().sort((a,b) => b.name.length - a.name.length);
-      if (!people.length) return this.escapeHtml(note);
-      const pattern = new RegExp('(^|[^\\p{L}\\p{N}_@])(@?)(' + people.map(p => escapeRegex(p.name)).join('|') + ')(?=$|[^\\p{L}\\p{N}_])', 'giu');
-      let html = '', cursor = 0;
-      for (const match of note.matchAll(pattern)) {
-        html += this.escapeHtml(note.slice(cursor, match.index) + match[1]);
-        const person = people.find(p => p.name.toLocaleLowerCase() === match[3].toLocaleLowerCase());
-        html += match[2] || (tx.personIds || []).includes(person.id) ? this.personNameHtml(person, !!match[2]) : this.escapeHtml(match[3]);
-        cursor = match.index + match[0].length;
+      const tokens = [];
+      const itemPattern = /(?:^|\s)(\$\s*[\p{L}][^$\u2063]*?)(?=\u2063|\s+\$|\s+@[\p{L}]|$)/giu;
+      for (const match of note.matchAll(itemPattern)) {
+        const start = match.index + match[0].indexOf(match[1]);
+        tokens.push({ start, end: start + match[1].length, type: 'item', text: match[1] });
       }
-      return html + this.escapeHtml(note.slice(cursor));
+      const itemTokens = tokens.filter(token => token.type === 'item');
+      const people = (this.data.people || []).filter(person => person.name).slice().sort((a,b) => b.name.length - a.name.length);
+      if (people.length) {
+        const pattern = new RegExp('(^|[^\\p{L}\\p{N}_@])(@?)(' + people.map(person => escapeRegex(person.name)).join('|') + ')(?=$|[^\\p{L}\\p{N}_])', 'giu');
+        for (const match of note.matchAll(pattern)) {
+          const person = people.find(item => item.name.toLocaleLowerCase() === match[3].toLocaleLowerCase());
+          if (!person) continue;
+          const start = match.index + match[1].length;
+          const end = match.index + match[0].length;
+          if (itemTokens.some(token => start < token.end && end > token.start)) continue;
+          tokens.push({ start, end, type: 'person', person, mention: !!match[2], text: match[3] });
+        }
+      }
+      tokens.sort((a,b) => a.start - b.start || b.end - a.end);
+      let html = '', cursor = 0;
+      for (const token of tokens) {
+        if (token.start < cursor) continue;
+        html += this.escapeHtml(cleanDescription(note.slice(cursor, token.start)));
+        html += token.type === 'item'
+          ? '<strong class="item-mention">' + this.escapeHtml(token.text) + '</strong>'
+          : this.personNameHtml(token.person, token.mention);
+        cursor = token.end;
+      }
+      return html + this.escapeHtml(cleanDescription(note.slice(cursor)));
     },
     toolsModal(id, title, body) {
       let modal = document.getElementById(id);
@@ -62,14 +129,19 @@
     },
     openFindReplace(restoreCustom = false, transactionIds = null) {
       const modal = this.toolsModal('find-replace-modal', 'Find & Replace',
-        '<div class="tools-grid"><label>Description contains<input id="replace-find" class="input"></label><label>Account<select id="replace-account" class="input"></select></label><label>Category<select id="replace-category" class="input"></select></label><label>Type<select id="replace-type" class="input"><option value="">All types</option><option value="expense">Expenses</option><option value="income">Income</option><option value="transfer">Transfers</option></select></label><label>From date<input id="replace-from" class="input"></label><label>To date<input id="replace-to" class="input"></label><label>Person<select id="replace-person" class="input"></select></label><label>Action<select id="replace-mode" class="input"><option value="replace">Replace text</option><option value="rewrite">Rewrite description</option><option value="assign-person">Assign person</option></select></label></div>' +
-        '<div class="tools-grid"><label class="tools-field" id="replace-needle-field">Text to replace<input id="replace-needle" class="input"></label><label class="tools-field"><span id="replace-text-label">New text</span><input id="replace-text" class="input"></label></div><p id="replace-action-help" class="health-explanation"></p><p class="health-explanation">#description · #date · #month · #year · #account · #category. Use @Name for people. Search is plain text, case-insensitive. Preview before applying.</p>' +
-        '<div class="tools-grid" id="replace-target-person-field" hidden><label class="tools-field">Assign person<select id="replace-target-person" class="input"></select></label><label class="tools-field">Name to replace (optional)<input id="replace-person-name" class="input" placeholder="Name currently in the description"></label></div><div class="tools-actions"><button id="replace-preview" class="btn btn-secondary">PREVIEW</button><button id="replace-apply" class="btn btn-primary" disabled>APPLY</button><span id="replace-count"></span></div><div id="replace-results" class="tools-scroll"></div>');
+        '<div class="tools-grid"><label>Description contains<input id="replace-find" class="input"></label><label>Account<select id="replace-account" class="input"></select></label><label>Category<select id="replace-category" class="input"></select></label><label>Type<select id="replace-type" class="input"><option value="">All types</option><option value="expense">Expenses</option><option value="income">Income</option><option value="transfer">Transfers</option></select></label><label>From date<input id="replace-from" class="input"></label><label>To date<input id="replace-to" class="input"></label><label>Person<select id="replace-person" class="input"></select></label><label>Item<select id="replace-item" class="input"><option value="">All items</option></select></label></div>' +
+        '<div class="tools-grid replace-action-row" id="replace-action-row"><label>Action<select id="replace-mode" class="input"><option value="replace">Replace text</option><option value="rewrite">Rewrite description</option><option value="assign-person">Assign person</option><option value="assign-item">Assign item</option></select></label><label id="replace-needle-field">Text to replace<input id="replace-needle" class="input"></label><label id="replace-text-field"><span id="replace-text-label">New text</span><input id="replace-text" class="input"></label><label id="replace-assignee-field" hidden><span id="replace-assignee-label">Name of person/item</span><input id="replace-assignee" class="input" type="text" autocomplete="off" aria-autocomplete="list" aria-controls="replace-assignee-suggestions" aria-expanded="false"><div id="replace-assignee-suggestions" class="people-suggestions replace-assignee-suggestions hidden" role="listbox" aria-label="Existing people and items"></div></label><label id="replace-name-to-replace-field" hidden>Text to replace<input id="replace-name-to-replace" class="input"></label></div>' +
+        '<div class="tools-actions"><button id="replace-preview" class="btn btn-secondary">PREVIEW</button><button id="replace-apply" class="btn btn-primary" disabled>APPLY</button><span id="replace-count"></span></div><div id="replace-results" class="tools-scroll"></div><p id="replace-token-help" class="replace-token-help">#description · #date · #month · #year · #account · #category @person</p>');
       modal.querySelector('#replace-account').innerHTML = '<option value="">All accounts</option>' + (this.data.accounts || []).map(a => '<option value="' + this.escapeHtml(a.id) + '">' + this.escapeHtml(a.name) + '</option>').join('') + (this.data.creditCards || []).map(a => '<option value="card:' + this.escapeHtml(a.id) + '">' + this.escapeHtml(a.name) + '</option>').join('');
       modal.querySelector('#replace-category').innerHTML = '<option value="">All categories</option>' + (this.data.categories || []).map(c => '<option value="' + this.escapeHtml(c.id) + '">' + this.escapeHtml(c.name) + '</option>').join('');
       modal.querySelector('#replace-person').innerHTML = this.peopleOptions();
+      const itemSelect = modal.querySelector('#replace-item');
+      if (!itemSelect.dataset.itemOptionsBound) {
+        itemSelect.dataset.itemOptionsBound = 'true';
+        itemSelect.addEventListener('focus', () => this.populateReplaceItemOptions(modal));
+      }
       this._replaceNegated = {};
-      for (const field of ['person','category','account']) {
+      for (const field of ['person','category','account','item']) {
         let button = modal.querySelector('#replace-not-' + field);
         if (!button) {
           const select = modal.querySelector('#replace-' + field);
@@ -90,6 +162,48 @@
         button.onclick = () => { this._replaceNegated[field] = !this._replaceNegated[field]; update(); this.previewDescriptionChanges(true); };
       }
       const actionSelect = modal.querySelector('#replace-mode');
+      const assigneeInput = modal.querySelector('#replace-assignee');
+      const assigneeSuggestions = modal.querySelector('#replace-assignee-suggestions');
+      if (modal.dataset.assigneeSuggestionDismissBound !== 'true') {
+        modal.dataset.assigneeSuggestionDismissBound = 'true';
+        modal.addEventListener('pointerdown', event => {
+          if (event.target.closest?.('#replace-assignee-field')) return;
+          modal.querySelector('#replace-assignee-suggestions')?.classList.add('hidden');
+          modal.querySelector('#replace-assignee')?.setAttribute('aria-expanded','false');
+        }, true);
+      }
+      assigneeInput.addEventListener('focus', () => this.renderReplaceAssigneeSuggestions(modal));
+      assigneeInput.addEventListener('click', () => this.renderReplaceAssigneeSuggestions(modal));
+      assigneeInput.addEventListener('input', () => this.renderReplaceAssigneeSuggestions(modal));
+      assigneeInput.addEventListener('blur', () => setTimeout(() => { assigneeSuggestions.classList.add('hidden'); assigneeInput.setAttribute('aria-expanded','false'); }, 120));
+      assigneeSuggestions.addEventListener('mousedown', event => { if (event.target.closest('.replace-assignee-suggestion')) event.preventDefault(); });
+      assigneeSuggestions.addEventListener('click', event => {
+        const suggestion = event.target.closest('.replace-assignee-suggestion');
+        if (!suggestion) return;
+        const prefix = modal.querySelector('#replace-mode').value === 'assign-person' ? '@' : '$';
+        assigneeInput.value = prefix + suggestion.dataset.name;
+        assigneeInput.dispatchEvent(new Event('input', { bubbles:true }));
+        assigneeSuggestions.classList.add('hidden');
+        assigneeInput.setAttribute('aria-expanded','false');
+      });
+      assigneeInput.addEventListener('keydown', event => {
+        const options = [...assigneeSuggestions.querySelectorAll('.replace-assignee-suggestion')];
+        if ((event.key === 'ArrowDown' || event.key === 'ArrowUp') && options.length) {
+          event.preventDefault();
+          const current = Number(assigneeSuggestions.dataset.activeIndex || 0);
+          const next = event.key === 'ArrowDown' ? (current + 1) % options.length : (current - 1 + options.length) % options.length;
+          assigneeSuggestions.dataset.activeIndex = String(next);
+          options.forEach((option, index) => { option.classList.toggle('is-active', index === next); option.setAttribute('aria-selected', String(index === next)); });
+          return;
+        }
+        if (event.key === 'Enter' && !assigneeSuggestions.classList.contains('hidden') && options.length) {
+          event.preventDefault();
+          options[Number(assigneeSuggestions.dataset.activeIndex) || 0].click();
+        } else if (event.key === 'Escape') {
+          assigneeSuggestions.classList.add('hidden');
+          assigneeInput.setAttribute('aria-expanded','false');
+        }
+      });
       if (!modal.querySelector('#replace-custom')) {
         const custom = document.createElement('button');
         custom.type = 'button'; custom.id = 'replace-custom'; custom.className = 'btn btn-secondary'; custom.textContent = 'FILTER';
@@ -133,13 +247,15 @@
       };
       if (!actionSelect.querySelector('[value="set-category"]')) {
         actionSelect.insertAdjacentHTML('beforeend', '<option value="set-category">Set category</option><option value="delete">Delete transactions</option><option value="remove-person">Remove person</option><option value="link-bill">Link to bill</option><option value="set-account">Set account</option>');
-        modal.querySelector('.tools-actions').insertAdjacentHTML('beforebegin', '<div class="tools-grid" id="replace-extra-fields" hidden><label class="tools-field"><span id="replace-target-label">Target</span><select id="replace-target" class="input"></select></label><label class="tools-field" id="replace-account-side-field" hidden>Change<select id="replace-account-side" class="input"><option value="accountId">Transaction account</option><option value="fromAccountId">Transfer source</option><option value="toAccountId">Transfer destination</option></select></label></div>');
+        modal.querySelector('#replace-action-row').insertAdjacentHTML('beforeend', '<div id="replace-extra-fields" hidden><label><span id="replace-target-label">Target</span><select id="replace-target" class="input"></select></label><label id="replace-account-side-field" hidden>Change<select id="replace-account-side" class="input"><option value="accountId">Transaction account</option><option value="fromAccountId">Transfer source</option><option value="toAccountId">Transfer destination</option></select></label></div>');
       }
-      for (const [field, label] of [['person','No person'], ['category','No category'], ['account','No account']]) {
+      for (const [field, label] of [['person','No person'], ['category','No category'], ['account','No account'], ['item','No item']]) {
         const select = modal.querySelector('#replace-' + field);
-        select.options[0].insertAdjacentHTML('afterend', '<option value="__none__">' + label + '</option>');
+        if (!select.querySelector('option[value="__none__"]')) {
+          select.options[0].insertAdjacentHTML('afterend', '<option value="__none__">' + label + '</option>' + (field === 'category' ? '<option value="__split__">Split categories</option>' : ''));
+        }
       }
-      modal.querySelector('#replace-target-person').innerHTML = '<option value="">Choose a person</option>' + (this.data.people || []).slice().sort((a,b) => a.name.localeCompare(b.name)).map(p => '<option value="' + this.escapeHtml(p.id) + '">@' + this.escapeHtml(p.name) + '</option>').join('');
+      this.populateReplaceItemOptions(modal);
       modal.querySelectorAll('input,select').forEach(field => {
         field.value = field.id === 'replace-mode' ? 'replace' : field.id === 'replace-account-side' ? 'accountId' : '';
         field.oninput = () => {
@@ -163,27 +279,69 @@
       this.openModal('find-replace-modal');
       if (restoreCustom && this._overviewCustomFilter?.profile === this.profile) {
         const filter = this._overviewCustomFilter.filter;
-        for (const field of ['find','account','category','type','person']) modal.querySelector('#replace-' + field).value = filter[field] || (field === 'account' ? this.selectedAccount || '' : '');
+        if (filter.item) this.populateReplaceItemOptions(modal);
+        for (const field of ['find','account','category','type','person','item']) modal.querySelector('#replace-' + field).value = filter[field] || (field === 'account' ? this.selectedAccount || '' : '');
         for (const field of ['from','to']) modal.querySelector('#replace-' + field).value = filter[field] ? this.fmtDateInput(filter[field]) : '';
         if (filter.wholeWord) modal.querySelector('#replace-match-mode').click();
-        for (const field of ['person','category','account']) if (filter['not' + field[0].toUpperCase() + field.slice(1)]) modal.querySelector('#replace-not-' + field).click();
+        for (const field of ['person','category','account','item']) if (filter['not' + field[0].toUpperCase() + field.slice(1)]) modal.querySelector('#replace-not-' + field).click();
         modal.querySelectorAll('select').forEach(select => this.syncCustomSelect(select));
         this.previewDescriptionChanges(true);
       }
       if (this._replaceGroupIds && !restoreCustom) this.previewDescriptionChanges(true);
       modal.querySelector('#replace-find').focus();
     },
+    renderReplaceAssigneeSuggestions(modal) {
+      const input = modal && modal.querySelector('#replace-assignee');
+      const panel = modal && modal.querySelector('#replace-assignee-suggestions');
+      const mode = modal && modal.querySelector('#replace-mode')?.value;
+      if (!input || !panel || !['assign-person','assign-item'].includes(mode)) {
+        panel?.classList.add('hidden');
+        input?.setAttribute('aria-expanded','false');
+        return;
+      }
+      const isPerson = mode === 'assign-person';
+      const prefix = isPerson ? '@' : '$';
+      const typedName = input.value.trim().replace(/^[@$]\s*/, '').replace(/\s+/g, ' ').trim();
+      const lowerName = typedName.toLocaleLowerCase();
+      const entries = isPerson
+        ? (this.data.people || []).slice().sort((a,b) => a.name.localeCompare(b.name, undefined, { sensitivity:'base' })).map(person => ({ name:person.name, html:'@' + this.personNameHtml(person, false) }))
+        : this.existingTrackedItems().slice().sort((a,b) => a.name.localeCompare(b.name, undefined, { sensitivity:'base' })).map(item => ({ name:item.name, html:'$' + this.escapeHtml(item.name) }));
+      const matches = entries.filter(entry => !lowerName || entry.name.toLocaleLowerCase().includes(lowerName)).slice(0, 16);
+      const exact = entries.some(entry => entry.name.toLocaleLowerCase() === lowerName);
+      let html = matches.map((entry, index) => '<button type="button" role="option" aria-selected="' + (index === 0) + '" class="btn btn-sm btn-secondary replace-assignee-suggestion' + (index === 0 ? ' is-active' : '') + '" data-name="' + this.escapeHtml(entry.name) + '">' + entry.html + '</button>').join('');
+      const rawPersonName = input.value.trim().replace(/^@\s*/, '');
+      const validNewName = typedName && (!isPerson || !/[@\r\n]/.test(rawPersonName));
+      if (validNewName && !exact) html += '<button type="button" role="option" aria-selected="' + (!matches.length) + '" class="btn btn-sm btn-secondary replace-assignee-suggestion replace-assignee-new-option' + (!matches.length ? ' is-active' : '') + '" data-name="' + this.escapeHtml(typedName) + '">+ NEW ' + prefix + this.escapeHtml(typedName) + '</button>';
+      panel.innerHTML = html;
+      panel.dataset.activeIndex = '0';
+      panel.classList.toggle('hidden', !html);
+      input.setAttribute('aria-expanded', String(!!html));
+    },
     updateReplaceAction() {
       const mode = document.getElementById('replace-mode').value;
       const rewrite = mode === 'rewrite';
-      const assign = mode === 'assign-person';
+      const assignPerson = mode === 'assign-person';
+      const assignItem = mode === 'assign-item';
+      const assign = assignPerson || assignItem;
       const textAction = mode === 'replace' || rewrite;
       document.getElementById('replace-needle-field').hidden = mode !== 'replace';
-      document.getElementById('replace-text').closest('label').hidden = !textAction;
-      document.getElementById('replace-target-person-field').hidden = !assign;
+      document.getElementById('replace-text-field').hidden = !textAction;
+      document.getElementById('replace-assignee-field').hidden = !assign;
+      document.getElementById('replace-name-to-replace-field').hidden = !assign;
+      const assignee = document.getElementById('replace-assignee');
+      const suggestions = document.getElementById('replace-assignee-suggestions');
+      if (assignee.dataset.mode !== mode) {
+        assignee.dataset.mode = mode;
+        assignee.value = '';
+      }
+      assignee.placeholder = assignPerson ? '@Person name' : '$Item name';
+      assignee.setAttribute('aria-label', assignPerson ? 'Name of person' : 'Name of item');
+      if (!assign) { suggestions.classList.add('hidden'); assignee.setAttribute('aria-expanded','false'); }
+      document.getElementById('replace-assignee-label').textContent = assignPerson ? 'Name of person' : 'Name of item';
       document.getElementById('replace-text-label').textContent = rewrite ? 'New description' : 'New text';
       const extra = ['set-category','remove-person','link-bill','set-account'].includes(mode);
       document.getElementById('replace-extra-fields').hidden = !extra;
+      document.getElementById('replace-action-row').dataset.mode = mode;
       document.getElementById('replace-account-side-field').hidden = mode !== 'set-account';
       const target = document.getElementById('replace-target');
       if (target.dataset.mode !== mode) {
@@ -192,30 +350,19 @@
         document.getElementById('replace-target-label').textContent = mode === 'set-category' ? 'Category' : mode === 'remove-person' ? 'Person to remove' : mode === 'link-bill' ? 'Bill' : 'Account';
         target.innerHTML = '<option value="">Choose…</option>' + (mode === 'remove-person' ? '<option value="__all__">All people</option>' : '') + entries.slice().sort((a,b) => a.name.localeCompare(b.name)).map(item => '<option value="' + this.escapeHtml(item.id) + '">' + this.escapeHtml((mode === 'remove-person' ? '@' : '') + item.name + (mode === 'set-account' ? ' · ' + (item.currency || this.baseCurrency()) : '')) + '</option>').join('');
       }
-      const help = {
-        'assign-person':'Add this person without removing existing people. Optionally replace a name with @Name; dates and the rest of the description stay unchanged.',
-        rewrite:'Replace the entire description of each matching transaction with the new description.',
-        replace:'Replace only the specified text; keep the rest of each description unchanged.',
-        'set-category':'Set the category on matching transactions. Categories archived for a transaction’s date are skipped.',
-        delete:'Delete selected transactions after confirmation. Linked payments are reversed; Undo restores the batch.',
-        'remove-person':'Remove the chosen person, or all person tags. Description text stays unchanged.',
-        'link-bill':'Link existing expense transactions to a bill and mark their months paid. No new transactions are created. Conflicting links are skipped.',
-        'set-account':'Change the selected account or transfer side. Exact currency values are preserved; incompatible currencies and protected linked records are skipped.'
-      };
-      document.getElementById('replace-action-help').textContent = help[mode];
       document.getElementById('replace-apply').classList.toggle('btn-danger', mode === 'delete');
       document.getElementById('replace-apply').classList.toggle('btn-primary', mode !== 'delete');
     },
     applyCustomOverviewFilter() {
       const value = id => document.getElementById('replace-' + id).value;
-      const filter = {find:value('find').trim(),account:value('account'),category:value('category'),type:value('type'),person:value('person'),wholeWord:!!this._replaceWholeWord,notAccount:!!this._replaceNegated?.account,notCategory:!!this._replaceNegated?.category,notPerson:!!this._replaceNegated?.person};
+      const filter = {find:value('find').trim(),account:value('account'),category:value('category'),type:value('type'),person:value('person'),item:value('item'),wholeWord:!!this._replaceWholeWord,notAccount:!!this._replaceNegated?.account,notCategory:!!this._replaceNegated?.category,notPerson:!!this._replaceNegated?.person,notItem:!!this._replaceNegated?.item};
       for (const key of ['from','to']) {
         filter[key] = value(key).trim() ? this.parseDateInput(value(key)) : '';
         if (value(key).trim() && !filter[key]) { this.showToast('Enter a valid ' + key + ' date'); return; }
       }
       if (filter.from && filter.to && filter.from > filter.to) { this.showToast('From date must be before To date'); return; }
       if (this._replaceGroupIds) filter.ids = this._replaceGroupIds.slice();
-      if (![filter.find,filter.account,filter.category,filter.type,filter.person,filter.from,filter.to,filter.ids].some(Boolean)) { this.showToast('Choose at least one search filter'); return; }
+      if (![filter.find,filter.account,filter.category,filter.type,filter.person,filter.item,filter.from,filter.to,filter.ids].some(Boolean)) { this.showToast('Choose at least one search filter'); return; }
       this.selectedAccount = filter.account && !filter.notAccount && filter.account !== '__none__' && !filter.account.startsWith('card:') ? filter.account : null;
       if (this.selectedAccount) filter.account = '';
       this._ovInc = filter.type === 'income'; this._ovExp = filter.type === 'expense';
@@ -263,12 +410,19 @@
       if (!target) return { changed:false };
       if (mode === 'remove-person') {
         patch.personIds = target === '__all__' ? [] : (tx.personIds || []).filter(id => id !== target);
-        return { patch, changed:JSON.stringify(patch.personIds) !== JSON.stringify(tx.personIds || []), previewAfter:target === '__all__' ? 'Remove all person tags' : 'Remove @' + ((this.data.people || []).find(p => p.id === target)?.name || '') };
+        if (Array.isArray(tx.parts)) patch.parts = tx.parts.map(part => ({ ...part, personIds: target === '__all__' ? [] : (part.personIds || []).filter(id => id !== target) }));
+        return { patch, changed:JSON.stringify(patch.personIds) !== JSON.stringify(tx.personIds || []) || JSON.stringify(patch.parts || []) !== JSON.stringify(tx.parts || []), previewAfter:target === '__all__' ? 'Remove all person tags' : 'Remove @' + ((this.data.people || []).find(p => p.id === target)?.name || '') };
       }
       if (mode === 'set-category') {
         const category = (this.data.categories || []).find(c => c.id === target);
         if (!category) return blocked('Category unavailable');
         if (!this.categorySelectionAllowed(target, tx.date, tx.categoryId)) return blocked('Category archived for this date');
+        if (Array.isArray(tx.parts) && tx.parts.length) {
+          if (tx.parts.some(part => !this.categorySelectionAllowed(target, tx.date, part.categoryId))) return blocked('Category archived for this date');
+          patch.parts = tx.parts.map(part => ({ ...part, categoryId:target }));
+          patch.categoryId = target;
+          return { patch, changed:tx.categoryId !== target || tx.parts.some(part => part.categoryId !== target), previewAfter:'All split parts → ' + category.name };
+        }
         return { patch:{categoryId:target}, changed:tx.categoryId !== target, previewAfter:'Category → ' + category.name };
       }
       if (mode === 'link-bill') {
@@ -314,39 +468,70 @@
       this._replacePreview = null;
       document.getElementById('replace-apply').disabled = true;
       const value = id => document.getElementById('replace-' + id).value;
-      const filter = { find: value('find').trim(), account: value('account'), category: value('category'), type: value('type'), person: value('person') };
+      const filter = { find: value('find').trim(), account: value('account'), category: value('category'), type: value('type'), person: value('person'), item: value('item') };
       const results = document.getElementById('replace-results');
       const invalid = message => { results.textContent = message; document.getElementById('replace-count').textContent = ''; if (!live) this.showToast(message); };
-      if (!Object.values(filter).some(Boolean) && !value('from').trim() && !value('to').trim() && !this._replaceGroupIds) {
+      const mode = value('mode');
+      const itemNameToReplace = mode === 'assign-item' ? value('name-to-replace').trim().replace(/^\$\s*/, '').replace(/\s+/g, ' ') : '';
+      const hasItemReplacementScope = mode === 'assign-item' && !!value('assignee') && !!itemNameToReplace;
+      if (!Object.values(filter).some(Boolean) && !value('from').trim() && !value('to').trim() && !this._replaceGroupIds && !hasItemReplacementScope) {
         results.innerHTML = ''; document.getElementById('replace-count').textContent = ''; return;
       }
       filter.wholeWord = this._replaceWholeWord;
       if (this._replaceGroupIds) filter.ids = this._replaceGroupIds;
       filter.notPerson = !!this._replaceNegated?.person;
       filter.notCategory = !!this._replaceNegated?.category;
+      filter.notItem = !!this._replaceNegated?.item;
       filter.notAccount = !!this._replaceNegated?.account;
       for (const key of ['from','to']) {
         filter[key] = value(key).trim() ? this.parseDateInput(value(key)) : '';
         if (value(key).trim() && !filter[key]) { invalid('Enter a valid ' + key + ' date'); return; }
       }
       if (filter.from && filter.to && filter.from > filter.to) { invalid('From date must be before To date'); return; }
-      const assignedPerson = value('mode') === 'assign-person' ? (this.data.people || []).find(p => p.id === value('target-person')) : null;
-      const mode = value('mode');
+      const enteredAssignee = value('assignee').trim();
+      const personInputName = enteredAssignee.replace(/^@\s*/, '').replace(/\s+/g, ' ').trim();
+      const itemInputName = enteredAssignee.replace(/^\$\s*/, '').replace(/\s+/g, ' ').trim();
+      const assignedPerson = mode === 'assign-person' ? (this.data.people || []).find(person => person.name.toLocaleLowerCase() === personInputName.toLocaleLowerCase()) : null;
+      const newPersonName = mode === 'assign-person' && personInputName && !assignedPerson && !/[@\r\n]/.test(enteredAssignee.replace(/^@\s*/, '')) ? personInputName : '';
+      const assignedItem = mode === 'assign-item' ? this.existingTrackedItems().find(item => item.name.toLocaleLowerCase() === itemInputName.toLocaleLowerCase()) : null;
+      const newItemName = mode === 'assign-item' && itemInputName && !assignedItem ? itemInputName : '';
+      const assignedPersonName = assignedPerson?.name || newPersonName;
+      const assignedItemName = assignedItem?.name || newItemName;
+
       const bulkAction = ['set-category','delete','remove-person','link-bill','set-account'].includes(mode);
-      const ready = bulkAction ? mode === 'delete' || !!value('target') : mode === 'assign-person' ? !!assignedPerson : mode === 'replace' ? !!value('needle') : !!value('text');
-      const rows = (this.data.transactions || []).filter(tx => matches(tx, filter)).slice().sort((a,b) => String(b.date).localeCompare(String(a.date))).map(tx => {
+      const ready = bulkAction ? mode === 'delete' || !!value('target') : mode === 'assign-person' ? !!assignedPersonName : mode === 'assign-item' ? !!assignedItemName : mode === 'replace' ? !!value('needle') : !!value('text');
+      const rows = (this.data.transactions || []).filter(tx => matches(tx, filter) && (!hasItemReplacementScope || descriptionMatches(tx.note, itemNameToReplace, this._replaceWholeWord))).slice().sort((a,b) => String(b.date).localeCompare(String(a.date))).map(tx => {
         const account = (this.data.accounts || []).find(a => a.id === (tx.accountId || tx.fromAccountId)) || (this.data.creditCards || []).find(a => a.id === tx.cardId);
         const category = (this.data.categories || []).find(c => c.id === tx.categoryId);
         const values = { description: tx.note || '', date: this.fmtDateInput(tx.date), year: String(tx.date || '').slice(0,4), month: new Date(String(tx.date) + 'T12:00:00').toLocaleString('en', { month:'long' }), account: account && account.name || '', category: category && category.name || '', person: (this.data.people || []).filter(p => (tx.personIds || []).includes(p.id)).map(p => p.name).join(', ') };
         let after = tx.note || '';
-        if (ready && assignedPerson) {
-          const name = value('person-name').trim().replace(/^@/, '');
-          if (name) after = after.replace(new RegExp('(^|[^\\p{L}\\p{N}_@])@?' + escapeRegex(name) + '(?=$|[^\\p{L}\\p{N}_])', 'giu'), (_, prefix) => prefix + '@' + assignedPerson.name);
+        if (ready && assignedPersonName) {
+          const name = value('name-to-replace').trim().replace(/^@/, '');
+          if (name) {
+            after = after.replace(new RegExp('(^|[^\\p{L}\\p{N}_@])@?' + escapeRegex(name) + '(?=$|[^\\p{L}\\p{N}_])', 'giu'), (_, prefix) => prefix + '@' + assignedPersonName);
+          } else {
+            const mention = '@' + assignedPersonName;
+            const mentionPattern = new RegExp('(^|[^\\p{L}\\p{N}_])' + escapeRegex(mention) + '(?=$|[^\\p{L}\\p{N}_])', 'iu');
+            if (!mentionPattern.test(after)) {
+              const description = String(after || '').trimEnd();
+              after = (description ? description + ' ' : '') + mention;
+            }
+          }
+        } else if (ready && assignedItemName) {
+          const name = value('name-to-replace').trim().replace(/^\$\s*/, '');
+          if (name) {
+            after = replaceItemText(after, name, assignedItemName, this._replaceWholeWord).value;
+          } else if (!itemTags(after).has(String(assignedItemName).toLocaleLowerCase())) {
+            const description = String(after || '').trimEnd();
+            const itemTag = '$' + assignedItemName + ITEM_TAG_END;
+            after = (description ? description + ' ' : '') + itemTag;
+          }
         } else if (ready && !bulkAction) after = rewrite(tx, value('needle'), value('text'), value('mode'), values);
-        const changed = ready && ((tx.note || '') !== after || (assignedPerson && !(tx.personIds || []).includes(assignedPerson.id)));
-        const previewAfter = assignedPerson ? after + ' · Assign @' + assignedPerson.name : after;
+        const personNeedsLink = !!assignedPersonName && (!!newPersonName || !(tx.personIds || []).includes(assignedPerson?.id));
+        const changed = ready && ((tx.note || '') !== after || personNeedsLink);
+        const previewAfter = after;
         const plan = bulkAction ? this.transactionBulkPlan(tx,mode,value('target'),value('account-side')) : {};
-        return { id: tx.id, original: JSON.stringify(tx), before: tx.note || '', after, previewAfter, changed, personId: assignedPerson?.id, date: tx.date, amount: tx.amount, currency: tx.currency, ...plan };
+        return { id: tx.id, original: JSON.stringify(tx), before: tx.note || '', after, previewAfter, changed, personId: assignedPerson?.id, newPersonName, itemKey:assignedItem?.key, date: tx.date, amount: tx.amount, currency: tx.currency, ...plan };
       }).sort((a,b) => Number(b.changed) - Number(a.changed) || String(b.date).localeCompare(String(a.date)));
       this._replacePreview = rows;
       this._replaceContext = this.transactionBulkContext();
@@ -397,8 +582,13 @@
           if (!fresh()) { this.showToast('Data changed. Generate a fresh preview.'); return; }
         }
         if (rows.some(row => row.personId && !(this.data.people || []).some(p => p.id === row.personId))) { this.showToast('Person changed. Generate a fresh preview.'); return; }
+        if (rows.some(row => row.itemKey && !this.existingTrackedItems().some(item => item.key === row.itemKey))) { this.showToast('Item changed. Generate a fresh preview.'); return; }
+        const requestedNewPersonName = rows.find(row => row.newPersonName)?.newPersonName || '';
+        if (requestedNewPersonName && (this.data.people || []).some(person => person.name.toLocaleLowerCase() === requestedNewPersonName.toLocaleLowerCase())) { this.showToast('People changed. Generate a fresh preview.'); return; }
+        const newAssignedPerson = requestedNewPersonName ? { id:crypto.randomUUID(), name:requestedNewPersonName, color:this.colorForName(requestedNewPersonName), accountNumber:'', notes:'' } : null;
         const beforeBatch = JSON.parse(JSON.stringify(this.data));
         try {
+          if (newAssignedPerson) (this.data.people ||= []).push(newAssignedPerson);
           rows.forEach(row => {
             const tx = transactions.get(row.id);
             if (row.delete) {
@@ -412,7 +602,7 @@
               payment.paid = true;
               payment.relatedTxIds = [...new Set([...this.billPaymentTransactionIds(payment),row.id])];
             } else if (row.patch) Object.assign(tx,row.patch);
-            else { if (row.personId) tx.personIds = [...new Set([...(tx.personIds || []), row.personId])]; tx.note = row.after; }
+            else { const personId = row.personId || (row.newPersonName && newAssignedPerson ? newAssignedPerson.id : null); if (personId) tx.personIds = [...new Set([...(tx.personIds || []), personId])]; tx.note = row.after; }
           });
           if (mode === 'link-bill' || mode === 'set-account' || mode === 'delete') {
             (this.data.billPayments || []).forEach(payment => this.syncBillPaymentTransactions(payment,(this.data.bills || []).find(bill => bill.id === payment.billId)));
@@ -422,8 +612,8 @@
           this.showToast('Changes could not be applied. Nothing was changed.');
           return;
         }
-        const assigned = rows.some(row => row.personId);
-        const labels = {'set-category':'Set transaction categories',delete:'Delete transactions','remove-person':'Remove transaction people','link-bill':'Link transactions to bill','set-account':'Set transaction accounts'};
+        const assigned = rows.some(row => row.personId || row.newPersonName);
+        const labels = {'set-category':'Set transaction categories',delete:'Delete transactions','remove-person':'Remove transaction people','link-bill':'Link transactions to bill','set-account':'Set transaction accounts','assign-item':'Assign items to transactions'};
         const saved = await this.save({ undoable:true, label:labels[mode] || (assigned ? 'Assign person to transactions' : 'Find & Replace descriptions') });
         this._replacePreview = null;
         if (!saved) { this.showToast('Changes are unsaved. Retry using the save indicator.'); return; }
@@ -483,17 +673,28 @@
       document.getElementById('person-account').value = person.accountNumber || '';
       document.getElementById('person-notes').value = person.notes || '';
       document.getElementById('person-delete').hidden = !id;
-      const txs = (this.data.transactions || []).filter(tx => (tx.personIds || []).includes(id)).slice().sort((a,b) => String(b.date).localeCompare(String(a.date)));
+      const txs = (this.data.transactions || []).filter(tx => (tx.personIds || []).includes(id) || (tx.parts || []).some(part => (part.personIds || []).includes(id))).slice().sort((a,b) => String(b.date).localeCompare(String(a.date)));
       const totals = {};
       const add = (currency, field, amount) => { const item = totals[currency] ||= {income:0,expense:0,out:0,in:0}; item[field] += Math.abs(Number(amount) || 0); };
-      txs.forEach(tx => { if (tx.type === 'transfer') { add(tx.currency || this.baseCurrency(),'out',tx.amount); add(tx.currencyIn || tx.currency || this.baseCurrency(),'in',tx.amountIn ?? tx.amount); } else add(tx.currency || this.baseCurrency(),tx.type === 'income' ? 'income' : 'expense',tx.amount); });
+      const personRows = txs.map(tx => {
+        if (tx.type === 'transfer') {
+          if ((tx.personIds || []).includes(id)) { add(tx.currency || this.baseCurrency(),'out',tx.amount); add(tx.currencyIn || tx.currency || this.baseCurrency(),'in',tx.amountIn ?? tx.amount); }
+          return { tx, amount:tx.amount, description:tx.note || '' };
+        }
+        const allocations = this.transactionAllocationRows(tx).filter(row => (row.personIds || []).includes(id));
+        allocations.forEach(row => add(tx.currency || this.baseCurrency(),tx.type === 'income' ? 'income' : 'expense',row.amount));
+        return { tx, amount:allocations.reduce((sum,row) => sum + row.amount,0), description:[tx.note, ...allocations.map(row => row.partDescription).filter(Boolean)].filter(Boolean).join(' · ') };
+      });
       document.getElementById('person-summary').innerHTML = Object.entries(totals).map(([currency,t]) => {
         const net = t.income - t.expense;
         return '<div class="person-summary-line"><strong>' + this.escapeHtml(currency) + '</strong><span>INCOME <strong class="amt-income">' + this.fmtNumber(t.income) + '</strong></span><span>EXPENSES <strong class="amt-expense">' + this.fmtNumber(t.expense) + '</strong></span><span>NET <strong class="' + (net > 0 ? 'amt-income' : net < 0 ? 'amt-expense' : '') + '">' + this.fmtNumber(net) + '</strong></span>' + (t.out || t.in ? '<span>TRANSFERS OUT ' + this.fmtNumber(t.out) + ' / IN ' + this.fmtNumber(t.in) + '</span>' : '') + '</div>';
-      }).join('') + (txs.some(tx => (tx.personIds || []).length > 1) ? '<p class="health-explanation">Shared transactions show their full amount here; no individual shares are assigned.</p>' : '');
+      }).join('') + (txs.some(tx => (tx.personIds || []).length > 1 || this.transactionAllocationRows(tx).some(row => (row.personIds || []).length > 1)) ? '<p class="health-explanation">Shared entries appear in each person’s history; split parts show only their assigned amounts.</p>' : '');
       const history = document.getElementById('person-history');
       document.getElementById('person-transaction-count').textContent = id ? txs.length + ' TRANSACTION' + (txs.length === 1 ? '' : 'S') : '';
-      history.innerHTML = id ? txs.map((tx,index) => '<div class="person-history-row"><span>' + this.escapeHtml(this.fmtDateInput(tx.date)) + ' · <span class="' + (tx.type === 'income' ? 'amt-income' : tx.type === 'expense' ? 'amt-expense' : 'amt-transfer') + '">' + this.escapeHtml(this.fmtAmount(tx.amount,tx.currency || this.baseCurrency())) + '</span> · ' + this.transactionDescriptionHtml(tx, 'No description') + '</span><button type="button" class="btn btn-sm btn-icon person-history-link" data-index="' + index + '" aria-label="Show transaction" title="Show transaction">' + this.transactionLinkIcon() + '</button></div>').join('') : '';
+      history.innerHTML = id ? personRows.map((row,index) => {
+        const tx = row.tx;
+        return '<div class="person-history-row"><span>' + this.escapeHtml(this.fmtDateInput(tx.date)) + ' · <span class="' + (tx.type === 'income' ? 'amt-income' : tx.type === 'expense' ? 'amt-expense' : 'amt-transfer') + '">' + this.escapeHtml(this.fmtAmount(row.amount,tx.currency || this.baseCurrency())) + '</span> · ' + this.transactionDescriptionHtml({ ...tx, note:row.description }, 'No description') + '</span><button type="button" class="btn btn-sm btn-icon person-history-link" data-index="' + index + '" aria-label="Show transaction" title="Show transaction">' + this.transactionLinkIcon() + '</button></div>';
+      }).join('') : '';
       if (id) {
         history.querySelectorAll('[data-index]').forEach(button => { button.onclick = () => { this.closeModal('people-modal'); this.openLinkedTransaction(txs[Number(button.dataset.index)].id); }; });
       }
@@ -517,34 +718,291 @@
       const id = this._personEditId;
       if (!id || this._personBusy || !(await this.confirmModal({title:'Delete person',message:'Remove this person and their transaction associations? Transaction descriptions and amounts are kept.',confirmText:'Delete',danger:true}))) return;
       this.data.people = (this.data.people || []).filter(p=>p.id!==id);
-      (this.data.transactions || []).forEach(tx=> { if ((tx.personIds || []).includes(id)) tx.personIds = tx.personIds.filter(value=>value!==id); });
+      (this.data.transactions || []).forEach(tx=> {
+        if ((tx.personIds || []).includes(id)) tx.personIds = tx.personIds.filter(value=>value!==id);
+        if (Array.isArray(tx.parts)) tx.parts.forEach(part => { part.personIds = (part.personIds || []).filter(value => value !== id); });
+      });
       await this.save({undoable:true,label:'Delete person'}); this.renderPeopleList(); this.editPerson(null);
+    },
+    existingTrackedItems() {
+      return typeof this.reportsItemsIndex === 'function' ? this.reportsItemsIndex() : [];
+    },
+    populateReplaceItemOptions(modal) {
+      const select = modal && modal.querySelector('#replace-item');
+      if (!select) return;
+      const transactions = this.data.transactions || [];
+      const sequence = this._saveSequence || 0;
+      const cache = this._replaceItemOptionsCache;
+      if (cache && cache.transactions === transactions && cache.sequence === sequence && cache.length === transactions.length) {
+        if (select.dataset.itemOptionsLoaded !== 'true') {
+          const current = select.value;
+          select.innerHTML = '<option value="">All items</option><option value="__none__">No item</option>' + cache.items.map(item => '<option value="' + this.escapeHtml(item.key) + '">$' + this.escapeHtml(item.name) + '</option>').join('');
+          select.value = current;
+          select.dataset.itemOptionsLoaded = 'true';
+          this.syncCustomSelect(select);
+        }
+        return;
+      }
+      const items = this.existingTrackedItems().slice().sort((a,b) => a.name.localeCompare(b.name, undefined, { sensitivity:'base' }) || a.key.localeCompare(b.key));
+      this._replaceItemOptionsCache = { transactions, sequence, length: transactions.length, items };
+      const current = select.value;
+      select.innerHTML = '<option value="">All items</option><option value="__none__">No item</option>' + items.map(item => '<option value="' + this.escapeHtml(item.key) + '">$' + this.escapeHtml(item.name) + '</option>').join('');
+      select.value = current;
+      select.dataset.itemOptionsLoaded = 'true';
+      this.syncCustomSelect(select);
+    },
+    initItemEntry(noteId) {
+      const input = document.getElementById(noteId);
+      if (!input) return;
+      let panel = document.getElementById(noteId + '-items');
+      if (!panel) {
+        panel = document.createElement('div');
+        panel.id = noteId + '-items';
+        panel.className = 'transaction-item-suggestions hidden';
+        panel.setAttribute('role', 'listbox');
+        panel.setAttribute('aria-label', 'Existing items');
+        const splitRow = input.closest('.tx-split-row');
+        if (splitRow) splitRow.insertAdjacentElement('afterend', panel);
+        else input.parentElement.insertBefore(panel, document.getElementById(noteId + '-people'));
+      }
+      if (input.dataset.itemEntryBound === 'true') return;
+      input.dataset.itemEntryBound = 'true';
+      input.addEventListener('input', event => {
+        if (event.isTrusted) delete input.dataset.confirmedItem;
+        this.renderItemEntrySuggestions(noteId);
+      });
+      input.addEventListener('keydown', event => {
+        const panel = document.getElementById(noteId + '-items');
+        const options = panel && !panel.classList.contains('hidden') ? [...panel.querySelectorAll('.transaction-item-suggestion')] : [];
+        if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+          if (!options.length) return;
+          event.preventDefault();
+          const current = Number(panel.dataset.activeIndex || 0);
+          const next = event.key === 'ArrowDown'
+            ? (current + 1) % options.length
+            : (current - 1 + options.length) % options.length;
+          panel.dataset.activeIndex = String(next);
+          options.forEach((option, index) => {
+            option.classList.toggle('is-active', index === next);
+            option.setAttribute('aria-selected', String(index === next));
+          });
+          options[next].scrollIntoView({ block:'nearest' });
+          return;
+        }
+        if (event.key !== 'Enter') return;
+        if (options.length) {
+          event.preventDefault();
+          event.stopImmediatePropagation();
+          this.chooseTransactionItem(noteId, options[Number(panel.dataset.activeIndex) || 0]?.dataset.itemName || options[0].dataset.itemName);
+          return;
+        }
+        const caret = input.selectionStart == null ? input.value.length : input.selectionStart;
+        const start = input.value.lastIndexOf('$', Math.max(0, caret - 1));
+        if (start < 0 || (start > 0 && !/\s/.test(input.value[start - 1]))) return;
+        const priorEnd = input.value.indexOf(ITEM_TAG_END, start);
+        if (priorEnd >= 0 && priorEnd < caret) return;
+        if (input.value.lastIndexOf('@', caret - 1) > start) return;
+        const confirmed = input.value.slice(start, caret).trim();
+        if (!/^\$\s*[\p{L}]/u.test(confirmed) || input.dataset.confirmedItem === confirmed) return;
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        const suffix = input.value.slice(caret);
+        const separator = suffix && /^\s/.test(suffix) ? '' : ' ';
+        input.value = input.value.slice(0, caret) + ITEM_TAG_END + separator + suffix;
+        const nextCaret = caret + ITEM_TAG_END.length + separator.length;
+        input.setSelectionRange(nextCaret, nextCaret);
+        input.dispatchEvent(new Event('input', { bubbles:true }));
+        input.dataset.confirmedItem = confirmed;
+      });
+      input.addEventListener('blur', () => setTimeout(() => document.getElementById(noteId + '-items')?.classList.add('hidden'), 120));
+    },
+    renderItemEntrySuggestions(noteId) {
+      const input = document.getElementById(noteId);
+      const panel = document.getElementById(noteId + '-items');
+      if (!input || !panel) return;
+      const caret = input.selectionStart == null ? input.value.length : input.selectionStart;
+      const start = input.value.lastIndexOf('$', Math.max(0, caret - 1));
+      if (start < 0 || (start > 0 && !/\s/.test(input.value[start - 1]))) { panel.innerHTML = ''; panel.classList.add('hidden'); return; }
+      const priorEnd = input.value.indexOf(ITEM_TAG_END, start);
+      if (priorEnd >= 0 && priorEnd < caret) { panel.innerHTML = ''; panel.classList.add('hidden'); return; }
+      const query = input.value.slice(start + 1, caret).replace(/\s+/g, ' ').replace(/^\s+/, '');
+      if (/[@#]/.test(query)) { panel.innerHTML = ''; panel.classList.add('hidden'); return; }
+      const lowerQuery = query.toLocaleLowerCase();
+      const suggestions = this.existingTrackedItems().filter(item => item.name.toLocaleLowerCase().includes(lowerQuery))
+        .sort((a,b) => Number(!a.name.toLocaleLowerCase().startsWith(lowerQuery)) - Number(!b.name.toLocaleLowerCase().startsWith(lowerQuery)) || a.name.localeCompare(b.name, undefined, { sensitivity:'base' }))
+        .slice(0, 8);
+      if (!suggestions.length) { panel.innerHTML = ''; panel.classList.add('hidden'); return; }
+      panel.dataset.activeIndex = '0';
+      panel.innerHTML = suggestions.map((item, index) => '<button type="button" role="option" aria-selected="' + (index === 0) + '" class="transaction-item-suggestion' + (index === 0 ? ' is-active' : '') + '" data-item-name="' + this.escapeHtml(item.name) + '"><strong>$' + this.escapeHtml(item.name) + '</strong></button>').join('');
+      panel.querySelectorAll('.transaction-item-suggestion').forEach(button => {
+        button.addEventListener('mousedown', event => event.preventDefault());
+        button.addEventListener('click', () => this.chooseTransactionItem(noteId, button.dataset.itemName));
+      });
+      panel.classList.remove('hidden');
+    },
+    chooseTransactionItem(noteId, name) {
+      const input = document.getElementById(noteId);
+      const panel = document.getElementById(noteId + '-items');
+      if (!input) return;
+      const caret = input.selectionStart == null ? input.value.length : input.selectionStart;
+      const start = input.value.lastIndexOf('$', Math.max(0, caret - 1));
+      if (start < 0) return;
+      const token = '$' + name;
+      const suffix = input.value.slice(caret);
+      const separator = suffix && /^\s/.test(suffix) ? '' : ' ';
+      input.value = input.value.slice(0, start) + token + ITEM_TAG_END + separator + suffix;
+      const nextCaret = start + token.length + ITEM_TAG_END.length + separator.length;
+      input.setSelectionRange(nextCaret, nextCaret);
+      if (panel) { panel.innerHTML = ''; panel.classList.add('hidden'); }
+      input.dispatchEvent(new Event('input', { bubbles:true }));
+      input.dataset.confirmedItem = token;
+      input.focus();
+    },
+    renderTransactionTagHighlight(noteId) {
+      if (noteId !== 'tx-note' && !noteId.startsWith('tx-split-description-')) return;
+      const input = document.getElementById(noteId);
+      if (!input || !input.parentElement) return;
+      let overlay = document.getElementById(noteId + '-tag-highlight');
+      if (!overlay) {
+        overlay = document.createElement('div');
+        overlay.id = noteId + '-tag-highlight';
+        overlay.className = 'transaction-tag-highlight';
+        overlay.setAttribute('aria-hidden', 'true');
+        input.parentElement.classList.add('transaction-tag-highlight-host');
+        input.parentElement.appendChild(overlay);
+        input.classList.add('transaction-tag-highlight-source');
+        input.addEventListener('input', () => this.renderTransactionTagHighlight(noteId));
+        input.addEventListener('scroll', () => this.renderTransactionTagHighlight(noteId), { passive: true });
+        input.addEventListener('focus', () => this.renderTransactionTagHighlight(noteId));
+        input.addEventListener('blur', () => this.renderTransactionTagHighlight(noteId));
+      }
+
+      if (!input.offsetWidth || !input.offsetHeight) {
+        if (input.dataset.tagHighlightMeasurePending !== 'true') {
+          input.dataset.tagHighlightMeasurePending = 'true';
+          requestAnimationFrame(() => {
+            delete input.dataset.tagHighlightMeasurePending;
+            if (input.isConnected && input.offsetWidth && input.offsetHeight) this.renderTransactionTagHighlight(noteId);
+          });
+        }
+        return;
+      }
+
+      const rect = window.getComputedStyle(input);
+      overlay.style.left = input.offsetLeft + 'px';
+      overlay.style.top = input.offsetTop + 'px';
+      overlay.style.width = input.offsetWidth + 'px';
+      overlay.style.height = input.offsetHeight + 'px';
+      overlay.style.fontFamily = rect.fontFamily;
+      overlay.style.fontSize = rect.fontSize;
+      overlay.style.fontWeight = rect.fontWeight;
+      overlay.style.fontStyle = rect.fontStyle;
+      overlay.style.letterSpacing = rect.letterSpacing;
+      overlay.style.lineHeight = rect.lineHeight;
+      overlay.style.textTransform = rect.textTransform;
+      overlay.style.textAlign = rect.textAlign;
+      overlay.style.padding = rect.padding;
+      overlay.style.borderWidth = rect.borderWidth;
+      overlay.style.borderStyle = rect.borderStyle;
+      overlay.style.borderColor = document.activeElement === input ? 'var(--accent)' : 'var(--border)';
+      overlay.style.borderRadius = rect.borderRadius;
+      overlay.style.backgroundColor = document.activeElement === input ? 'var(--block-hover)' : 'var(--surface-raised)';
+      overlay.classList.toggle('is-focused', document.activeElement === input);
+
+      const note = String(input.value || '');
+      const tokens = [];
+      const itemPattern = /(?:^|\s)(\$\s*[\p{L}][^$\u2063]*?)(?=\u2063|\s+\$|\s+@[\p{L}]|$)/giu;
+      for (const match of note.matchAll(itemPattern)) {
+        const start = match.index + match[0].indexOf(match[1]);
+        tokens.push({ start, end: start + match[1].length, type: 'item', text: match[1] });
+      }
+      const people = (this.data.people || []).filter(person => person && person.name).slice().sort((a, b) => b.name.length - a.name.length);
+      for (const person of people) {
+        const pattern = new RegExp('(^|[^\\p{L}\\p{N}_@])(@' + escapeRegex(person.name) + ')(?=$|[^\\p{L}\\p{N}_])', 'giu');
+        for (const match of note.matchAll(pattern)) {
+          const start = match.index + match[1].length;
+          tokens.push({ start, end: start + match[2].length, type: 'person', person, text: match[2] });
+        }
+      }
+      const genericPersonPattern = /(^|[^\p{L}\p{N}_@])(@[\p{L}\p{N}_-]+)/gu;
+      for (const match of note.matchAll(genericPersonPattern)) {
+        const start = match.index + match[1].length;
+        tokens.push({ start, end: start + match[2].length, type: 'person', text: match[2] });
+      }
+      tokens.sort((a, b) => a.start - b.start || b.end - a.end);
+      let html = '', cursor = 0;
+      for (const token of tokens) {
+        if (token.start < cursor) continue;
+        html += this.escapeHtml(cleanDescription(note.slice(cursor, token.start)));
+        if (token.type === 'item') html += '<span class="transaction-tag-highlight-item">' + this.escapeHtml(token.text) + '</span>';
+        else html += '<span class="transaction-tag-highlight-person"' + (token.person ? ' style="color:' + this.personColor(token.person) + '"' : '') + '>' + this.escapeHtml(token.text) + '</span>';
+        cursor = token.end;
+      }
+      html += this.escapeHtml(cleanDescription(note.slice(cursor)));
+      overlay.innerHTML = '<span class="transaction-tag-highlight-text">' + html + '</span>';
+      const text = overlay.firstElementChild;
+      if (text) text.style.transform = 'translateX(-' + input.scrollLeft + 'px)';
+
+      if (!this._transactionTagHighlightResizeBound) {
+        this._transactionTagHighlightResizeBound = true;
+        window.addEventListener('resize', () => document.querySelectorAll('.transaction-tag-highlight-source').forEach(field => this.renderTransactionTagHighlight(field.id)));
+      }
     },
     initPeopleEntry(ids, noteId = 'tx-note') {
       const note = document.getElementById(noteId);
       if (!note) return;
-      if (!note.dataset.peopleHint) { note.placeholder = (note.placeholder || 'Description') + ' · @ person'; note.dataset.peopleHint = 'true'; }
+      if (!note.dataset.peopleHint) { if (!/@|person/i.test(note.placeholder || '')) note.placeholder = (note.placeholder || 'Description') + ' · @ person'; note.dataset.peopleHint = 'true'; }
       this._peopleDrafts ||= {};
       this._peopleDrafts[noteId] = [...new Set(ids || [])].filter(id => (this.data.people || []).some(p=>p.id===id));
       let panel = document.getElementById(noteId + '-people');
       if (!panel) {
         panel = document.createElement('div'); panel.id = noteId + '-people'; panel.className = 'transaction-people';
-        note.parentElement.insertAdjacentElement('afterend',panel);
-        note.addEventListener('input',()=>this.renderPeopleEntry(noteId));
-        note.addEventListener('keydown',event=> { if (event.key === 'Enter' && panel.querySelector('.person-suggestion')) { event.preventDefault(); panel.querySelector('.person-suggestion').click(); } });
+        if (noteId === 'tx-note') note.parentElement.appendChild(panel);
+        else note.parentElement.insertAdjacentElement('afterend', panel);
+      }
+      if (note.dataset.peopleEntryBound !== 'true') {
+        note.dataset.peopleEntryBound = 'true';
+        note.addEventListener('input', () => this.renderPeopleEntry(noteId));
+        note.addEventListener('keydown', event => {
+          const itemPanel = document.getElementById(noteId + '-items');
+          if (event.key !== 'Enter' || (itemPanel && !itemPanel.classList.contains('hidden') && itemPanel.querySelector('.transaction-item-suggestion'))) return;
+          const suggestion = panel.querySelector('.person-suggestion');
+          if (!suggestion) return;
+          event.preventDefault();
+          event.stopImmediatePropagation();
+          suggestion.click();
+        });
       }
       this.renderPeopleEntry(noteId);
+      if (noteId === 'tx-note' || noteId.startsWith('tx-split-description-')) this.initItemEntry(noteId);
     },
     transactionPeopleDraft(noteId = 'tx-note') { return [...(this._peopleDrafts && this._peopleDrafts[noteId] || [])].filter(id => (this.data.people || []).some(person => person.id === id)); },
     renderPeopleEntry(noteId) {
       const note = document.getElementById(noteId), panel = document.getElementById(noteId + '-people');
+      this.renderTransactionTagHighlight(noteId);
       const ids = this.transactionPeopleDraft(noteId), people = this.data.people || [];
       const caret = note.selectionStart ?? note.value.length;
       const match = note.value.slice(0,caret).match(/@([^@\n]*)$/);
-      const suggestions = match ? people.filter(p=>!ids.includes(p.id) && p.name.toLocaleLowerCase().includes(match[1].toLocaleLowerCase())).sort((a,b)=>a.name.localeCompare(b.name, undefined, { sensitivity:'base' })).slice(0,8) : [];
-      panel.innerHTML = '<div class="people-chips">' + people.filter(p=>ids.includes(p.id)).slice().sort((a,b)=>a.name.localeCompare(b.name, undefined, { sensitivity:'base' })).map(p=>'<button type="button" class="btn btn-sm btn-secondary" data-remove="' + this.escapeHtml(p.id) + '">@' + this.personNameHtml(p, false) + ' ×</button>').join('') + '</div><div class="people-suggestions">' + suggestions.map(p=>'<button type="button" class="btn btn-sm btn-secondary person-suggestion" data-person="' + this.escapeHtml(p.id) + '">@' + this.personNameHtml(p, false) + '</button>').join('') + '</div>';
+      const query = match ? String(match[1] || '').trim() : '';
+      const suggestions = query ? people.filter(person => !ids.includes(person.id) && person.name.toLocaleLowerCase().includes(query.toLocaleLowerCase()))
+        .sort((a,b)=>a.name.localeCompare(b.name, undefined, { sensitivity:'base' })).slice(0,5) : [];
+      const mentioned = new Set(people.filter(person => new RegExp('(^|[^\\p{L}\\p{N}_@])@' + escapeRegex(person.name) + '(?=$|[^\\p{L}\\p{N}_])', 'iu').test(note.value)).map(person => person.id));
+      panel.innerHTML = '<div class="people-chips">' + people.filter(person => ids.includes(person.id) && !mentioned.has(person.id)).slice().sort((a,b)=>a.name.localeCompare(b.name, undefined, { sensitivity:'base' })).map(person=>'<button type="button" class="btn btn-sm btn-secondary" data-remove="' + this.escapeHtml(person.id) + '">@' + this.personNameHtml(person, false) + ' ×</button>').join('') + '</div><div class="people-suggestions">' + suggestions.map(person=>'<button type="button" class="btn btn-sm btn-secondary person-suggestion" data-person="' + this.escapeHtml(person.id) + '">@' + this.personNameHtml(person, false) + '</button>').join('') + '</div>';
       panel.querySelectorAll('[data-remove]').forEach(button=> { button.onclick=()=> { this._peopleDrafts[noteId] = ids.filter(id=>id!==button.dataset.remove); this.renderPeopleEntry(noteId); }; });
-      panel.querySelectorAll('[data-person]').forEach(button=> { button.onclick=()=> { const person = people.find(p=>p.id===button.dataset.person); this._peopleDrafts[noteId] = [...ids,person.id]; note.value = note.value.slice(0,caret-match[0].length) + '@' + person.name + ' ' + note.value.slice(caret); note.focus(); this.renderPeopleEntry(noteId); }; });
+      panel.querySelectorAll('[data-person]').forEach(button=> { button.onclick=()=> {
+        const person = people.find(p=>p.id===button.dataset.person);
+        if (!person || !match) return;
+        this._peopleDrafts[noteId] = [...ids,person.id];
+        const start = caret - match[0].length;
+        const suffix = note.value.slice(caret);
+        const mention = '@' + person.name;
+        const separator = suffix && /^\s/.test(suffix) ? '' : ' ';
+        note.value = note.value.slice(0,start) + mention + separator + suffix;
+        const nextCaret = start + mention.length + separator.length;
+        note.setSelectionRange(nextCaret,nextCaret);
+        note.focus();
+        this.renderPeopleEntry(noteId);
+      }; });
     }
   });
 })();

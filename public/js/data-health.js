@@ -29,23 +29,37 @@
       for (const personId of (Array.isArray(tx.personIds) ? tx.personIds : [])) {
         if (personId && !ids.people.has(personId)) add('transactions', tx, 'Linked person no longer exists (' + personId + ').');
       }
+      for (const part of Array.isArray(tx.parts) ? tx.parts : []) {
+        if (!part || typeof part !== 'object') continue;
+        if (part.categoryId && !ids.categories.has(part.categoryId)) add('transactions', tx, 'Split part refers to a missing category (' + part.categoryId + ').');
+        for (const personId of Array.isArray(part.personIds) ? part.personIds : []) {
+          if (personId && !ids.people.has(personId)) add('transactions', tx, 'Split part refers to a missing person (' + personId + ').');
+        }
+      }
       if (tx.linkId && !entries.has(tx.linkId)) add('transactions', tx, 'Missing savings entry.');
       const slot = /^inst-(.+)-s\d+$/.exec(tx.pairId || '');
       if (slot && !ids.installments.has(slot[1])) add('transactions', tx, 'Missing installment plan.');
       if (!tx.date || !Number.isFinite(tx.amount)) continue;
       const signature = JSON.stringify([tx.type, tx.date, tx.amount, tx.currency, tx.accountId, tx.cardId, tx.fromAccountId, tx.toAccountId, tx.categoryId, tx.note || '']);
-      if (signatures.has(signature)) {
-        const previous = signatures.get(signature);
-        const relatedIds = [...previous, tx].map(item => item.id).filter(Boolean);
-        for (const item of previous) {
-          let priorIssue = issues.find(issue => issue.collection === 'transactions' && issue.kind === 'possible-duplicate' && issue.id === item.id);
-          if (!priorIssue) priorIssue = add('transactions', item, 'Possible duplicate transaction; review before changing anything.', 'possible-duplicate');
-          priorIssue.relatedIds = relatedIds;
+      const group = signatures.get(signature);
+      if (!group) {
+        signatures.set(signature, { transactions: [tx], issues: [], relatedIds: null });
+        continue;
+      }
+      group.transactions.push(tx);
+      if (!group.issues.length) {
+        group.relatedIds = group.transactions.map(item => item.id).filter(Boolean);
+        for (const item of group.transactions) {
+          const issue = add('transactions', item, 'Possible duplicate transaction; review before changing anything.', 'possible-duplicate');
+          issue.relatedIds = group.relatedIds;
+          group.issues.push(issue);
         }
-        const currentIssue = add('transactions', tx, 'Possible duplicate transaction; review before changing anything.', 'possible-duplicate');
-        currentIssue.relatedIds = relatedIds;
-        previous.push(tx);
-      } else signatures.set(signature, [tx]);
+      } else {
+        if (tx.id) group.relatedIds.push(tx.id);
+        const issue = add('transactions', tx, 'Possible duplicate transaction; review before changing anything.', 'possible-duplicate');
+        issue.relatedIds = group.relatedIds;
+        group.issues.push(issue);
+      }
     }
     for (const pay of (data.billPayments || [])) {
       const bill = lists.bills.find(b => b.id === pay.billId);
@@ -97,7 +111,22 @@
       for (const payment of item.payments || []) if (payment && payment.txId) linked.add(payment.txId);
     }
     for (const goal of data.savingsGoals || []) for (const entry of goal.entries || []) if (entry && entry.txId) linked.add(entry.txId);
-    const normalize = value => String(value || '').normalize('NFKD').replace(/\p{M}/gu,'').toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim().replace(/\s+/g, ' ');
+    const escapeRegex = value => String(value || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const hasItemOrPersonTag = tx => {
+      if ((tx.personIds || []).length || (tx.parts || []).some(part => (part.personIds || []).length)) return true;
+      const descriptions = [tx.note, ...(tx.parts || []).map(part => part && part.description)].filter(Boolean).join(' ');
+      return /(?:^|\s)\$\s*[\p{L}]/u.test(descriptions) || /(?:^|[^\p{L}\p{N}_@])@[\p{L}\p{N}_-]+/u.test(descriptions);
+    };
+    const stripDescriptionTags = value => {
+      let text = String(value || '').replace(/(?:^|\s)\$\s*[\p{L}][^$\u2063]*?(?:\u2063|(?=\s+\$|\s+@[\p{L}]|$))/giu, ' ');
+      for (const person of [...(data.people || [])].filter(Boolean).sort((a, b) => String(b.name || '').length - String(a.name || '').length)) {
+        if (!person.name) continue;
+        const mention = new RegExp('(^|[^\\p{L}\\p{N}_@])@' + escapeRegex(person.name) + '(?=$|[^\\p{L}\\p{N}_])', 'giu');
+        text = text.replace(mention, ' ');
+      }
+      return text.replace(/(^|[^\p{L}\p{N}_@])@[\p{L}\p{N}_-]+/gu, ' ').replace(/\u2063/g, ' ');
+    };
+    const normalize = value => stripDescriptionTags(value).normalize('NFKD').replace(/\p{M}/gu,'').toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim().replace(/\s+/g, ' ');
     const rules = Array.isArray(data.recurringRules) ? data.recurringRules.filter(rule => rule && rule.active !== false) : [];
     const ignoredByRule = (note, source) => rules.some(rule => rule.action === 'ignore' && rule.match && normalize(note).includes(normalize(rule.match)) && (!rule.source || rule.source === source));
     const ignored = new Set(['payment','purchase','transaction','transfer','card','online','monthly','invoice','bill','paid','for','the','and','rsd','eur','usd','january','february','march','april','may','june','july','august','september','october','november','december','jan','feb','mar','apr','jun','jul','aug','sep','oct','nov','dec','reference','ref']);
@@ -135,6 +164,7 @@
     const buckets = new Map();
     for (const tx of transactions) {
       if (!tx || tx.balanceCorrection || tx.type === 'transfer' || !['expense', 'income'].includes(tx.type) || !tx.note || linked.has(tx.id)) continue;
+      if (hasItemOrPersonTag(tx)) continue;
       if (tx.billId || tx.invoiceId || tx.debtId || tx.linkId || tx.installId || tx.pairId) continue;
       const source = tx.cardId ? 'card:' + tx.cardId : tx.accountId ? 'account:' + tx.accountId : '';
       if (!source) continue;

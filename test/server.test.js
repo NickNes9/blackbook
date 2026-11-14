@@ -91,6 +91,72 @@ test('server is loopback-only and preserves the API profile document contract', 
   }
 });
 
+test('large profile loading serves newest transactions first and protects history during partial saves', async () => {
+  const dataDir = mkdtempSync(join(tmpdir(), 'black-book-server-test-'));
+  let child;
+  try {
+    const server = await startServer(dataDir);
+    child = server.child;
+    const origin = server.origin;
+    const blank = await fetch(origin + '/api/load').then(response => response.json());
+    const transactions = Array.from({ length: 205 }, (_, index) => ({
+      id: `tx-${index}`, date: String(index).padStart(6, '0'), amount: index
+    }));
+    const seed = await fetch(origin + '/api/save', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ...blank, transactions })
+    });
+    assert.equal(seed.status, 200);
+
+    const partialResponse = await fetch(origin + '/api/load?initialTransactions=3');
+    assert.equal(partialResponse.status, 200);
+    const partial = await partialResponse.json();
+    assert.deepEqual(partial.transactions.map(transaction => transaction.id), ['tx-204', 'tx-203', 'tx-202']);
+    assert.deepEqual(partial._transactionLoad.firstIndexes, [204, 203, 202]);
+
+    const loadSessionId = partial._transactionLoad.id;
+    const firstChunk = await fetch(origin + `/api/load-chunk?loadSessionId=${loadSessionId}&offset=3&limit=100`).then(response => response.json());
+    assert.equal(firstChunk.transactions.length, 100);
+    assert.equal(firstChunk.indexes[0], 0);
+    assert.equal(firstChunk.indexes.at(-1), 99);
+
+    const partialData = { ...partial };
+    delete partialData._transactionLoad;
+    partialData.transactions = partial.transactions.concat(firstChunk.transactions)
+      .filter(transaction => transaction.id !== 'tx-203');
+    partialData.transactions[0].amount = 9999;
+    partialData.transactions.push({ id: 'created-mid-load', date: '999999', amount: 12 });
+    const partialSave = await fetch(origin + '/api/save', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ profile: '', data: partialData, loadSessionId, loadedTransactionCount: firstChunk.nextOffset })
+    });
+    assert.equal(partialSave.status, 200);
+
+    const saved = await fetch(origin + '/api/load').then(response => response.json());
+    const savedIds = saved.transactions.map(transaction => transaction.id);
+    assert.equal(saved.transactions.length, 205, 'partial save keeps undelivered history and the new transaction');
+    assert.equal(savedIds.filter(id => id === 'tx-203').length, 0, 'a deletion made during loading stays deleted');
+    assert.equal(savedIds.filter(id => id === 'tx-204').length, 1, 'a delivered transaction is not duplicated');
+    assert.equal(saved.transactions.find(transaction => transaction.id === 'tx-204').amount, 9999, 'an edit made during loading is retained');
+    assert.equal(savedIds.filter(id => id === 'created-mid-load').length, 1);
+    assert.equal(savedIds.filter(id => id === 'tx-100').length, 1, 'older undelivered transactions are retained');
+
+    await fetch(origin + '/api/load-complete', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ profile: '', loadSessionId })
+    });
+    const staleSave = await fetch(origin + '/api/save', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ profile: '', data: partialData, loadSessionId, loadedTransactionCount: 103 })
+    });
+    assert.equal(staleSave.status, 409, 'completed load sessions cannot be used for a stale partial save');
+  } finally {
+    if (child && !child.killed) child.kill();
+    if (child) await once(child, 'exit').catch(() => {});
+    rmSync(dataDir, { recursive: true, force: true });
+  }
+});
+
 test('password-protected profiles are encrypted at rest and locked after restart until unlocked', async () => {
   const dataDir = mkdtempSync(join(tmpdir(), 'black-book-server-test-'));
   let child;

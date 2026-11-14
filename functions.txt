@@ -168,6 +168,9 @@ BILLS
   that cannot fit use compact amounts and currency symbols where available.
   Full values remain available on hover.
 - 12-month graph "BILLS BY MONTH" per bill, plus a monthly bill total.
+- The summary shows the previous month's recorded bill payments and the
+  average monthly bill payments across the previous 12 completed months.
+  Bills without a recorded payment in those periods do not add an estimate.
 - Selected-year bill breakdown donut beside the monthly lines. It follows
   the same bill filters and shows amounts and percentages on hover.
 - Repair / re-link bill payments to their transactions automatically.
@@ -319,6 +322,8 @@ REPORTS (0.9.7 WORK IN PROGRESS)
 - Switch between Categories, Compare, People, Cash Flow, and Calendar.
 - Review live profile data: yearly category history, multi-year comparisons,
   person totals, money flow, and a calendar with selectable days.
+- Graph yearly income, expenses, and net together; compare category totals in
+  bars, and review each year's monthly averages and transaction counts below.
 - Filter by account, category, person, and period; charts and summaries
   update to match the active selection.
 - Account cards use their own colors. Click or Shift-click to toggle

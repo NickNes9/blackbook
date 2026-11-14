@@ -10,6 +10,7 @@ const tools = readFileSync(new URL('../public/js/transaction-tools.js', import.m
 const core = readFileSync(new URL('../public/js/core.js', import.meta.url), 'utf8');
 const transactions = readFileSync(new URL('../public/js/page-transactions.js', import.meta.url), 'utf8');
 const bills = readFileSync(new URL('../public/js/page-bills.js', import.meta.url), 'utf8');
+const debts = readFileSync(new URL('../public/js/page-debts.js', import.meta.url), 'utf8');
 
 test('transfer amount fields accept arithmetic expressions', () => {
   assert.match(index, /<input type="text" inputmode="decimal" id="tr-amount" class="input" placeholder="150000-60"/);
@@ -295,6 +296,80 @@ test('successful merge closes its dialog and uses an in-app notification', async
   assert.equal(app.data.transactions[0].amount, -30);
   assert.equal(closed, 'merge-modal');
   assert.equal(notice, 'Merged 2 transactions successfully.');
+});
+
+test('merge as split keeps each source transaction as a separately attributed part', async () => {
+  let nextPartId = 0;
+  const context = {
+    window: {},
+    localStorage: { getItem: () => null },
+    crypto: { randomUUID: () => 'merged-part-' + (++nextPartId) }
+  };
+  vm.runInNewContext(core, context);
+  vm.runInNewContext(tools, context);
+  vm.runInNewContext(transactions, context);
+  vm.runInNewContext(overview, context);
+  const app = context.window.BlackBook;
+  app.data = {
+    categories: [{ id: 'food', name: 'Food' }, { id: 'fees', name: 'Fees' }],
+    bills: [{ id: 'chatgpt', name: 'ChatGPT' }],
+    billPayments: [{ billId: 'chatgpt', month: '2026-09', txId: 'a', relatedTxIds: ['a', 'b'] }],
+    transactions: [
+      { id: 'a', amount: -10, note: 'Groceries', date: '2026-09-01', type: 'expense', currency: 'RSD', accountId: 'bank', categoryId: 'food', personIds: ['jess'], nativeAmount: -5.99, nativeCurrency: 'EUR', bankStatementRows: [{ key: 'row-a' }] },
+      { id: 'b', amount: -20, note: 'Market', date: '2026-09-02', type: 'expense', currency: 'RSD', accountId: 'bank', categoryId: 'food', personIds: ['mama'], nativeAmount: -7.22, nativeCurrency: 'USD', bankStatementRows: [{ key: 'row-b' }], parts: [
+        { id: 'b1', description: 'Produce', categoryId: 'food', amount: 15, personIds: [] },
+        { id: 'b2', description: 'Card fee', categoryId: 'fees', amount: 5, personIds: ['jess'] }
+      ] },
+      { id: 'c', amount: -7, note: 'Coffee', date: '2026-09-03', type: 'expense', currency: 'RSD', accountId: 'bank', categoryId: 'food', personIds: [] }
+    ]
+  };
+  app._mergeIds = ['a', 'b', 'c'];
+  app._mergeOk = true;
+  app._mergeSelected = 0;
+  app._mergeCurrency = 'RSD';
+  app.categorySelectionAllowed = () => true;
+  app.baseCurrency = () => 'RSD';
+  app.transactionToBase = tx => Number(tx.amount) || 0;
+  app.save = async () => {};
+  app.closeModal = () => {};
+  app.bulkClear = () => {};
+  app.showToast = () => {};
+
+  await app.submitMerge(true);
+
+  assert.equal(app.data.transactions.length, 1);
+  const merged = app.data.transactions[0];
+  assert.equal(merged.amount, -37);
+  assert.deepEqual(JSON.parse(JSON.stringify(merged.parts.map(({ description, categoryId, amount, personIds, nativeAmount, nativeCurrency }) => ({ description, categoryId, amount, personIds, nativeAmount:nativeAmount ?? null, nativeCurrency:nativeCurrency ?? null })))), [
+    { description: 'Groceries', categoryId: 'food', amount: 10, personIds: ['jess'], nativeAmount: 5.99, nativeCurrency: 'EUR' },
+    { description: 'Produce', categoryId: 'food', amount: 15, personIds: ['mama'], nativeAmount: 7.22, nativeCurrency: 'USD' },
+    { description: 'Card fee', categoryId: 'fees', amount: 5, personIds: ['mama', 'jess'], nativeAmount: null, nativeCurrency: null },
+    { description: 'Coffee', categoryId: 'food', amount: 7, personIds: [], nativeAmount: null, nativeCurrency: null }
+  ]);
+  assert.equal(merged.parts[0].nativeAmount, 5.99);
+  assert.equal(merged.parts[0].nativeCurrency, 'EUR');
+  assert.deepEqual(JSON.parse(JSON.stringify(merged.personIds)), [], 'source people stay assigned to their own split parts');
+  const payment = app.data.billPayments[0];
+  assert.deepEqual(JSON.parse(JSON.stringify(app.billPaymentTransactionIds(payment))), ['a'], 'bill payment links collapse to the surviving split transaction');
+  assert.equal(app.billPaymentForTx('a'), payment, 'the merged transaction still resolves back to its bill payment');
+  assert.equal(app.linkedBillForTx(merged).id, 'chatgpt', 'the split transaction still resolves back to its bill');
+  assert.deepEqual(JSON.parse(JSON.stringify(merged.bankStatementRows.map(row => row.key))), ['row-a', 'row-b'], 'source statement rows stay attached to the merged transaction');
+  app.data.accounts = [{ id: 'bank', currency: 'RSD' }];
+  app.baseCurrency = () => 'RSD';
+  app.categoryColor = () => '#ffffff';
+  app.transactionDescriptionHtml = item => item.note || '';
+  app.fmtAmount = (amount, currency) => Math.abs(amount) + ' ' + currency;
+  app.fmtDualCurrency = (amount, currency, accountCurrency, nativeAmount, nativeCurrency) =>
+    Math.abs(amount) + ' ' + currency + (nativeAmount == null ? '' : ' (' + Math.abs(nativeAmount) + ' ' + nativeCurrency + ')');
+  const splitDetails = app.transactionSplitDetailsHtml(merged);
+  assert.match(splitDetails, /5\.99 EUR/);
+  assert.match(splitDetails, /7\.22 USD/);
+});
+
+test('merge dialog offers a split-preserving option and debt history empty state uses payment-row typography', () => {
+  assert.match(index, /id="merge-split-btn"[^>]*onclick="BlackBook\.submitMerge\(true\)"[^>]*>MERGE AS SPLIT<\/button>/);
+  assert.match(debts, /class="linked-payment-history"><div class="linked-payment-row linked-payment-empty">No debt activity yet\.<\/div><\/div>/);
+  assert.match(styles, /\.linked-payment-empty\s*\{[^}]*grid-column:\s*1\s*\/\s*-1;/);
 });
 
 test('merge success notification uses the existing top-bar notice style', () => {

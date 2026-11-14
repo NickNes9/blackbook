@@ -1,7 +1,10 @@
 (function () {
   Object.assign(window.BlackBook, {
     forecastResult() {
-      const accountIds = this._forecastAccountIds == null ? this.visibleAccounts().map(account => account.id) : this._forecastAccountIds;
+      const reportForecast = this.currentPage === 'reports' && this.reportsState && this.reportsState().view === 'forecast';
+      const accountIds = reportForecast
+        ? [...this.reportsSelectedAccounts()]
+        : this._forecastAccountIds == null ? this.visibleAccounts().map(account => account.id) : this._forecastAccountIds;
       return window.ForecastEngine.buildForecast(this.data, {
         startDate: this.today(), days: this._forecastDays || 30,
         accountIds, baseCurrency: this.baseCurrency(), rates: this.getRates(),
@@ -9,34 +12,34 @@
       });
     },
 
-    renderForecast() {
-      const el = document.getElementById('page-forecast');
-      if (!el || !window.ForecastEngine) return;
-      const chartHeights = this.captureChartPanelHeights(el);
-      this.hideDonutTooltip();
-      if (this.forecastChart) { this.forecastChart.destroy(); this.forecastChart = null; }
+    forecastReportsContent() {
+      if (!window.ForecastEngine) return { summary: '', html: '<div class="reports-empty">Forecast is unavailable.</div>' };
       const result = this.forecastResult();
-      const accounts = this.visibleAccounts();
-      const selected = new Set(this._forecastAccountIds == null ? accounts.map(account => account.id) : this._forecastAccountIds);
       const final = result.daily[result.daily.length - 1];
       const eventRows = result.events.length ? result.events.map(event =>
         '<div class="forecast-event"><span>' + this.escapeHtml(this.fmtDateInput(event.date)) + '</span><span class="forecast-kind">' + this.escapeHtml(event.kind.toUpperCase()) + '</span><span>' + this.escapeHtml(event.name) + '</span><span class="' + (event.baseAmount < 0 ? 'amount-negative' : 'amount-positive') + '">' + this.fmtBase(event.baseAmount) + '</span></div>').join('') :
-        '<div class="empty-state"><div class="empty-state-text">Nothing scheduled in this period.</div></div>';
+        '<div class="reports-empty">Nothing scheduled in this period.</div>';
       const hideGraph = !!(this.data.settings && this.data.settings.hideForecastGraph);
-      el.innerHTML = '<div class="month-picker"><span style="flex:1"></span>' +
+      const opening = Object.values(result.openingBalances).reduce((sum, amount) => sum + amount, 0);
+      return {
+        summary: this.reportsSummaryHtml([
+          ['Opening', this.fmtBase(opening)],
+          ['Projected End', this.fmtBase(final ? final.total : 0), final && final.total < 0 ? 'negative' : 'positive'],
+          ['Shortfalls', String(result.shortfalls.length), result.shortfalls.length ? 'negative' : 'positive']
+        ]),
+        forecastResult: result,
+        html: '<div class="forecast-report-view"><div class="forecast-report-toolbar">' +
         [30, 60, 90].map(days => '<button class="btn btn-sm page-control ' + ((this._forecastDays || 30) === days ? 'btn-primary' : 'btn-secondary') + '" onclick="BlackBook.setForecastDays(' + days + ')">' + days + ' DAYS</button>').join(' ') +
         '<button class="btn btn-sm btn-secondary page-control" onclick="BlackBook.openRecurringTemplate()">+ RECURRING</button></div>' +
-        '<div class="month-summary"><div class="month-summary-item"><span class="month-summary-label">OPENING</span><span class="month-summary-value">' + this.fmtBase(Object.values(result.openingBalances).reduce((sum, amount) => sum + amount, 0)) + '</span></div><div class="month-summary-item"><span class="month-summary-label">ENDING</span><span class="month-summary-value ' + (final && final.total < 0 ? 'amount-negative' : 'amount-positive') + '">' + this.fmtBase(final ? final.total : 0) + '</span></div><div class="month-summary-item"><span class="month-summary-label">SHORTFALLS</span><span class="month-summary-value ' + (result.shortfalls.length ? 'amount-negative' : 'amount-positive') + '">' + result.shortfalls.length + '</span></div></div>' +
-        '<div class="list-sep"></div>' +
-        '<div class="forecast-account-filters">' + accounts.map(account => '<button type="button" class="cat-filter-chip page-control' + (selected.has(account.id) ? ' selected' : '') + '" style="--cc:' + this.accountColor(account) + ';' + (selected.has(account.id) ? 'background:' + this.accountColor(account) + ';color:var(--on-fill);' : 'opacity:.55;') + '" aria-pressed="' + selected.has(account.id) + '" onclick="BlackBook.toggleForecastAccount(\'' + account.id + '\', event)" title="Click: toggle · Shift-click: keep multiple selected · Alt-click: isolate">' + this.escapeHtml(account.name) + '</button>').join('') + '</div>' +
-        (!selected.size ? '<div class="form-hint">Select an account to see its cash forecast.</div>' : '') +
         this.forecastWarningsHtml(result.warnings) +
-        '<div class="page-scroll-wrap"><div class="forecast-list">' + eventRows + '</div></div>' +
-        (hideGraph
-          ? ''
-          : '<div class="list-sep"></div><div class="overview-charts"><div class="chart-panel overview-line-panel"><div class="chart-head-row"><span class="chart-title-text">PROJECTED CASH BALANCE</span></div><canvas id="forecast-chart"></canvas></div></div>');
-      this.restoreChartPanelHeights(el, chartHeights);
-      if (!hideGraph) this.renderForecastChart(result);
+        '<div class="forecast-events-panel"><div class="chart-head-row"><span class="chart-title-text">SCHEDULED EVENTS</span></div><div class="forecast-list">' + eventRows + '</div></div>' +
+        (hideGraph ? '' : '<div class="overview-charts"><div class="chart-panel overview-line-panel reports-chart-wrap"><div class="chart-head-row"><span class="chart-title-text">PROJECTED CASH BALANCE</span></div><canvas id="forecast-chart"></canvas></div></div>') +
+        '</div>'
+      };
+    },
+
+    renderForecast() {
+      if (this.currentPage === 'reports' && this.reportsState && this.reportsState().view === 'forecast') this.renderPage('reports');
     },
 
     forecastWarningsHtml(warnings) {
@@ -62,7 +65,8 @@
     async toggleForecastGraph() {
       this.data.settings.hideForecastGraph = !(this.data.settings && this.data.settings.hideForecastGraph);
       await this.save();
-      this.renderForecast();
+      if (this.currentPage === 'reports') this.renderPage('reports');
+      else this.renderForecast();
       this.updateGraphFooter();
     },
 

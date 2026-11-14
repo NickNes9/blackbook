@@ -29,7 +29,7 @@ test('report rows honor account/year filters, omit transfers, and retain income/
     transactionToBase: transaction => transaction.amount
   });
 
-  assert.deepEqual(app.reportsRows().map(({ id, amount }) => ({ id, amount })), [
+  assert.deepEqual(JSON.parse(JSON.stringify(app.reportsRows().map(({ id, amount }) => ({ id, amount })))), [
     { id: 'pay', amount: 500 },
     { id: 'shop', amount: -80 }
   ]);
@@ -37,6 +37,7 @@ test('report rows honor account/year filters, omit transfers, and retain income/
 
 test('reports default to the net comparison metric', () => {
   const app = loadReports();
+  app.data = { accounts:[], categories:[{ id:'none', name:'Uncategorized' }], people:[] };
   app._reportsState = { year: 2026 };
 
   assert.equal(app.reportsCompareSettings().metric, 'net');

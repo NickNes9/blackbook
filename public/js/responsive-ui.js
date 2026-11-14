@@ -40,7 +40,10 @@
           const short = document.createElement('span');
           short.className = 'money-short';
           // Only abbreviate thousands and above; never round away small balances or cents.
-          short.textContent = (Math.abs(value) < 1000 ? full : compact.format(value).toLowerCase() + (currency ? ' ' + currency : ''));
+          const currencyLabel = currency
+            ? (window.BlackBook?.currencyShortLabel ? window.BlackBook.currencyShortLabel(currency) : currency)
+            : '';
+          short.textContent = (Math.abs(value) < 1000 ? full : compact.format(value).toLowerCase() + (currencyLabel ? ' ' + currencyLabel : ''));
           short.setAttribute('aria-hidden', 'true');
           span.append(exact, short);
           fragment.append(span);

@@ -29,7 +29,7 @@ Object.assign(window.BlackBook, {
           this.budgetChipsHtml() +
       '<div class="overview-charts budget-charts">' +
           '<div class="chart-panel budget-donut-panel"><div class="chart-head-row"><span class="chart-title-text">BUDGET ALLOCATION</span></div>' +
-          '<div class="budget-donut-wrap"><canvas id="budget-donut-chart" aria-label="Budget allocation"></canvas></div></div>' +
+          '<div class="budget-donut-wrap"><canvas id="budget-donut-chart" aria-label="Budget allocation"></canvas><canvas id="budget-allocation-mobile-chart" aria-label="Budget allocation by category"></canvas></div></div>' +
           '<div class="chart-panel overview-line-panel"><div class="chart-head-row"><span class="chart-title-text">SPEND BY CATEGORY</span></div><canvas id="budget-chart"></canvas></div></div>');
     this.restoreChartPanelHeights(el, chartHeights);
     if (!hideGraph) {
@@ -57,8 +57,8 @@ Object.assign(window.BlackBook, {
       const color = this.categoryColor(cat);
       const b = budgetMap[cat.id];
       const on = !(this._budgetCatOff && this._budgetCatOff[cat.id]);
-      const name = b && b.name ? b.name : cat.name;
-      html += '<div class="cat-filter-chip' + (on ? ' selected' : '') + '" style="--cc:' + color + ';' + (on ? 'background:' + color + ';color:var(--on-fill);' : '') + (on ? '' : 'opacity:0.55;') + '" onclick="BlackBook.toggleBudgetCat(\x27' + cat.id + '\x27, event)" title="' + this.escapeHtml(name) + (limits[cat.id] != null ? ' \u00b7 ' + this.fmtBase(limits[cat.id]) : ' \u00b7 NO LIMIT') + ' \u00b7 click: toggle · Shift-click: toggle while keeping other selections · Alt-click: isolate">' + this.escapeHtml(name) + '</div>';
+      const name = b && b.name ? b.name : this.categoryLabel(cat);
+      html += '<div class="cat-filter-chip' + (on ? ' selected' : '') + '" style="--cc:' + color + ';' + (on ? 'background:' + color + ';color:var(--on-fill);' : '') + (on ? '' : 'opacity:0.55;') + '" onclick="BlackBook.toggleBudgetCat(\x27' + cat.id + '\x27, event)" title="' + this.escapeHtml(name) + (limits[cat.id] != null ? ' \u00b7 ' + this.fmtNumber(limits[cat.id]) : ' \u00b7 NO LIMIT') + ' \u00b7 click: toggle · Shift-click: toggle while keeping other selections · Alt-click: isolate">' + this.escapeHtml(name) + '</div>';
     }
     return html + '</div>';
   },
@@ -92,9 +92,14 @@ Object.assign(window.BlackBook, {
       const mk = String(tx.date || '').slice(0, 7);
       if (!totalSet.has(mk)) continue;
       const rsd = Math.abs(this.transactionToBase(tx));
-      if (!byCat[tx.categoryId]) byCat[tx.categoryId] = {};
-      byCat[tx.categoryId][mk] = (byCat[tx.categoryId][mk] || 0) + rsd;
       total[mk] += rsd;
+      const allocations = this.transactionAllocationRows(tx);
+      for (const allocation of allocations) {
+        const ratio = tx.parts && Math.abs(Number(tx.amount)) > 0 ? Math.abs(allocation.amount) / Math.abs(Number(tx.amount)) : 1;
+        const categoryId = allocation.categoryId || '';
+        if (!byCat[categoryId]) byCat[categoryId] = {};
+        byCat[categoryId][mk] = (byCat[categoryId][mk] || 0) + rsd * ratio;
+      }
     }
     return { months: months, byCat: byCat, total: total };
   },
@@ -132,7 +137,7 @@ Object.assign(window.BlackBook, {
       const b = this.data.budgets.find(x => x.categoryId === cat.id);
       const per = spend.byCat[cat.id] || {};
       datasets.push({
-        label: b && b.name ? b.name : cat.name,
+        label: b && b.name ? b.name : this.categoryLabel(cat),
         data: spend.months.map(mk => this.round2(per[mk] || 0)),
         borderColor: this.categoryColor(cat),
         backgroundColor: this.categoryColor(cat),
@@ -160,8 +165,8 @@ Object.assign(window.BlackBook, {
               : '') }
         },
         scales: {
-          x: { ticks: { color: '#555555', autoSkip: false, maxRotation: 0, font: { size: 11 } }, grid: { color: '#141414' } },
-          y: { ticks: { color: '#555555', font: { size: 11 }, maxTicksLimit: 5 }, grid: { color: '#141414' } }
+          x: { ticks: { color: '#555555', autoSkip: false, maxRotation: 0, font: { size: 11 } }, grid: { color: this.chartGridColor('#141414') } },
+          y: { ticks: { color: '#555555', font: { size: 11 }, maxTicksLimit: 5 }, grid: { color: this.chartGridColor('#141414') } }
         }
       }
     });
@@ -170,7 +175,8 @@ Object.assign(window.BlackBook, {
   renderBudgetDonut(preview = false) {
     const chartKey = preview ? 'budgetPreviewDonutChart' : 'budgetDonutChart';
     if (this[chartKey]) { this[chartKey].destroy(); this[chartKey] = null; }
-    const canvas = document.getElementById(preview ? 'budget-allocation-preview-chart' : 'budget-donut-chart');
+    const mobileBar = !preview && window.matchMedia('(max-width: 500px)').matches;
+    const canvas = document.getElementById(preview ? 'budget-allocation-preview-chart' : mobileBar ? 'budget-allocation-mobile-chart' : 'budget-donut-chart');
     if (!canvas) return;
     const cats = new Map(this.categoriesVisibleInMonth(this.budgetAllocationMonth()).map(cat => [cat.id, cat]));
     const view = this.monthlyBudgetView();
@@ -181,7 +187,7 @@ Object.assign(window.BlackBook, {
       if (!Number.isFinite(total) || total < 0) total = 0;
       for (const item of (this._budgetAllocationDraft || [])) {
         const cat = cats.get(item.categoryId);
-        if (cat && item.pct > 0) segments.push({ id: cat.id, name: cat.name, pct: item.pct,
+        if (cat && item.pct > 0) segments.push({ id: cat.id, name: this.categoryLabel(cat), pct: item.pct,
           amount: this.round2(total * item.pct / 100), color: this.categoryColor(cat) });
       }
       const unassigned = Math.max(0, 100 - segments.reduce((sum, s) => sum + s.pct, 0));
@@ -191,7 +197,7 @@ Object.assign(window.BlackBook, {
       total = view.total;
       for (const slice of view.slices) {
         const cat = cats.get(slice.categoryId);
-        if (cat) segments.push({ id: cat.id, name: cat.name, pct: slice.percent,
+        if (cat) segments.push({ id: cat.id, name: this.categoryLabel(cat), pct: slice.percent,
           amount: slice.value, color: this.categoryColor(cat) });
       }
       if (view.leftover) segments.push({ id: null, name: 'Unassigned', pct: view.leftover.percent,
@@ -200,31 +206,36 @@ Object.assign(window.BlackBook, {
       total = view.total;
       for (const [id, amount] of Object.entries(view.limits)) {
         const cat = cats.get(id);
-        if (cat && amount > 0 && total > 0) segments.push({ id, name: cat.name, pct: amount / total * 100,
+        if (cat && amount > 0 && total > 0) segments.push({ id, name: this.categoryLabel(cat), pct: amount / total * 100,
           amount, color: this.categoryColor(cat) });
       }
     }
     const empty = !segments.length;
     if (empty) segments = [{ id: null, name: 'No budget', pct: 100, amount: 0, color: '#454545' }];
+    const background = getComputedStyle(document.documentElement).getPropertyValue('--bg').trim();
     this[chartKey] = new Chart(canvas.getContext('2d'), {
-      type: 'doughnut',
-      data: { labels: segments.map(item => item.name), datasets: [{ data: this.donutDisplayValues(segments.map(item => item.pct)),
-        backgroundColor: segments.map(item => item.color), borderColor: getComputedStyle(document.documentElement).getPropertyValue('--bg').trim(), borderWidth: 1, hoverOffset: 0 }] },
+      type: mobileBar ? 'bar' : 'doughnut',
+      data: mobileBar
+        ? { labels: ['ALLOCATION'], datasets: segments.map(item => ({ label:item.name, data:[item.pct], backgroundColor:item.color, borderColor:background, borderWidth:1, borderSkipped:false, stack:'allocation', categoryPercentage:.82, barPercentage:1 })) }
+        : { labels: segments.map(item => item.name), datasets: [{ data: this.donutDisplayValues(segments.map(item => item.pct)),
+          backgroundColor: segments.map(item => item.color), borderColor: background, borderWidth: 1, hoverOffset: 0 }] },
       options: {
-        responsive: true, maintainAspectRatio: false, cutout: '52.5%', animation: false,
+        responsive: true, maintainAspectRatio: false, indexAxis:mobileBar?'y':'x', cutout: '52.5%', animation: false,
+        scales: mobileBar ? { x:{ display:false, stacked:true, min:0, max:100, grid:{display:false}, border:{display:false} }, y:{ display:false, stacked:true, grid:{display:false}, border:{display:false} } } : {},
         plugins: { legend: { display: false }, tooltip: { enabled: false, external: ({ chart, tooltip }) => {
           const point = tooltip.dataPoints && tooltip.dataPoints[0];
-          const item = point && segments[point.dataIndex];
+          const item = point && segments[mobileBar ? point.datasetIndex : point.dataIndex];
           this.showDonutTooltip(chart, tooltip, !empty && item
-            ? item.name + ': ' + this.round2(item.pct) + '% · ' + this.fmtBase(item.amount) : '');
+            ? item.name + ': ' + this.round2(item.pct) + '% · ' + this.fmtNumber(item.amount) : '');
         } } },
         onClick: (_event, elements) => {
           if (!elements.length) return;
+          const segmentIndex = mobileBar ? elements[0].datasetIndex : elements[0].index;
           if (preview) {
-            const id = segments[elements[0].index].id;
+            const id = segments[segmentIndex].id;
             const card = id && document.querySelector('#budget-allocation-rows .budget-allocation-card[data-category-id="' + CSS.escape(id) + '"]');
             if (card) card.scrollIntoView({ block: 'nearest' });
-          } else this.openBudgetAllocationModal(segments[elements[0].index].id);
+          } else this.openBudgetAllocationModal(segments[segmentIndex].id);
         }
       }
     });
@@ -239,15 +250,22 @@ Object.assign(window.BlackBook, {
     let used = 0;
     for (const tx of this.data.transactions) {
       if (tx.type !== 'expense') continue;
-      if ((!planActive && !budgetedIds.has(tx.categoryId)) || this.isTransfer(tx)) continue;
+      if (this.isTransfer(tx)) continue;
       const { y, m } = this.ymOf(tx.date);
-      if (y === year && m === month) { used += Math.abs(this.transactionToBase(tx)); }
+      if (y === year && m === month) {
+        if (planActive) used += Math.abs(this.transactionToBase(tx));
+        else for (const allocation of this.transactionAllocationRows(tx)) {
+          if (!budgetedIds.has(allocation.categoryId)) continue;
+          const ratio = tx.parts && Math.abs(Number(tx.amount)) > 0 ? Math.abs(allocation.amount) / Math.abs(Number(tx.amount)) : 1;
+          used += Math.abs(this.transactionToBase(tx)) * ratio;
+        }
+      }
     }
     const totalRemaining = totalBudgeted - used;
     return '<div class="month-summary budget-summary">' +
-      '<div class="month-summary-item"><span class="month-summary-label">TOTAL BUDGET</span><span class="month-summary-value">' + this.fmtBase(totalBudgeted) + '</span></div>' +
-      '<div class="month-summary-item"><span class="month-summary-label">USED</span><span class="month-summary-value">' + this.fmtBase(used) + '</span></div>' +
-      '<div class="month-summary-item"><span class="month-summary-label">REMAINING</span><span class="month-summary-value ' + (totalRemaining >= 0 ? 'amount-positive' : 'amount-negative') + '">' + this.fmtBase(totalRemaining) + '</span></div>' +
+      '<div class="month-summary-item"><span class="month-summary-label">TOTAL BUDGET</span><span class="month-summary-value">' + this.fmtNumber(totalBudgeted) + '</span></div>' +
+      '<div class="month-summary-item"><span class="month-summary-label">USED</span><span class="month-summary-value">' + this.fmtNumber(used) + '</span></div>' +
+      '<div class="month-summary-item"><span class="month-summary-label">REMAINING</span><span class="month-summary-value ' + (totalRemaining >= 0 ? 'amount-positive' : 'amount-negative') + '">' + this.fmtNumber(totalRemaining) + '</span></div>' +
       '<button class="btn btn-sm btn-secondary page-control budget-allocate-btn" onclick="BlackBook.openBudgetAllocationModal()">ALLOCATE</button>' +
       '</div>';
   },
@@ -255,8 +273,8 @@ Object.assign(window.BlackBook, {
   budgetAllocationBannerHtml() {
     const plan = this.monthlyBudgetView();
     if (!plan.allocation || !(plan.allocation.amount > 0)) return '';
-    return '<div class="form-hint budget-allocation-banner">PLAN ' + this.fmtBase(plan.allocation.amount) +
-      ' · UNASSIGNED ' + this.fmtBase(plan.leftover ? plan.leftover.value : 0) +
+    return '<div class="form-hint budget-allocation-banner">PLAN ' + this.fmtNumber(plan.allocation.amount) +
+      ' · UNASSIGNED ' + this.fmtNumber(plan.leftover ? plan.leftover.value : 0) +
       ' · effective from ' + this.escapeHtml(plan.allocation.month) + '</div>';
   },
 
@@ -276,10 +294,14 @@ Object.assign(window.BlackBook, {
       const { y, m } = this.ymOf(tx.date);
       if (y !== year || m !== month) continue;
       const val = this.transactionToBase(tx);
-      if (tx.type === 'income') {
-        if (val > 0) catIncome[tx.categoryId] = (catIncome[tx.categoryId] || 0) + val;
-      } else {
-        catSpent[tx.categoryId] = (catSpent[tx.categoryId] || 0) + Math.abs(val);
+      for (const allocation of this.transactionAllocationRows(tx)) {
+        const ratio = tx.parts && Math.abs(Number(tx.amount)) > 0 ? Math.abs(allocation.amount) / Math.abs(Number(tx.amount)) : 1;
+        const categoryId = allocation.categoryId || '';
+        if (tx.type === 'income') {
+          if (val > 0) catIncome[categoryId] = (catIncome[categoryId] || 0) + val * ratio;
+        } else {
+          catSpent[categoryId] = (catSpent[categoryId] || 0) + Math.abs(val) * ratio;
+        }
       }
     }
     let html = '';
@@ -301,21 +323,21 @@ Object.assign(window.BlackBook, {
       const pct = amount > 0 ? Math.round(spentAbs / amount * 100) : 0;
       const fillPct = Math.min(pct, 100);
       const catColor = this.categoryColor(cat);
-      const budgetName = budget && budget.name ? budget.name : cat.name;
+      const budgetName = budget && budget.name ? budget.name : this.categoryLabel(cat);
       const barValues = budget
-        ? this.fmtBase(spentAbs) + '<span class="budget-bar-slash">/ ' + this.fmtBase(amount) + '</span>'
-        : this.fmtBase(spentAbs);
+        ? this.fmtNumber(spentAbs) + '<span class="budget-bar-slash">/' + this.fmtNumber(amount) + '</span>'
+        : this.fmtNumber(spentAbs);
       const barBg = over ? 'rgba(248,113,113,0.15)' : 'var(--surface-raised)';
       const editAction = planActive ? 'openBudgetAllocationModal(\x27' + cat.id + '\x27)' : 'openBudgetModal(\x27' + cat.id + '\x27)';
-      html += '<div class="budget-card">' +
+      const rowActionLabel = planActive ? budget ? 'SHARE' : 'ADD' : budget ? 'EDIT' : 'SET';
+      html += '<div class="budget-card" data-budget-category-id="' + this.escapeHtml(cat.id) + '" data-budget-plan-active="' + String(planActive) + '">' +
         '<div class="budget-headrow">' +
         '<span class="budget-name-block">' +
-        '<span class="cat-dot" style="background:' + catColor + ';"></span>' +
         '<span class="budget-name-text">' + this.escapeHtml(budgetName) + '</span>' +
         '</span>' +
         '<span class="bar-values-wrap"><div class="budget-bar' + (budget ? '' : ' budget-bar-none') + '" style="background:' + barBg + ';"><div class="budget-bar-fill' + (budget ? '' : ' budget-bar-fill-full') + ' ' + (over ? 'over' : '') + '" style="width:' + fillPct + '%;background:' + catColor + (over ? ';opacity:0.9' : '') + ';"></div><span class="budget-bar-values-unfilled' + (over ? ' amount-negative' : '') + '">' + barValues + '</span><span class="budget-bar-values-filled' + (over ? ' amount-negative' : '') + '" style="clip-path:inset(0 ' + (100 - fillPct) + '% 0 0);">' + barValues + '</span></div></span>' +
         '<span class="budget-pct' + (over ? ' over' : '') + (incomeBeat ? ' amount-positive' : '') + (incomeShort ? ' amount-negative' : '') + '">' + (budget ? pct + '%' : '') + '</span>' +
-        '<button class="btn btn-sm budget-edit ' + (budget ? 'btn-secondary' : 'btn-primary') + '" onclick="BlackBook.' + editAction + '">' + (planActive ? budget ? 'SHARE' : 'ADD' : budget ? 'EDIT' : 'SET') + '</button>' +
+        '<button class="btn btn-sm budget-edit ' + (budget ? 'btn-secondary' : 'btn-primary') + '" onclick="BlackBook.' + editAction + '">' + rowActionLabel + '</button>' +
         '</div></div>';
     }
     return html || '<div class="empty-state"><div class="empty-state-text">No categories. Add categories in Settings first.</div></div>';
@@ -363,12 +385,11 @@ Object.assign(window.BlackBook, {
       const pct = checked ? byId.get(cat.id) : 0;
       const amount = checked && Number.isFinite(total) ? this.round2(total * pct / 100) : 0;
       return '<div class="budget-allocation-card' + (checked ? ' active' : '') + '" data-category-id="' + this.escapeHtml(cat.id) + '" style="--category-color:' + this.categoryColor(cat) + '">' +
-        '<span class="cat-dot" style="background:' + this.categoryColor(cat) + '"></span>' +
-        '<span class="budget-allocation-name">' + this.escapeHtml(cat.name) + '</span>' +
+        '<span class="budget-allocation-name">' + this.escapeHtml(this.categoryLabel(cat)) + '</span>' +
         '<label class="budget-allocation-field"><input class="input budget-allocation-pct" type="number" min="0" max="100" step="0.000001" value="' + (checked ? pct : '') + '" ' + (checked ? '' : 'disabled ') +
-        'oninput="BlackBook.updateBudgetAllocationInput(this,\x27pct\x27)" aria-label="' + this.escapeHtml(cat.name) + ' percent"><span>%</span></label>' +
+        'oninput="BlackBook.updateBudgetAllocationInput(this,\x27pct\x27)" aria-label="' + this.escapeHtml(this.categoryLabel(cat)) + ' percent"><span>%</span></label>' +
         '<label class="budget-allocation-field"><input class="input budget-allocation-amount" type="number" min="0" step="0.01" value="' + (checked ? amount : '') + '" ' + (checked ? '' : 'disabled ') +
-        'oninput="BlackBook.updateBudgetAllocationInput(this,\x27amount\x27)" aria-label="' + this.escapeHtml(cat.name) + ' amount"><span>' + this.escapeHtml(this.baseCurrency()) + '</span></label>' +
+        'oninput="BlackBook.updateBudgetAllocationInput(this,\x27amount\x27)" aria-label="' + this.escapeHtml(this.categoryLabel(cat)) + ' amount"><span>' + this.escapeHtml(this.baseCurrency()) + '</span></label>' +
         '<button type="button" class="btn btn-sm ' + (checked ? 'btn-secondary' : 'btn-primary') + '" onclick="BlackBook.toggleBudgetAllocationCategory(this.closest(\x27.budget-allocation-card\x27).dataset.categoryId)">' + (checked ? 'REMOVE' : 'ADD') + '</button></div>';
     }).join('');
     box.innerHTML = rows;

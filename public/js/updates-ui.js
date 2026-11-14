@@ -154,11 +154,11 @@ window.UpdateUi = {
 
   async checkNow() {
     const btn = document.getElementById('settings-updates-check');
-    if (btn) { btn.disabled = true; btn.textContent = 'CHECKING…'; }
+    if (btn) { btn.disabled = true; btn.classList.add('is-checking'); btn.setAttribute('aria-busy', 'true'); }
     try {
       await this.refresh(true);
     } finally {
-      if (btn) { btn.disabled = false; btn.textContent = 'CHECK FOR UPDATES'; }
+      if (btn) { btn.disabled = false; btn.classList.remove('is-checking'); btn.removeAttribute('aria-busy'); }
     }
     this.renderBanner();
     this.renderSettings();
@@ -235,20 +235,16 @@ window.UpdateUi = {
       const s = this.status;
       const ver = this.esc(this.version);
       let html =
-        '<div class="settings-row"><span class="settings-row-name">Current version</span><span class="settings-row-meta">v' + ver + '</span></div>';
-      if (s && s.reason === 'unreachable') {
-        html += '<div class="settings-row"><span class="settings-row-name">Checking for updates</span><span class="settings-row-meta" style="color:var(--text-muted);">offline or not reachable</span></div>';
-      } else if (s && s.updateAvailable && s.latest) {
-        html += '<div class="settings-row"><span class="settings-row-name">Update available</span><span class="settings-row-meta" style="color:var(--income);">v' + this.esc(s.latest.version) + '</span></div>';
+        '<div class="settings-row update-version-row"><span class="settings-row-name">Current Version</span><span class="settings-row-meta">v' + ver + '</span>' +
+        '<button class="btn btn-sm btn-secondary btn-icon" id="settings-updates-check" title="Check for updates" aria-label="Check for updates" onclick="UpdateUi.checkNow()"' + (this._updating ? ' disabled' : '') + '>' + (window.BlackBook?.refreshIcon ? window.BlackBook.refreshIcon() : '&#8635;') + '</button></div>';
+      if (s && s.updateAvailable && s.latest) {
+        html += '<div class="settings-row-note update-available-note">Update to v' + this.esc(s.latest.version) + ' available!</div>';
         if (s.latest.notes) html += '<div class="settings-row-note">' + this.esc(this.notesPreview(s.latest.notes)) + '</div>';
-      } else if (s) {
-        html += '<div class="settings-row"><span class="settings-row-name">Updates</span><span class="settings-row-meta" style="color:var(--text-muted);">You are on the latest version</span></div>';
       }
       if (this._progress) html += this.progressMarkup(this._progress, true);
-      html += '<div class="settings-data-actions" style="margin-top:10px;">' +
-        '<button class="btn btn-secondary" id="settings-updates-check" onclick="UpdateUi.checkNow()"' + (this._updating ? ' disabled' : '') + '>CHECK FOR UPDATES</button>' +
-        (s && s.updateAvailable && s.latest && s.reason === 'available' ? '<button class="btn btn-primary" onclick="UpdateUi.updateNow()"' + (this._updating ? ' disabled' : '') + '>' + (this._updating ? 'UPDATING…' : 'UPDATE NOW') + '</button>' : '') +
-        '</div>';
+      if (s && s.updateAvailable && s.latest && s.reason === 'available') {
+        html += '<div class="settings-data-actions update-install-action"><button class="btn btn-primary" onclick="UpdateUi.updateNow()"' + (this._updating ? ' disabled' : '') + '>' + (this._updating ? 'UPDATING…' : 'UPDATE NOW') + '</button></div>';
+      }
       el.innerHTML = html;
     }
     const footer = document.getElementById('settings-footer-version');

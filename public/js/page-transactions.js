@@ -32,9 +32,391 @@ Object.assign(window.BlackBook, {
     return rule ? rule.categoryId : null;
   },
 
+  setTransactionSplitMode(enabled, parts = [], remainderEnabled = null) {
+    const sourceParts = Array.isArray(parts) ? parts : [];
+    const remainder = sourceParts.find(part => part && part.autoRemainder);
+    this._txSplitEnabled = !!enabled;
+    this._txSplitRemainderEnabled = !!enabled && (!!remainder || !!remainderEnabled);
+    this._txSplitRemainderId = remainder && remainder.id || '';
+    this._txSplitRemainderCategoryId = remainder && remainder.categoryId || (enabled && remainderEnabled ? sourceParts.find(part => part && !part.autoRemainder)?.categoryId || '' : '');
+    this._txSplitParts = enabled ? sourceParts.filter(part => part && !part.autoRemainder).map(part => ({
+      id: part.id || crypto.randomUUID(),
+      description: String(part.description || ''),
+      categoryId: part.categoryId || '',
+      quantity: part.quantity == null ? '1' : String(part.quantity),
+      quantitySpecified: part.quantitySpecified == null ? Number(part.quantity) > 1 : !!part.quantitySpecified,
+      unitAmount: part.unitAmount == null ? (part.amount == null ? '' : String(Math.abs(Number(part.amount) || 0))) : String(Math.abs(Number(part.unitAmount) || 0)),
+      amount: part.amount == null || String(part.amount).trim() === '' ? '' : String(Math.abs(Number(part.amount) || 0)),
+      amountMode: part.amountMode === 'total' || (part.amountMode !== 'unit' && part.unitAmount == null && part.amount != null) ? 'total' : 'unit',
+      personIds: [...new Set(Array.isArray(part.personIds) ? part.personIds : [])]
+    })) : [];
+    this.renderTransactionSplitEditor();
+  },
+
+  readTransactionSplitPart(index, part) {
+    const row = document.querySelector('#tx-split-rows [data-split-index="' + index + '"]');
+    const quantityInput = row && row.querySelector('.tx-split-quantity');
+    const unitInput = row && row.querySelector('.tx-split-unit-amount');
+    const totalInput = row && row.querySelector('.tx-split-line-total');
+    const descriptionInput = document.getElementById('tx-split-description-' + index);
+    const categoryInput = row && row.querySelector('.tx-split-category');
+    const quantityRaw = String(quantityInput ? quantityInput.value : part.quantity == null ? '1' : part.quantity).trim();
+    const unitRaw = String(unitInput ? unitInput.value : part.unitAmount == null ? '' : part.unitAmount).trim();
+    const amountRaw = String(totalInput ? totalInput.value : part.amount == null ? '' : part.amount).trim();
+    const quantity = quantityRaw ? this.evalAmount(quantityRaw) : NaN;
+    const amountMode = part.amountMode === 'total' ? 'total' : 'unit';
+    const validQuantity = Number.isFinite(quantity) && quantity > 0;
+    let unitAmount = unitRaw ? this.evalAmount(unitRaw) : NaN;
+    let unitCents = null;
+    let lineCents = null;
+    let valid = false;
+    if (amountMode === 'total') {
+      const enteredTotal = amountRaw ? this.evalAmount(amountRaw) : NaN;
+      if (validQuantity && Number.isFinite(enteredTotal) && enteredTotal > 0) {
+        lineCents = Math.round(Math.abs(enteredTotal) * 100);
+        unitAmount = lineCents > 0 ? lineCents / 100 / quantity : NaN;
+        valid = lineCents > 0 && Number.isFinite(unitAmount) && unitAmount > 0;
+      }
+    } else if (validQuantity && Number.isFinite(unitAmount) && unitAmount > 0) {
+      unitCents = Math.round(Math.abs(unitAmount) * 100);
+      lineCents = Math.round(unitCents * quantity);
+      unitAmount = unitCents / 100;
+      valid = lineCents > 0;
+    }
+    return {
+      quantityRaw, unitRaw, amountRaw, quantity, unitAmount, unitCents, lineCents, amountMode, valid,
+      description: String(descriptionInput ? descriptionInput.value : part.description || '').trim(),
+      categoryId: categoryInput ? categoryInput.value || null : part.categoryId || null,
+      lineTotal: valid ? lineCents / 100 : null
+    };
+  },
+  sanitizeTransactionNumber(value, allowOperators = false) {
+    const raw = String(value == null ? '' : value).replace(
+      allowOperators ? /[^0-9.,+\-*\/()]/g : /[^0-9.,]/g,
+      ''
+    );
+    if (allowOperators) {
+      return raw.replace(/,/g, '.').replace(/[0-9.]+/g, token => {
+        const decimal = token.indexOf('.');
+        return decimal < 0 ? token : token.slice(0, decimal + 1) + token.slice(decimal + 1).replace(/\./g, '');
+      });
+    }
+    const separator = Math.max(raw.lastIndexOf('.'), raw.lastIndexOf(','));
+    if (separator < 0) return raw;
+    const whole = raw.slice(0, separator).replace(/[.,]/g, '');
+    const fraction = raw.slice(separator + 1).replace(/[.,]/g, '');
+    return whole + '.' + fraction;
+  },
+
+  bindTransactionNumericInput(input, allowOperators = false) {
+    if (!input || input.dataset.numericOnlyBound === 'true') return;
+    input.dataset.numericOnlyBound = 'true';
+    const invalidCharacter = allowOperators ? /[^0-9.,+\-*\/()]/ : /[^0-9.,]/;
+    input.addEventListener('beforeinput', event => {
+      if (event.data && invalidCharacter.test(event.data)) event.preventDefault();
+    });
+    input.addEventListener('paste', event => {
+      const pasted = event.clipboardData && event.clipboardData.getData('text');
+      if (typeof pasted !== 'string') return;
+      const cleaned = this.sanitizeTransactionNumber(pasted, allowOperators);
+      if (cleaned === pasted) return;
+      event.preventDefault();
+      const start = input.selectionStart == null ? input.value.length : input.selectionStart;
+      const end = input.selectionEnd == null ? start : input.selectionEnd;
+      input.setRangeText(cleaned, start, end, 'end');
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    input.addEventListener('input', event => {
+      const target = event.currentTarget;
+      const original = target.value;
+      const start = target.selectionStart == null ? original.length : target.selectionStart;
+      const cleaned = this.sanitizeTransactionNumber(original, allowOperators);
+      if (cleaned === original) return;
+      const caret = this.sanitizeTransactionNumber(original.slice(0, start), allowOperators).length;
+      target.value = cleaned;
+      if (typeof target.setSelectionRange === 'function') target.setSelectionRange(caret, caret);
+    }, true);
+  },
+  async toggleTransactionSplit() {
+    if (this._txSplitEnabled) {
+      this.updateTransactionSplitStatus();
+      const baseCategoryId = document.getElementById('tx-category').value || '';
+      const totalAmount = this.evalAmount(document.getElementById('tx-amount').value);
+      const hasEnteredData = (this._txSplitParts || []).some((part, index) => {
+        const line = this.readTransactionSplitPart(index, part);
+        const people = this.transactionPeopleDraft('tx-split-description-' + index);
+        const defaultFirstAmount = index === 0 && line.valid && Math.round(line.lineCents) === Math.round(Math.abs(totalAmount) * 100) &&
+          !line.description && (line.categoryId || '') === baseCategoryId && Math.abs(line.quantity - 1) < 0.000001 && !people.length;
+        return line.description || (line.categoryId || '') !== baseCategoryId || people.length || ((line.unitRaw || line.amountRaw) && !defaultFirstAmount) ||
+          (line.quantityRaw && Math.abs((Number.isFinite(line.quantity) ? line.quantity : 1) - 1) > 0.000001);
+      });
+      const hasTotal = Number.isFinite(totalAmount) && Math.round(Math.abs(totalAmount) * 100) > 0;
+      if (hasEnteredData && hasTotal && !(await this.confirmModal({ title: 'Remove split', message: 'This will turn the itemized parts back into one transaction. The first part’s category will be kept.', confirmText: 'Remove split', danger: true }))) return;
+      const first = (this._txSplitParts || [])[0];
+      if (first) {
+        const category = this.data.categories.find(item => item.id === first.categoryId);
+        document.getElementById('tx-category').value = first.categoryId || '';
+        document.getElementById('tx-category-input').value = category ? this.categoryLabel(category).toUpperCase() : '';
+        this._peopleDrafts ||= {};
+        this._peopleDrafts['tx-note'] = [...new Set([...this.transactionPeopleDraft('tx-note'), ...(this._txSplitParts || []).flatMap(part => part.personIds || [])])];
+        this.renderPeopleEntry('tx-note');
+      }
+      this.setTransactionSplitMode(false);
+      return;
+    }
+    const categoryId = document.getElementById('tx-category').value || '';
+    const entered = this.evalAmount(document.getElementById('tx-amount').value);
+    const hasAmount = Number.isFinite(entered) && entered > 0;
+    const initialAmount = hasAmount ? String(Math.abs(entered)) : '';
+    const noteInput = document.getElementById('tx-note');
+    const description = noteInput ? noteInput.value : '';
+    const personIds = this.transactionPeopleDraft('tx-note');
+    this._peopleDrafts ||= {};
+    this._peopleDrafts['tx-note'] = [];
+    if (noteInput) noteInput.value = '';
+    this.setTransactionSplitMode(true, [
+      { id: crypto.randomUUID(), description, categoryId, quantity: '1', quantitySpecified: false, unitAmount: initialAmount, amount: initialAmount, amountMode: hasAmount ? 'total' : 'unit', personIds }
+    ], false);
+    this.renderPeopleEntry('tx-note');
+  },
+
+  toggleTransactionSplitRemainder() {
+    if (!this._txSplitEnabled) return;
+    this.updateTransactionSplitStatus();
+    const total = this.evalAmount(document.getElementById('tx-amount').value);
+    if (!this._txSplitRemainderEnabled) {
+      const first = (this._txSplitParts || [])[0];
+      this._txSplitRemainderEnabled = true;
+      this._txSplitRemainderId ||= crypto.randomUUID();
+      this._txSplitRemainderCategoryId = document.getElementById('tx-category').value || first && first.categoryId || '';
+    } else {
+      if (!Number.isFinite(total) || total <= 0) {
+        this._txSplitRemainderEnabled = false;
+        this._txSplitRemainderId = '';
+        this._txSplitRemainderCategoryId = '';
+        this.renderTransactionSplitEditor();
+        return;
+      }
+      const amountCents = Math.round(Math.abs(total || 0) * 100);
+      const allocatedCents = (this._txSplitParts || []).reduce((sum, part, index) => {
+        const line = this.readTransactionSplitPart(index, part);
+        return sum + (line.valid ? line.lineCents : 0);
+      }, 0);
+      const remainingCents = amountCents - allocatedCents;
+      if (remainingCents < 0) {
+        this.showToast(remainingCents < 0 ? 'Itemized amounts exceed the total. Adjust them before turning off auto remainder.' : 'Enter the full transaction total first.');
+        return;
+      }
+      if (remainingCents > 0) this._txSplitParts.push({
+        id: this._txSplitRemainderId || crypto.randomUUID(), description: 'Other items',
+        categoryId: this._txSplitRemainderCategoryId || document.getElementById('tx-category').value || '',
+        quantity: '1', unitAmount: (remainingCents / 100).toFixed(2), amount: (remainingCents / 100).toFixed(2), amountMode: 'unit', personIds: []
+      });
+
+      this._txSplitRemainderEnabled = false;
+      this._txSplitRemainderId = '';
+      this._txSplitRemainderCategoryId = '';
+    }
+    this.renderTransactionSplitEditor();
+  },
+
+  addTransactionSplitPart() {
+    this._txSplitParts ||= [];
+    this._txSplitParts.push({ id: crypto.randomUUID(), description: '', categoryId: document.getElementById('tx-category').value || '', quantity: '1', quantitySpecified: false, unitAmount: '', amount: '', amountMode: 'unit', personIds: [] });
+    this.renderTransactionSplitEditor();
+  },
+
+  removeTransactionSplitPart(index) {
+    if (!this._txSplitParts || this._txSplitParts.length <= 1) {
+      this.showToast('Keep at least one itemized part.');
+      return;
+    }
+    this._txSplitParts.splice(index, 1);
+    this.renderTransactionSplitEditor();
+  },
+
+  renderTransactionSplitEditor() {
+    const enabled = !!this._txSplitEnabled;
+    const toggle = document.getElementById('tx-split-toggle');
+    const addPart = document.getElementById('tx-split-add-part');
+    const remainderToggle = document.getElementById('tx-split-remainder-toggle');
+    const editor = document.getElementById('tx-split-editor');
+    const categoryControl = document.getElementById('qe-category-control');
+    const amountInput = document.getElementById('tx-amount');
+    const amountLabel = document.getElementById('tx-amount-label');
+    if (!toggle || !editor || !categoryControl) return;
+    toggle.textContent = 'SPLIT';
+    if (addPart) addPart.classList.toggle('hidden', !enabled);
+    if (remainderToggle) {
+      remainderToggle.classList.toggle('hidden', !enabled);
+      remainderToggle.classList.toggle('btn-primary', enabled && !!this._txSplitRemainderEnabled);
+      remainderToggle.classList.toggle('btn-secondary', !enabled || !this._txSplitRemainderEnabled);
+      remainderToggle.setAttribute('aria-pressed', String(enabled && !!this._txSplitRemainderEnabled));
+    }
+    toggle.classList.toggle('btn-primary', enabled);
+    toggle.classList.toggle('btn-secondary', !enabled);
+    toggle.setAttribute('aria-pressed', String(enabled));
+    editor.classList.toggle('hidden', !enabled);
+    categoryControl.classList.toggle('hidden', enabled);
+    if (amountInput) {
+      amountInput.readOnly = enabled && !this._txSplitRemainderEnabled;
+      amountInput.disabled = enabled && !this._txSplitRemainderEnabled;
+      amountInput.classList.toggle('qe-amount-auto', enabled && !this._txSplitRemainderEnabled);
+      amountInput.title = enabled && !this._txSplitRemainderEnabled ? 'Automatically summed from quantity × unit price' : '';
+    }
+    if (amountLabel) amountLabel.textContent = enabled ? 'TOTAL' : 'AMOUNT';
+    if (!enabled) { this.updateTransactionSplitStatus(); return; }
+
+    const date = this.parseDateInput((document.getElementById('tx-date') || {}).value) || this.today();
+    const available = this.categoriesAvailableOn(date);
+    const retained = new Set([...(this._txSplitParts || []).map(part => part.categoryId), this._txSplitRemainderCategoryId].filter(Boolean));
+    const categories = [...available, ...(this.data.categories || []).filter(category => retained.has(category.id) && !available.some(item => item.id === category.id))];
+    const options = selected => '<option value="">NONE</option>' + categories.map(category => '<option value="' + this.escapeHtml(category.id) + '"' + (category.id === selected ? ' selected' : '') + '>' + this.escapeHtml(this.categoryLabel(category)) + '</option>').join('');
+    const rows = document.getElementById('tx-split-rows');
+    rows.innerHTML = '<div class="tx-split-head" aria-hidden="true"><span>ITEM · PERSON</span><span>CATEGORY</span><span>QTY</span><span>PRICE EACH</span><span>LINE TOTAL</span><span></span></div>' +
+      (this._txSplitParts || []).map((part, index) => {
+        const noteId = 'tx-split-description-' + index;
+        return '<div class="tx-split-item"><div class="tx-split-row" data-split-index="' + index + '">' +
+          '<input type="text" id="' + noteId + '" class="input tx-split-description" aria-label="Split item description" placeholder="ITEM · @ PERSON" autocomplete="off" value="' + this.escapeHtml(part.description) + '">' +
+          '<select class="input tx-split-category" aria-label="Part category">' + options(part.categoryId) + '</select>' +
+          '<input type="text" inputmode="text" class="input tx-split-quantity" aria-label="Quantity" title="Enter a quantity or arithmetic expression" value="' + this.escapeHtml(part.quantity == null ? '1' : part.quantity) + '">' +
+          '<input type="text" inputmode="text" class="input tx-split-unit-amount" aria-label="Unit price" placeholder="PRICE" title="Enter a unit price or arithmetic expression" value="' + this.escapeHtml(part.unitAmount) + '">' +
+          '<input type="text" inputmode="text" class="input tx-split-line-total" aria-label="Line total" placeholder="TOTAL" title="Enter the total; price each is calculated as total divided by quantity. Arithmetic is allowed." value="' + this.escapeHtml(part.amount) + '">' +
+          '<button type="button" class="btn btn-sm btn-danger btn-icon tx-split-remove" title="Remove part" aria-label="Remove part" onclick="BlackBook.removeTransactionSplitPart(' + index + ')">' + this.xIcon() + '</button></div>' +
+          '<div class="transaction-people" id="' + noteId + '-people"></div></div>';
+      }).join('');
+    const remainder = document.getElementById('tx-split-remainder');
+    if (remainder) {
+      remainder.classList.toggle('hidden', !this._txSplitRemainderEnabled);
+      remainder.innerHTML = this._txSplitRemainderEnabled
+        ? '<div class="tx-split-remainder-row"><span class="tx-split-remainder-label">OTHER ITEMS · AUTO</span><select id="tx-split-remainder-category" class="input" aria-label="Other items category">' + options(this._txSplitRemainderCategoryId) + '</select><span id="tx-split-remainder-value" class="tx-split-remainder-value">—</span></div><div id="tx-split-status" class="tx-split-status" role="status" aria-live="polite"></div>'
+        : '<div id="tx-split-status" class="tx-split-status" role="status" aria-live="polite"></div>';
+      const remainderCategory = document.getElementById('tx-split-remainder-category');
+      if (remainderCategory) remainderCategory.addEventListener('change', () => {
+        this._txSplitRemainderCategoryId = remainderCategory.value || '';
+        this.updateTransactionSplitStatus();
+      });
+    }
+    (this._txSplitParts || []).forEach((part, index) => {
+      const noteId = 'tx-split-description-' + index;
+      this.initPeopleEntry(part.personIds, noteId);
+      const row = rows.querySelector('[data-split-index="' + index + '"]');
+      const description = document.getElementById(noteId);
+      const category = row && row.querySelector('.tx-split-category');
+      const quantity = row && row.querySelector('.tx-split-quantity');
+      const unitAmount = row && row.querySelector('.tx-split-unit-amount');
+      const lineTotal = row && row.querySelector('.tx-split-line-total');
+      if (description) description.addEventListener('input', () => { this._txSplitParts[index].description = description.value; });
+      if (category) category.addEventListener('change', () => { this._txSplitParts[index].categoryId = category.value; });
+      if (quantity) {
+        this.bindTransactionNumericInput(quantity, true);
+        quantity.addEventListener('focus', () => quantity.select());
+        quantity.addEventListener('blur', () => { if (!quantity.value.trim()) { quantity.value = '1'; this._txSplitParts[index].quantity = '1'; this._txSplitParts[index].quantitySpecified = false; this.updateTransactionSplitStatus(); } });
+        quantity.addEventListener('input', () => { this._txSplitParts[index].quantity = quantity.value; this._txSplitParts[index].quantitySpecified = quantity.value.trim() !== ''; this.updateTransactionSplitStatus(); });
+      }
+      if (unitAmount) {
+        this.bindTransactionNumericInput(unitAmount, true);
+        unitAmount.addEventListener('focus', () => {
+          unitAmount.select();
+          if (/^[-+]?0+(?:[.,]0+)?$/.test(unitAmount.value.trim())) { unitAmount.value = ''; this._txSplitParts[index].unitAmount = ''; this.updateTransactionSplitStatus(); }
+        });
+        unitAmount.addEventListener('input', () => {
+          this._txSplitParts[index].amountMode = 'unit';
+          this._txSplitParts[index].unitAmount = unitAmount.value;
+          this.updateTransactionSplitStatus();
+        });
+      }
+      if (lineTotal) {
+        this.bindTransactionNumericInput(lineTotal, true);
+        lineTotal.addEventListener('focus', () => {
+          lineTotal.select();
+          if (/^[-+]?0+(?:[.,]0+)?$/.test(lineTotal.value.trim())) { lineTotal.value = ''; this._txSplitParts[index].amount = ''; this.updateTransactionSplitStatus(); }
+        });
+        lineTotal.addEventListener('input', () => {
+          this._txSplitParts[index].amountMode = 'total';
+          this._txSplitParts[index].amount = lineTotal.value;
+          this.updateTransactionSplitStatus();
+        });
+      }
+    });
+    this.updateTransactionSplitStatus();
+  },
+
+  updateTransactionSplitStatus() {
+    const amountInput = document.getElementById('tx-amount');
+    const amountLabel = document.getElementById('tx-amount-label');
+    if (!amountInput) return;
+    if (!this._txSplitEnabled) {
+      amountInput.readOnly = false;
+      amountInput.disabled = false;
+      amountInput.classList.remove('qe-amount-auto');
+      amountInput.title = '';
+      if (amountLabel) amountLabel.textContent = 'AMOUNT';
+      const status = document.getElementById('tx-split-status');
+      if (status) { status.textContent = ''; status.classList.remove('is-error'); }
+      return;
+    }
+    const autoRemainder = !!this._txSplitRemainderEnabled;
+    amountInput.readOnly = !autoRemainder;
+    amountInput.disabled = !autoRemainder;
+    amountInput.classList.toggle('qe-amount-auto', !autoRemainder);
+    amountInput.title = autoRemainder ? 'Enter the full transaction total; the other items amount is calculated automatically.' : 'Automatically summed from item totals';
+    if (amountLabel) amountLabel.textContent = 'TOTAL';
+    const currency = document.getElementById('tx-currency-select').value || this.baseCurrency();
+    const lines = (this._txSplitParts || []).map((part, index) => {
+      const line = this.readTransactionSplitPart(index, part);
+      part.quantity = line.quantityRaw;
+      part.amountMode = line.amountMode;
+      const row = document.querySelector('#tx-split-rows [data-split-index="' + index + '"]');
+      const unitInput = row && row.querySelector('.tx-split-unit-amount');
+      const totalInput = row && row.querySelector('.tx-split-line-total');
+      if (line.valid) {
+        part.amount = (line.lineCents / 100).toFixed(2);
+        if (line.amountMode === 'total') {
+          const derivedUnit = String(Math.round(line.unitAmount * 1000000) / 1000000);
+          part.unitAmount = derivedUnit;
+          if (unitInput && document.activeElement !== unitInput) unitInput.value = derivedUnit;
+        } else {
+          part.unitAmount = line.unitRaw;
+          if (totalInput && document.activeElement !== totalInput) totalInput.value = (line.lineCents / 100).toFixed(2);
+        }
+      } else if (line.amountMode === 'total') {
+        part.amount = line.amountRaw;
+        part.unitAmount = '';
+        if (unitInput && document.activeElement !== unitInput) unitInput.value = '';
+      } else {
+        part.unitAmount = line.unitRaw;
+        part.amount = '';
+        if (totalInput && document.activeElement !== totalInput) totalInput.value = '';
+      }
+      return line;
+    });
+    const allocatedCents = lines.reduce((sum, line) => sum + (line.valid ? line.lineCents : 0), 0);
+    const status = document.getElementById('tx-split-status');
+    if (autoRemainder) {
+      const total = this.evalAmount(amountInput.value);
+      const totalCents = Number.isFinite(total) && total > 0 ? Math.round(total * 100) : null;
+      const remainingCents = totalCents == null ? null : totalCents - allocatedCents;
+      const value = document.getElementById('tx-split-remainder-value');
+      if (value) {
+        value.textContent = remainingCents == null ? 'ENTER TOTAL' : remainingCents < 0 ? 'OVER BY ' + this.fmtAmount(Math.abs(remainingCents) / 100, currency) : this.fmtAmount(remainingCents / 100, currency);
+        value.classList.toggle('is-error', remainingCents != null && remainingCents < 0);
+      }
+      if (status) {
+        status.textContent = remainingCents != null && remainingCents < 0 ? 'Itemized amounts exceed the transaction total by ' + this.fmtAmount(Math.abs(remainingCents) / 100, currency) + '.' : '';
+        status.classList.toggle('is-error', remainingCents != null && remainingCents < 0);
+      }
+    } else {
+      amountInput.value = (allocatedCents / 100).toFixed(2);
+      if (status) { status.textContent = ''; status.classList.remove('is-error'); }
+    }
+    this.updateTxPreview();
+  },
   openNewTransaction(targetId) {
     this._copyTransactionDraft = false;
     this._txDualCurrencyEdit = null;
+    const transactionForm = document.getElementById('transaction-form');
+    if (transactionForm) delete transactionForm.dataset.wishlistPurchaseId;
     const usable = this.visibleAccounts().length + (this.data.creditCards || []).length;
     if (!usable) { alert('Create an account first — use CREATE FIRST ACCOUNT on the overview, or Settings → Accounts → + ADD.'); return; }
     document.getElementById('tx-id').value = '';
@@ -68,8 +450,9 @@ Object.assign(window.BlackBook, {
     if (catInput && catHidden) { catHidden.value = defaultCatId; catInput.value = defaultCat ? defaultCat.name.toUpperCase() : ''; }
     const amountInput = document.getElementById('tx-amount');
     amountInput.dataset.fallbackType = document.getElementById('tx-type').value;
-    amountInput.oninput = () => this.updateTransactionSign();
+    amountInput.oninput = () => { this.updateTransactionSign(); this.updateTransactionSplitStatus(); };
     this.updateTransactionSign();
+    this.setTransactionSplitMode(false);
     this.initPeopleEntry([]);
     this.openModal('transaction-modal');
     setTimeout(() => amountInput.focus(), 50);
@@ -388,6 +771,8 @@ Object.assign(window.BlackBook, {
   openEditTransaction(txId) {
     this._copyTransactionDraft = false;
     this._txDualCurrencyEdit = null;
+    const transactionForm = document.getElementById('transaction-form');
+    if (transactionForm) delete transactionForm.dataset.wishlistPurchaseId;
     const tx = this.data.transactions.find(t => t.id === txId);
     if (!tx) return;
     if (tx.type === 'transfer') { this.openEditTransfer(txId); return; }
@@ -396,7 +781,7 @@ Object.assign(window.BlackBook, {
     document.getElementById('tx-type').value = tx.type;
     document.getElementById('tx-amount').value = Math.abs(tx.amount);
     document.getElementById('tx-amount').dataset.fallbackType = tx.type;
-    document.getElementById('tx-amount').oninput = () => this.updateTransactionSign();
+    document.getElementById('tx-amount').oninput = () => { this.updateTransactionSign(); this.updateTransactionSplitStatus(); };
     this.updateTransactionSign();
     document.getElementById('tx-currency').value = tx.currency;
     document.getElementById('tx-currency-select').value = tx.currency;
@@ -428,7 +813,8 @@ Object.assign(window.BlackBook, {
     }
     const catInput = document.getElementById('tx-category-input');
     const catHidden = document.getElementById('tx-category');
-    if (catInput && catHidden) { catHidden.value = tx.categoryId; const cat = this.data.categories.find(c => c.id === tx.categoryId); catInput.value = cat ? cat.name.toUpperCase() : ''; }
+    if (catInput && catHidden) { catHidden.value = tx.categoryId; const cat = this.data.categories.find(c => c.id === tx.categoryId); catInput.value = cat ? this.categoryLabel(cat).toUpperCase() : ''; }
+    this.setTransactionSplitMode(Array.isArray(tx.parts) && tx.parts.length > 0, tx.parts || [], !!tx.splitRemainder);
     this.initPeopleEntry(tx.personIds || []);
     this.openModal('transaction-modal');
     setTimeout(() => document.getElementById('tx-amount').focus(), 50);
@@ -478,10 +864,8 @@ Object.assign(window.BlackBook, {
     this._copyTransactionDraft = true;
     if (tx.type === 'transfer') {
       this._editingTransferId = null;
-      document.getElementById('tr-date').value = this.fmtDateInput(this.today());
     } else {
       document.getElementById('tx-id').value = '';
-      document.getElementById('tx-date').value = this.fmtDateInput(this.today());
       if (this._txDualCurrencyEdit) this._txDualCurrencyEdit.txId = '';
     }
   },
@@ -530,10 +914,12 @@ Object.assign(window.BlackBook, {
 
     const debt = this.debtForPaymentTx(tx.id);
     if (debt) {
-      const isIn = (debt.type === 'in');
+      const isAddition = tx.debtEntryType === 'addition';
       return {
-        title: 'Delete Debt Payment',
-        message: 'This ' + amtP + ' payment is linked to the debt "' + (debt.person || '') + '". Deleting it reverses only this payment and increases the remaining balance.',
+        title: isAddition ? 'Delete Added Debt Amount' : 'Delete Debt Payment',
+        message: isAddition
+          ? 'This ' + amtP + ' is an added amount on the debt for "' + (debt.person || '') + '". Deleting it removes that amount from the debt total.'
+          : 'This ' + amtP + ' payment is linked to the debt "' + (debt.person || '') + '". Deleting it reverses only this payment and increases the remaining balance.',
         detail: 'debt'
       };
     }
@@ -554,6 +940,14 @@ Object.assign(window.BlackBook, {
         title: 'Delete Savings Contribution',
         message: 'This contribution is linked to the savings goal "' + (sav.goal.name || '') + '". Deleting it will reduce that goal\u2019s saved amount.',
         detail: 'savings'
+      };
+    }
+
+    if (tx.cardBillPayment) {
+      return {
+        title: 'Delete Credit Card Payment',
+        message: 'This is one payment for the card bill. Deleting it will remove its allocation from every purchase on that card.',
+        detail: 'card'
       };
     }
 
@@ -603,9 +997,14 @@ Object.assign(window.BlackBook, {
     if (sav) {
       sav.goal.entries.splice(sav.entryIndex, 1);
     }
-    const inst = this.installmentForTx(tx.id);
-    if (inst && inst.inst && inst.seq != null) {
-      if (Array.isArray(inst.inst.paid)) {
+    if (tx.cardBillPayment && Array.isArray(tx.installmentAllocations)) {
+      for (const allocation of tx.installmentAllocations) {
+        const inst = (this.data.installments || []).find(item => item.id === allocation.installmentId);
+        if (inst && Array.isArray(inst.paid)) inst.paid = inst.paid.filter(entry => !(entry && entry.seq === allocation.seq && entry.via === 'tx'));
+      }
+    } else {
+      const inst = this.installmentForTx(tx.id);
+      if (inst && inst.inst && inst.seq != null && Array.isArray(inst.inst.paid)) {
         inst.inst.paid = inst.inst.paid.filter(e => !(e && (e.seq === inst.seq && e.via === 'tx')));
       }
     }
@@ -730,9 +1129,13 @@ Object.assign(window.BlackBook, {
     const catMap = Object.fromEntries((this.data.categories || []).map(c => [c.id, c]));
     const curs = new Set(txs.map(t => t.currency || this.baseCurrency() || 'RSD'));
     const accs = new Set(txs.map(t => t.cardId ? ('card:' + t.cardId) : (t.accountId || '')));
+    const hasSplits = txs.some(tx => Array.isArray(tx.parts) && tx.parts.length);
+    const signs = new Set(txs.map(tx => Math.sign(Number(tx.amount) || 0)));
     this._mergeIds = txs.map(t => t.id);
     this._mergeCurrency = txs[0].currency || this.baseCurrency() || 'RSD';
-    this._mergeOk = curs.size === 1 && accs.size === 1;
+    this._mergeOk = curs.size === 1 && accs.size === 1 && (!hasSplits || signs.size === 1 && !signs.has(0));
+    this._mergeSplitOk = curs.size === 1 && accs.size === 1 && signs.size === 1 && !signs.has(0);
+    this._mergeReason = this._mergeOk ? '' : curs.size !== 1 || accs.size !== 1 ? 'Transactions must use the same currency and account/card.' : 'Split transactions must all have the same income/expense direction.';
     this._mergeSelected = 0;
     let list = '<div style="max-height:280px;overflow:auto;">';
     txs.forEach((t, i) => {
@@ -740,7 +1143,7 @@ Object.assign(window.BlackBook, {
       const cat = catMap[t.categoryId];
       list += '<div class="merge-row' + (i === 0 ? ' merge-target' : '') + '" data-idx="' + i + '" onclick="BlackBook.selectMergeTarget(' + i + ')">' +
         '<span class="merge-date">' + this.escapeHtml(t.date) + '</span>' +
-        '<span class="merge-cat" style="color:' + (cat ? BlackBook.categoryColor(cat) : 'var(--text-muted)') + '">' + this.escapeHtml(cat ? cat.name : 'Uncategorized') + '</span>' +
+        '<span class="merge-cat" style="color:' + (cat ? BlackBook.categoryColor(cat) : 'var(--text-muted)') + '">' + this.escapeHtml(cat ? this.categoryLabel(cat) : 'None') + '</span>' +
         '<span class="merge-acct">' + this.escapeHtml(acc ? acc.name : '?') + '</span>' +
         '<span class="merge-note">' + this.transactionDescriptionHtml(t) + '</span>' +
         '<span class="merge-amt">' + this.fmtAmount(t.amount, this._mergeCurrency) + '</span></div>';
@@ -749,15 +1152,17 @@ Object.assign(window.BlackBook, {
     document.getElementById('merge-list').innerHTML = list;
     document.getElementById('merge-title').textContent = 'Merge Transactions \u00b7 ' + txs.length;
     this.renderMergeSummary();
-    if (txs.length === 2) {
+    if (txs.length === 2 && !hasSplits) {
       document.getElementById('merge-summary').insertAdjacentHTML('beforeend', '<div style="color:var(--text-muted);margin-top:4px;">Tip: you can also convert these into a transfer between their accounts.</div>');
     }
     if (!this._mergeOk) {
-      document.getElementById('merge-summary').insertAdjacentHTML('beforeend', '<div style="color:var(--expense);margin-top:4px;">Cannot merge: transactions use different currencies or accounts/cards. Select a matching group.</div>');
+      document.getElementById('merge-summary').insertAdjacentHTML('beforeend', '<div style="color:var(--expense);margin-top:4px;">Cannot merge: ' + this.escapeHtml(this._mergeReason) + '</div>');
     }
     this.openModal('merge-modal');
     const trBtn = document.getElementById('merge-transfer-btn');
-    if (trBtn) trBtn.style.display = (txs.length === 2) ? '' : 'none';
+    if (trBtn) trBtn.style.display = (txs.length === 2 && !hasSplits) ? '' : 'none';
+    const splitBtn = document.getElementById('merge-split-btn');
+    if (splitBtn) splitBtn.style.display = this._mergeSplitOk ? '' : 'none';
   },
 
   selectMergeTarget(idx) {
@@ -778,26 +1183,71 @@ Object.assign(window.BlackBook, {
     const catMap = Object.fromEntries((this.data.categories || []).map(c => [c.id, c]));
     const acc = tgt.cardId ? (this.data.creditCards || []).find(c => c.id === tgt.cardId) : accMap[tgt.accountId];
     const cat = catMap[tgt.categoryId];
-    el.innerHTML = 'Target: <b>' + this.escapeHtml(tgt.date) + '</b> ' + this.escapeHtml(cat ? cat.name : 'Uncategorized') +
+    el.innerHTML = 'Target: <b>' + this.escapeHtml(tgt.date) + '</b> ' + this.escapeHtml(cat ? this.categoryLabel(cat) : 'None') +
       ' / ' + this.escapeHtml(acc ? acc.name : '?') +
       ' &middot; Combined total: <b>' + this.fmtAmount(sum, this._mergeCurrency) + '</b> (' + txs.length + ' into 1)' +
       (notes.length ? ' &middot; Note: "' + this.escapeHtml(notes.join('; ')) + '"' : '');
   },
 
-  async submitMerge() {
+  async submitMerge(asSplit = false) {
     if (!this._mergeIds || this._mergeIds.length < 2) return;
-    if (!this._mergeOk) { alert('Cannot merge: transactions use different currencies or accounts.'); return; }
+    if (!this._mergeOk) { alert('Cannot merge: ' + (this._mergeReason || 'choose transactions with compatible accounts and currencies.')); return; }
     const txs = this.data.transactions.filter(t => this._mergeIds.includes(t.id));
     const tgt = txs[this._mergeSelected];
     if (!tgt) return;
+    const mergedTransactionIds = new Set(txs.map(tx => tx.id));
+    const splitDirections = new Set(txs.map(tx => Math.sign(Number(tx.amount) || 0)));
+    if (asSplit && (splitDirections.size !== 1 || splitDirections.has(0))) {
+      alert('Cannot merge as split: all transactions must be income or all be expenses.');
+      return;
+    }
     const sum = Math.round(txs.reduce((s, t) => s + (t.amount || 0), 0) * 100) / 100;
     const notes = txs.map(t => (t.note || '').trim()).filter(Boolean);
+    if (asSplit || txs.some(tx => Array.isArray(tx.parts) && tx.parts.length)) {
+      const categoryName = id => (this.data.categories || []).find(category => category.id === id)?.name || '';
+      tgt.parts = txs.flatMap(tx => {
+        const sourceParts = Array.isArray(tx.parts) && tx.parts.length ? tx.parts : [{
+          description:(tx.note || '').trim() || categoryName(tx.categoryId) || 'Transaction',
+          categoryId:tx.categoryId,
+          amount:Math.abs(Number(tx.amount) || 0),
+          personIds:tx.personIds || [],
+          ...(asSplit && tx.nativeAmount != null ? { nativeAmount:Math.abs(Number(tx.nativeAmount) || 0), nativeCurrency:tx.nativeCurrency || tx.currency || this._mergeCurrency } : {})
+        }];
+        const hasPartNativeAmount = sourceParts.some(part => part.nativeAmount != null);
+        return sourceParts.map((part, index) => {
+          const mergedPart = {
+            ...part,
+            id:crypto.randomUUID(),
+            amount:Math.abs(Number(part.amount) || 0),
+            personIds:[...new Set([...(asSplit ? tx.personIds || [] : []), ...(part.personIds || [])])]
+          };
+          if (asSplit && index === 0 && !hasPartNativeAmount && tx.nativeAmount != null) {
+            mergedPart.nativeAmount = Math.abs(Number(tx.nativeAmount) || 0);
+            mergedPart.nativeCurrency = tx.nativeCurrency || tx.currency || this._mergeCurrency;
+          }
+          return mergedPart;
+        });
+      });
+      tgt.parts = tgt.parts.map(part => this.categorySelectionAllowed(part.categoryId, tgt.date, part.categoryId) ? part : { ...part, categoryId:null });
+      tgt.categoryId = tgt.parts[0]?.categoryId || null;
+    } else delete tgt.parts;
     tgt.amount = sum;
     tgt.note = notes.join('; ');
-    tgt.personIds = [...new Set(txs.flatMap(tx => tx.personIds || []))];
+    tgt.personIds = asSplit ? [] : [...new Set(txs.flatMap(tx => tx.personIds || []))];
     delete tgt.nativeAmount; delete tgt.nativeCurrency; delete tgt.baseAmount; delete tgt.feeAmount;
+    const bankStatementRows = txs.flatMap(tx => Array.isArray(tx.bankStatementRows) ? tx.bankStatementRows : []);
+    if (bankStatementRows.length) {
+      tgt.bankStatementRows = [...new Map(bankStatementRows.map(row => [row.key || JSON.stringify(row), row])).values()];
+    }
     const keep = tgt.id;
     this.data.transactions = this.data.transactions.filter(t => t.id === keep || !this._mergeIds.includes(t.id));
+    for (const payment of this.data.billPayments || []) {
+      const linkedIds = this.billPaymentTransactionIds(payment);
+      if (!linkedIds.some(id => mergedTransactionIds.has(id))) continue;
+      payment.relatedTxIds = [...new Set(linkedIds.map(id => mergedTransactionIds.has(id) ? keep : id))];
+      if (mergedTransactionIds.has(payment.txId)) payment.txId = keep;
+      this.syncBillPaymentTransactions(payment, (this.data.bills || []).find(bill => bill.id === payment.billId));
+    }
     await this.save({ undoable: true, label: 'Merge transactions' });
     this.closeModal('merge-modal');
     this.bulkClear();
@@ -812,7 +1262,8 @@ Object.assign(window.BlackBook, {
     const accs = txs.map(t => accMap[t.accountId]);
     const exp = txs.find(t => (t.amount || 0) < 0);
     const inc = txs.find(t => (t.amount || 0) > 0);
-    const reason = txs.some(t => t.cardId) ? 'one of the selected transactions is on a credit card.' :
+    const reason = txs.some(t => (t.parts || []).length) ? 'one of the selected transactions has split parts.' :
+      txs.some(t => t.cardId) ? 'one of the selected transactions is on a credit card.' :
       (!accs[0] || !accs[1] || accs[0].id === accs[1].id) ? 'the two transactions must be on different accounts.' :
       (!exp || !inc) ? 'one transaction must be an expense and one an income.' : null;
     if (reason) { alert('Cannot convert to transfer: ' + reason); return; }
@@ -847,11 +1298,14 @@ Object.assign(window.BlackBook, {
 
   bindModalSubmit() {
     const form = document.getElementById('transaction-form');
+    ['tx-amount', 'tx-native-amount', 'tx-fee-amount'].forEach(id => this.bindTransactionNumericInput(document.getElementById(id)));
     form.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter' && e.target.tagName !== 'SELECT') { e.preventDefault(); form.requestSubmit(); }
+      if (e.key === 'Enter' && !e.defaultPrevented && e.target.tagName !== 'SELECT') { e.preventDefault(); form.requestSubmit(); }
     });
     document.getElementById('transaction-form').addEventListener('submit', async (e) => {
       e.preventDefault();
+      const form = document.getElementById('transaction-form');
+      const wishlistPurchaseId = form.dataset.wishlistPurchaseId || '';
       const id = document.getElementById('tx-id').value;
       const rawParsed = this.evalAmount(document.getElementById('tx-amount').value);
       if (isNaN(rawParsed)) { alert('Please enter a valid amount.'); return; }
@@ -874,34 +1328,132 @@ Object.assign(window.BlackBook, {
       const txData = { date: txDate, type: txType, amount: polarity * rawAmt, currency: primaryCurrency, accountId: accountVal.startsWith('card:') ? null : accountVal, categoryId: document.getElementById('tx-category').value, note: document.getElementById('tx-note').value };
       const recurringSource = accountVal.startsWith('card:') ? accountVal : 'account:' + accountVal;
       txData.personIds = this.transactionPeopleDraft();
-      const ruleCategory = this.recurringCategoryFor(txData.note, recurringSource);
-      if (ruleCategory && this.categorySelectionAllowed(ruleCategory, txDate, txData.categoryId)) txData.categoryId = ruleCategory;
       const original = id ? this.data.transactions.find(t => t.id === id) : null;
-      if (!this.categorySelectionAllowed(txData.categoryId, txDate, original && original.categoryId)) { alert('That category was archived for this date. Choose another category.'); return; }
+      const splitEnabled = !!this._txSplitEnabled;
+      if (splitEnabled) {
+        const baseCategoryId = document.getElementById('tx-category').value || '';
+        const entries = (this._txSplitParts || []).map((part, index) => {
+          const line = this.readTransactionSplitPart(index, part);
+          const noteId = 'tx-split-description-' + index;
+          const personIds = this.transactionPeopleDraft(noteId);
+          const hasNonZeroInput = raw => {
+            const text = String(raw || '').trim();
+            if (!text) return false;
+            const value = this.evalAmount(text);
+            return !Number.isFinite(value) || Math.abs(value) > 0.000001;
+          };
+          const quantityIsEntered = !!line.quantityRaw && (!Number.isFinite(line.quantity) || (Math.abs(line.quantity) > 0.000001 && Math.abs(line.quantity - 1) > 0.000001));
+          const hasContent = !!line.description || hasNonZeroInput(line.unitRaw) || hasNonZeroInput(line.amountRaw) || personIds.length > 0 || (line.categoryId || '') !== baseCategoryId || quantityIsEntered;
+          return { part, line, personIds, hasContent };
+        });
+        if (entries.some(entry => entry.hasContent && !entry.line.valid)) { alert('Enter a positive quantity and either a line total or price each for every split item.'); return; }
+        const parts = entries.filter(entry => entry.hasContent).map(({ part, line, personIds }) => ({
+          id: original ? (part.id || crypto.randomUUID()) : crypto.randomUUID(),
+          description: line.description,
+          categoryId: line.categoryId,
+          quantity: Math.round(line.quantity * 10000) / 10000,
+          quantitySpecified: part.quantitySpecified === true,
+          unitAmount: Math.round(line.unitAmount * 1000000) / 1000000,
+          amount: line.lineCents / 100,
+          amountMode: line.amountMode,
+          personIds
+        }));
+        if (this._txSplitRemainderEnabled) {
+          if (!Number.isFinite(rawAmt) || rawAmt <= 0) { alert('Enter the full transaction total first.'); return; }
+          if (!parts.length) { alert('Add at least one itemized part before saving.'); return; }
+          const remainingCents = Math.round(rawAmt * 100) - parts.reduce((sum, part) => sum + Math.round(part.amount * 100), 0);
+          if (remainingCents < 0) { alert('Itemized amounts exceed the transaction total by ' + this.fmtAmount(Math.abs(remainingCents) / 100, primaryCurrency) + '.'); return; }
+          const previousRemainder = (original && original.parts || []).find(part => part && part.autoRemainder);
+          parts.push({
+            id: this._txSplitRemainderId || previousRemainder && previousRemainder.id || crypto.randomUUID(),
+            description: '',
+            categoryId: this._txSplitRemainderCategoryId || null,
+            amount: remainingCents / 100,
+            autoRemainder: true,
+            personIds: []
+          });
+          txData.splitRemainder = true;
+        } else {
+          const allocation = this.transactionSplitValidation(rawAmt, parts);
+          if (!allocation.valid) {
+            const difference = this.fmtAmount(Math.abs(allocation.remainingCents) / 100, primaryCurrency);
+            alert(allocation.remainingCents >= 0 ? 'Split parts are short by ' + difference + '.' : 'Split parts exceed the transaction total by ' + difference + '.');
+            return;
+          }
+          delete txData.splitRemainder;
+        }
+        const oldParts = new Map((original && original.parts || []).map(part => [part.id, part]));
+        for (const part of parts) {
+          if (part.autoRemainder && !part.amount) continue;
+          const previous = oldParts.get(part.id);
+          if (!this.categorySelectionAllowed(part.categoryId, txDate, previous && previous.categoryId)) { alert('A split category was archived for this date. Choose another category.'); return; }
+        }
+        txData.parts = parts;
+        txData.categoryId = parts[0] ? parts[0].categoryId : null;
+      } else {
+        delete txData.parts;
+        delete txData.splitRemainder;
+        const ruleCategory = this.recurringCategoryFor(txData.note, recurringSource);
+        if (ruleCategory && this.categorySelectionAllowed(ruleCategory, txDate, txData.categoryId)) txData.categoryId = ruleCategory;
+        if (!this.categorySelectionAllowed(txData.categoryId, txDate, original && original.categoryId)) { alert('That category was archived for this date. Choose another category.'); return; }
+      }
       if (hasSecondary) {
         txData.nativeAmount = polarity * Math.round(Math.abs(secondaryParsed) * 100) / 100;
         txData.nativeCurrency = secondaryCurrency;
+        if (splitEnabled && Array.isArray(txData.parts) && txData.parts.length) {
+          txData.parts.forEach(part => { delete part.nativeAmount; delete part.nativeCurrency; });
+          txData.parts[0].nativeAmount = Math.round(Math.abs(secondaryParsed) * 100) / 100;
+          txData.parts[0].nativeCurrency = secondaryCurrency;
+        }
       } else {
         delete txData.nativeAmount;
         delete txData.nativeCurrency;
+        if (splitEnabled && Array.isArray(txData.parts)) {
+          txData.parts.forEach(part => { delete part.nativeAmount; delete part.nativeCurrency; });
+        }
       }
       if (accountVal.startsWith('card:')) { txData.cardId = accountVal.slice(5); txData.accountId = null; }
       else { txData.cardId = null; txData.accountId = accountVal; }
       if (id) {
         const tx = this.data.transactions.find(t => t.id === id);
         if (tx) {
+          const linkedDebt = tx.debtId && (this.data.debts || []).find(debt => debt.id === tx.debtId);
+          if (linkedDebt && tx.debtEntryType === 'addition') {
+            const editResult = this.adjustDebtAdditionForEdit(linkedDebt, tx, txData);
+            if (!editResult.ok) { this.showToast(editResult.message); return; }
+          }
+          if (tx.cardBillPayment) {
+            const editResult = this.adjustCardBillPaymentForEdit(tx, txData);
+            if (!editResult.ok) { this.showToast(editResult.message); return; }
+          }
           if (tx.settlements && this.transactionSettlementFieldsChanged(tx, txData)) delete tx.settlements;
           Object.assign(tx, txData);
+          if (!splitEnabled) { delete tx.parts; delete tx.splitRemainder; }
+          else if (!txData.splitRemainder) delete tx.splitRemainder;
           if (!hasSecondary) { delete tx.nativeAmount; delete tx.nativeCurrency; }
+          if (tx.debtId) {
+            if (linkedDebt) this.syncDebtPaidDate(linkedDebt);
+          }
         }
       }
       else {
         txData.id = crypto.randomUUID(); this.data.transactions.push(txData);
       }
+      const wishlist = wishlistPurchaseId && !id && Array.isArray(this.data.wishlist) ? this.data.wishlist : null;
+      const wishlistIndex = wishlist ? wishlist.findIndex(item => item.id === wishlistPurchaseId) : -1;
+      const purchasedWishlistItem = wishlistIndex >= 0 ? wishlist[wishlistIndex] : null;
+      if (purchasedWishlistItem) wishlist.splice(wishlistIndex, 1);
       this.syncViewToDate(txData.date);
       const wrap = document.querySelector('.tx-list-wrap');
       const scrollTop = wrap ? wrap.scrollTop : 0;
-      const saved = await this.save({ undoable: true, label: id ? 'Edit transaction' : 'Add transaction' }); this.closeModal('transaction-modal'); this.renderPage(this.currentPage);
+      const saved = await this.save({ undoable: true, label: purchasedWishlistItem ? 'Buy wishlist item' : id ? 'Edit transaction' : 'Add transaction' });
+      if (!saved && purchasedWishlistItem) {
+        wishlist.splice(Math.min(wishlistIndex, wishlist.length), 0, purchasedWishlistItem);
+        this.data.transactions = this.data.transactions.filter(item => item.id !== txData.id);
+        return;
+      }
+      if (saved && wishlistPurchaseId) delete form.dataset.wishlistPurchaseId;
+      this.closeModal('transaction-modal'); this.renderPage(this.currentPage);
       if (saved && !id && this._copyTransactionDraft) {
         this._copyTransactionDraft = false;
         this.openLinkedTransaction(txData.id);

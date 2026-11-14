@@ -1,5 +1,6 @@
 import express from 'express';
 import { spawn } from 'node:child_process';
+import { randomUUID } from 'node:crypto';
 import { readFileSync, realpathSync, statSync, unlinkSync, writeFileSync } from 'node:fs';
 import http from 'node:http';
 import { basename, isAbsolute, join } from 'node:path';
@@ -30,7 +31,7 @@ const DEFAULT_DATA = {
     { id: 'cat-debt', name: 'Debt', color: '#facc15' },
     { id: 'cat-uncategorized', name: 'Uncategorized', color: null }
   ],
-  transactions: [], bills: [], billPayments: [], savingsGoals: [], budgets: [], installments: [], debts: [],
+  transactions: [], bills: [], billPayments: [], savingsGoals: [], wishlist: [], budgets: [], installments: [], debts: [],
   settings: {
     baseCurrency: 'RSD',
     enabledCurrencies: ['RSD', 'EUR', 'USD', 'GBP', 'CHF', 'JPY', 'CNY', 'AUD', 'CAD', 'SEK', 'NOK', 'PLN', 'CZK', 'TRY', 'INR'],
@@ -42,6 +43,8 @@ const DEFAULT_DATA = {
 const store = createProfileStore({ profilesDir: PROFILES_DIR, legacyDataFile: LEGACY_DATA_FILE, defaultData: DEFAULT_DATA });
 const app = express();
 const unlocked = new Map();
+const transactionLoadSessions = new Map();
+const TRANSACTION_LOAD_TTL_MS = 2 * 60 * 60 * 1000;
 const startedAt = Date.now();
 app.get('/api/instance', (req, res) => res.json({ appName: 'Black Book', instanceId: INSTANCE_ID, pid: process.pid, startedAt, runtimeVersion: process.versions.node }));
 
@@ -71,16 +74,129 @@ function loadDefaultData() {
   return db;
 }
 
+function pruneTransactionLoadSessions() {
+  const now = Date.now();
+  for (const [id, session] of transactionLoadSessions) {
+    if (now - session.lastUsed > TRANSACTION_LOAD_TTL_MS) transactionLoadSessions.delete(id);
+  }
+  while (transactionLoadSessions.size > 4) {
+    const oldest = [...transactionLoadSessions.entries()].sort((a, b) => a[1].lastUsed - b[1].lastUsed)[0];
+    if (!oldest) break;
+    transactionLoadSessions.delete(oldest[0]);
+  }
+}
+
+function readProfileForLoad(profile) {
+  if (store.hasPassword(profile)) {
+    const unlockedProfile = unlocked.get(profile);
+    if (!unlockedProfile) return null;
+    return unlockedProfile.doc;
+  }
+  return store.read(profile);
+}
+
+function newestTransactionsFirst(transactions, count) {
+  const compare = (a, b) => {
+    if (a.date !== b.date) return a.date > b.date ? 1 : -1;
+    return b.index - a.index;
+  };
+  const heap = [];
+  const sink = (index) => {
+    for (;;) {
+      const left = index * 2 + 1;
+      const right = left + 1;
+      let worst = index;
+      if (left < heap.length && compare(heap[left], heap[worst]) < 0) worst = left;
+      if (right < heap.length && compare(heap[right], heap[worst]) < 0) worst = right;
+      if (worst === index) return;
+      [heap[index], heap[worst]] = [heap[worst], heap[index]];
+      index = worst;
+    }
+  };
+  for (let index = 0; index < transactions.length; index++) {
+    const tx = transactions[index];
+    const date = String(tx?.date || '');
+    if (heap.length < count) {
+      heap.push({ tx, index, date });
+      let child = heap.length - 1;
+      while (child > 0) {
+        const parent = Math.floor((child - 1) / 2);
+        if (compare(heap[child], heap[parent]) >= 0) break;
+        [heap[child], heap[parent]] = [heap[parent], heap[child]];
+        child = parent;
+      }
+    } else if (count && (date > heap[0].date || (date === heap[0].date && index < heap[0].index))) {
+      heap[0] = { tx, index, date };
+      sink(0);
+    }
+  }
+  heap.sort((a, b) => compare(b, a));
+  const selected = new Set(heap.map(entry => entry.index));
+  const indexes = new Uint32Array(transactions.length);
+  let position = 0;
+  for (const entry of heap) indexes[position++] = entry.index;
+  for (let index = 0; index < transactions.length; index++) {
+    if (!selected.has(index)) indexes[position++] = index;
+  }
+  return { indexes, firstCount: heap.length };
+}
+
 app.get('/api/load', (req, res) => {
   try {
     const profile = req.query.profile || '';
-    if (store.hasPassword(profile)) {
-      const session = unlocked.get(profile);
-      if (!session) return res.status(401).json({ error: 'locked' });
-      return res.json(session.doc);
-    }
-    return res.json(store.read(profile));
+    const doc = readProfileForLoad(profile);
+    if (!doc) return res.status(401).json({ error: 'locked' });
+    const firstCount = Math.max(0, Math.min(10_000, Number.parseInt(req.query.initialTransactions, 10) || 0));
+    const transactions = Array.isArray(doc.transactions) ? doc.transactions : [];
+    if (!firstCount || transactions.length <= firstCount) return res.json(doc);
+
+    // Select the newest entries first while preserving the remaining file order.
+    const ordered = newestTransactionsFirst(transactions, firstCount);
+    const firstIndexes = Array.from(ordered.indexes.subarray(0, ordered.firstCount));
+    const firstTransactions = firstIndexes.map(index => transactions[index]);
+    pruneTransactionLoadSessions();
+    const loadSessionId = randomUUID();
+    transactionLoadSessions.set(loadSessionId, {
+      profile,
+      transactions,
+      indexes: ordered.indexes,
+      initialCount: firstTransactions.length,
+      lastUsed: Date.now()
+    });
+    return res.json({ ...doc, transactions: firstTransactions, _transactionLoad: {
+      id: loadSessionId, total: transactions.length, nextOffset: firstTransactions.length, chunkSize: 10_000,
+      firstIndexes
+    } });
   } catch (error) { return sendError(res, error); }
+});
+
+app.get('/api/load-chunk', (req, res) => {
+  try {
+    const profile = req.query.profile || '';
+    const loadSessionId = String(req.query.loadSessionId || '');
+    const loadSession = transactionLoadSessions.get(loadSessionId);
+    if (!loadSession || loadSession.profile !== profile) throw new StorageError('This transaction loading session has expired. Reload the profile to continue.', 409);
+    if (store.hasPassword(profile) && !unlocked.has(profile)) return res.status(401).json({ error: 'locked' });
+    const offset = Number.parseInt(req.query.offset, 10);
+    if (!Number.isSafeInteger(offset) || offset < 0 || offset > loadSession.transactions.length) {
+      throw new StorageError('Invalid transaction loading position.', 400);
+    }
+    const requestedLimit = Number.parseInt(req.query.limit, 10) || loadSession.chunkSize || 10_000;
+    const limit = Math.max(100, Math.min(25_000, requestedLimit));
+    const indexes = Array.from(loadSession.indexes.subarray(offset, offset + limit));
+    const transactions = indexes.map(index => loadSession.transactions[index]);
+    const nextOffset = offset + transactions.length;
+    loadSession.lastUsed = Date.now();
+    return res.json({ transactions, indexes, nextOffset, total: loadSession.transactions.length, done: nextOffset >= loadSession.transactions.length });
+  } catch (error) { return sendError(res, error); }
+});
+
+app.post('/api/load-complete', (req, res) => {
+  const profile = String(req.body?.profile || '');
+  const loadSessionId = String(req.body?.loadSessionId || '');
+  const loadSession = transactionLoadSessions.get(loadSessionId);
+  if (loadSession && loadSession.profile === profile) transactionLoadSessions.delete(loadSessionId);
+  return res.json({ ok: true });
 });
 
 app.post('/api/save', (req, res) => {
@@ -89,14 +205,32 @@ app.post('/api/save', (req, res) => {
     const profile = envelope ? req.body.profile : '';
     const data = envelope ? req.body.data : req.body;
     if (!isProfileDocument(data)) throw new StorageError('Profile data must be a JSON object', 400);
+    const loadSessionId = envelope ? String(req.body.loadSessionId || '') : '';
+    const loadSession = loadSessionId ? transactionLoadSessions.get(loadSessionId) : null;
+    if (loadSessionId && (!loadSession || loadSession.profile !== profile)) {
+      throw new StorageError('This transaction loading session has expired. Reload the profile before saving.', 409);
+    }
+    let dataToSave = data;
+    if (loadSession) {
+      const incomingTransactions = Array.isArray(data.transactions) ? data.transactions : [];
+      const reportedLoadedCount = Number.parseInt(req.body.loadedTransactionCount, 10);
+      const loadedCount = Math.max(0, Math.min(loadSession.transactions.length,
+        Number.isSafeInteger(reportedLoadedCount) ? reportedLoadedCount : loadSession.initialCount));
+      const mergedTransactions = incomingTransactions.slice();
+      for (let offset = loadedCount; offset < loadSession.indexes.length; offset++) {
+        mergedTransactions.push(loadSession.transactions[loadSession.indexes[offset]]);
+      }
+      dataToSave = { ...data, transactions: mergedTransactions };
+    }
     if (store.hasPassword(profile)) {
       const session = unlocked.get(profile);
       if (!session) throw new StorageError('Profile is locked', 401);
-      store.write(profile, encryptWithKey(data, session.key));
-      session.doc = data;
+      store.write(profile, encryptWithKey(dataToSave, session.key));
+      session.doc = dataToSave;
     } else {
-      store.write(profile, data);
+      store.write(profile, dataToSave);
     }
+    if (loadSession) loadSession.lastUsed = Date.now();
     return res.json({ ok: true });
   } catch (error) { return sendError(res, error); }
 });

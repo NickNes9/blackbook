@@ -143,6 +143,34 @@ test('successful financial save supports undo and redo; a failed undo keeps its 
   assert.equal(app._undoHistory.redoStack.length, 0);
 });
 
+test('saves preserve their call-time snapshot and skip undo diffing unless the change is undoable', async () => {
+  const sent = [];
+  const { app } = appContext(async (_url, options) => {
+    sent.push(JSON.parse(options.body));
+    return { ok: true, json: async () => ({}) };
+  });
+  let diffCalls = 0;
+  const diff = app._undoHistory.diff.bind(app._undoHistory);
+  app._undoHistory.diff = (...args) => { diffCalls++; return diff(...args); };
+
+  app.data.transactions.push({ id: 'tx-1', amount: 10 });
+  const firstSave = app.save();
+  app.data.transactions[0].amount = 20;
+  assert.equal(await firstSave, true);
+  assert.equal(sent[0].transactions[0].amount, 10, 'the request retains the state captured when save was called');
+  assert.equal(diffCalls, 0, 'ordinary saves clear history without comparing the full profile');
+
+  assert.equal(await app.save({ undoable: true, label: 'Edit transaction' }), true);
+  assert.equal(sent[1].transactions[0].amount, 20);
+  assert.equal(diffCalls, 1, 'undoable saves still calculate their financial delta');
+  assert.equal(app._undoHistory.undoStack.length, 1);
+
+  app.data.transactions[0].amount = 30;
+  assert.equal(await app.save(), true);
+  assert.equal(diffCalls, 2, 'a non-undoable financial change still checks active history before clearing it');
+  assert.equal(app._undoHistory.undoStack.length, 0);
+});
+
 test('Ctrl+Z and Ctrl+Shift+Z trigger undo and redo, while editable fields keep native shortcuts', () => {
   let keydown;
   let activeTag = 'BODY';

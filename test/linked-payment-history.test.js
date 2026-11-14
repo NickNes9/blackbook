@@ -37,6 +37,107 @@ test('linked transaction navigation sets the transaction month and requests an e
   assert.equal(navigatedTo, 'overview');
 });
 
+test('linked record navigation focuses the bill record rather than the payment transaction', () => {
+  const app = loadApp();
+  const tx = { id: 'tx-bill-payment', date: '2026-04-17' };
+  app.data = {
+    transactions: [tx],
+    bills: [{ id: 'bill-internet', name: 'Internet' }],
+    billPayments: [{ billId: 'bill-internet', month: '2026-04', relatedTxIds: [tx.id] }]
+  };
+  app.ymOf = date => ({ y: Number(date.slice(0, 4)), m: Number(date.slice(5, 7)) - 1 });
+  let navigatedTo = null;
+  app.navigateTo = page => { navigatedTo = page; };
+
+  app.navigateToRecord('bill', tx.id);
+
+  assert.deepEqual(JSON.parse(JSON.stringify(app._focusRecord)), { type: 'bill', id: 'bill-internet' });
+  assert.equal(navigatedTo, 'bills');
+  assert.deepEqual(JSON.parse(JSON.stringify(app._pageView.bills)), { y: 2026, m: 3 });
+});
+
+test('linked debt, invoice, savings, and card links focus their destination records', () => {
+  const scenarios = [
+    {
+      type: 'debt', page: 'debts', targetId: 'debt-1',
+      tx: { id: 'tx-debt', date: '2026-04-17', debtId: 'debt-1' },
+      data: { debts: [{ id: 'debt-1' }] }
+    },
+    {
+      type: 'invoice', page: 'invoices', targetId: 'invoice-1',
+      tx: { id: 'tx-invoice', date: '2026-04-17' },
+      data: { invoices: [{ id: 'invoice-1', payments: [{ txId: 'tx-invoice' }] }] }
+    },
+    {
+      type: 'savings', page: 'savings', targetId: 'goal-1',
+      tx: { id: 'tx-savings', date: '2026-04-17', linkId: 'entry-1' },
+      data: { savingsGoals: [{ id: 'goal-1', entries: [{ id: 'entry-1' }] }] }
+    },
+    {
+      type: 'card', page: 'cards', targetId: 'plan-1',
+      tx: { id: 'tx-card', date: '2026-04-17', pairId: 'inst-plan-1-s1' },
+      data: { installments: [{ id: 'plan-1' }] }
+    },
+    {
+      type: 'card', page: 'cards', targetId: 'card-1',
+      tx: { id: 'tx-card-purchase', date: '2026-04-17', cardId: 'card-1' },
+      data: { creditCards: [{ id: 'card-1' }], installments: [] }
+    }
+  ];
+
+  for (const scenario of scenarios) {
+    const app = loadApp();
+    app.data = { transactions: [scenario.tx], ...scenario.data };
+    app.ymOf = date => ({ y: Number(date.slice(0, 4)), m: Number(date.slice(5, 7)) - 1 });
+    let navigatedTo = null;
+    app.navigateTo = page => { navigatedTo = page; };
+
+    app.navigateToRecord(scenario.type, scenario.tx.id);
+
+    assert.deepEqual(JSON.parse(JSON.stringify(app._focusRecord)), { type: scenario.type, id: scenario.targetId });
+    assert.equal(navigatedTo, scenario.page);
+  }
+});
+
+test('a split transaction keeps an interactive link to its associated bill', () => {
+  const app = loadApp(overview);
+  const tx = {
+    id: 'tx-split-bill', date: '2026-04-17', type: 'expense', amount: -100,
+    currency: 'RSD', accountId: 'account-1', categoryId: 'category-1', note: 'Internet and router',
+    parts: [{ amount: -100, categoryId: 'category-1' }]
+  };
+  app.data = {
+    transactions: [tx],
+    accounts: [{ id: 'account-1', shortName: 'CHK', name: 'Checking', currency: 'RSD' }],
+    creditCards: [],
+    categories: [{ id: 'category-1', name: 'Bills' }],
+    bills: [{ id: 'bill-internet', name: 'Internet' }],
+    billPayments: [{ billId: 'bill-internet', month: '2026-04', relatedTxIds: [tx.id] }],
+    settings: {}
+  };
+  app.overviewCustomMatches = () => true;
+  app.overviewCategoryMatches = () => true;
+  app.ovActiveTypes = () => null;
+  app.vy = () => 2026;
+  app.vm = () => 3;
+  app.ymOf = date => ({ y: Number(date.slice(0, 4)), m: Number(date.slice(5, 7)) - 1 });
+  app.transactionToBase = item => Math.abs(item.amount);
+  app.baseCurrency = () => 'RSD';
+  app.accountColor = () => '#123456';
+  app.categoryColor = () => '#abcdef';
+  app.fmtDateInput = date => date;
+  app.fmtDualCurrency = () => '100 RSD';
+  app.transactionDescriptionHtml = () => 'Internet and router';
+  app.healthMarker = () => '';
+  app.xIcon = () => '×';
+  app.transactionSplitDetailsHtml = () => '';
+
+  const html = app.recentTransactionsHtml();
+
+  assert.match(html, /<button type="button" class="tx-link-badge" data-record-type="bill" data-tx-id="tx-split-bill"[^>]*onclick="event\.stopPropagation\(\);BlackBook\.navigateToRecord\(this\.dataset\.recordType,this\.dataset\.txId\)"/);
+  assert.match(html, /aria-label="Open Linked to bill: Internet"/);
+});
+
 test('missing linked transactions show a warning and valid links target the exact ID', () => {
   const app = loadApp();
   app.data = { transactions: [{ id: 'tx-one' }] };

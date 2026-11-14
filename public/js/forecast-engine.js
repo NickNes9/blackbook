@@ -25,6 +25,21 @@
 
   function transactionToBase(tx, baseCurrency, rates) {
     if (tx && tx.currency === baseCurrency) return Number(tx.amount) || 0;
+    const parts = tx && Array.isArray(tx.parts) ? tx.parts : [];
+    if (parts.some(part => part && part.nativeAmount != null && Number.isFinite(Number(part.nativeAmount)))) {
+      const sign = Number(tx.amount) < 0 ? -1 : 1;
+      let total = 0;
+      for (const part of parts) {
+        if (part && part.nativeAmount != null && (part.nativeCurrency || tx.nativeCurrency) === baseCurrency) {
+          total += sign * Math.abs(Number(part.nativeAmount) || 0);
+          continue;
+        }
+        const converted = toBase(sign * Math.abs(Number(part && part.amount) || 0), (part && part.currency) || tx.currency || baseCurrency, baseCurrency, rates);
+        if (converted == null) return null;
+        total += converted;
+      }
+      return Math.round(total * 100) / 100;
+    }
     if (tx && tx.nativeCurrency === baseCurrency && tx.nativeAmount != null) return Number(tx.nativeAmount) || 0;
     return tx ? toBase(tx.amount, tx.currency || baseCurrency, baseCurrency, rates) : 0;
   }
@@ -77,7 +92,7 @@
     const profile = data || {};
     const settings = profile.settings || {};
     const baseCurrency = options && options.baseCurrency || settings.baseCurrency || 'RSD';
-    const rates = options && options.rates || settings.exchangeRates || {};
+    const rates = options && options.rates || settings.exchangeRates || settings.rates || {};
     const start = atMidnight(options && options.startDate || new Date()) || atMidnight(new Date());
     const days = Math.max(1, Math.min(365, Number(options && options.days) || 30));
     const end = addDays(start, days - 1);

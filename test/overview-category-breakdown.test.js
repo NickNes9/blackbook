@@ -4,10 +4,13 @@ import { readFileSync } from 'node:fs';
 import { runInNewContext } from 'node:vm';
 
 const source = readFileSync(new URL('../public/js/page-overview.js', import.meta.url), 'utf8');
+const core = readFileSync(new URL('../public/js/core.js', import.meta.url), 'utf8');
 
 function breakdownFor(filter) {
-  const window = { BlackBook: {} };
-  runInNewContext(source, { window });
+  const context = { window: {}, localStorage: { getItem: () => null } };
+  runInNewContext(core, context);
+  runInNewContext(source, context);
+  const window = context.window;
   const app = window.BlackBook;
   app.overviewCustomMatches = () => true;
   app.data = {

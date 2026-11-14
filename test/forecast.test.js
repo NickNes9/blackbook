@@ -33,3 +33,21 @@ test('explicitly selecting no accounts gives an empty forecast, while omission i
   assert.equal(none.daily[0].total, 0);
   assert.deepEqual(none.openingBalances, {});
 });
+
+test('forecast opening balance includes an account-currency split fee beside original-currency purchase', () => {
+  const data = {
+    settings: { baseCurrency: 'EUR', rates: { EUR: { rate: 1 }, RSD: { rate: 0.0083 } } },
+    accounts: [{ id: 'bank' }],
+    transactions: [{
+      id: 'paprika', date: '2026-08-16', accountId: 'bank', type: 'expense', amount: -728.38, currency: 'RSD',
+      nativeAmount: -5.99, nativeCurrency: 'EUR',
+      parts: [
+        { amount: 721.16, nativeAmount: 5.99, nativeCurrency: 'EUR' },
+        { amount: 7.22 }
+      ]
+    }]
+  };
+
+  const result = buildForecast(data, { startDate: '2026-09-01', days: 1 });
+  assert.equal(result.openingBalances.bank, -6.05);
+});

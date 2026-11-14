@@ -1,4 +1,5 @@
 (function () {
+const cleanDescription = value => window.TransactionTools ? window.TransactionTools.cleanDescription(value) : String(value || '').replace(/\u2063/g, '');
 Object.assign(window.BlackBook, {
   renderSettings() {
     const el = document.getElementById('page-settings');
@@ -8,6 +9,7 @@ Object.assign(window.BlackBook, {
     this.upgradeAllSelects(el);
     this.bindSettingsEvents(el);
     this.bindSettingsModals();
+    this.bindSettingsReordering(el);
     this.refreshProfilesList();
     this.syncDateInputHints();
   },
@@ -33,12 +35,17 @@ Object.assign(window.BlackBook, {
     }
     const layout = document.createElement('div');
     layout.className = 'settings-ordered';
-    for (const name of ['PROFILES', 'APPEARANCE', 'DATA', 'DEFAULTS', 'PAGES', 'ACCOUNTS', 'CATEGORIES', 'EXCHANGE RATES', 'ABOUT & UPDATES']) {
+    for (const name of ['PROFILES', 'APPEARANCE', 'DATA', 'PAGES', 'ACCOUNTS', 'CATEGORIES', 'EXCHANGE RATES', 'ABOUT & UPDATES']) {
       const section = sections.get(name);
       if (section) layout.appendChild(section);
     }
     const footer = el.querySelector('.settings-footer');
     el.replaceChildren(layout, ...(footer ? [footer] : []));
+  },
+
+  bindSettingsReordering(el) {
+    this.bindVerticalReorder(el.querySelector('#settings-account-list'), '.settings-row[data-reorder-key]', ids => this.reorderAccounts(ids), { dragAnywhere:true });
+    this.bindVerticalReorder(el.querySelector('#settings-currency-list'), '.rate-grid-row[data-reorder-key]', ids => this.reorderCurrencies(ids), { dragAnywhere:true });
   },
 
   profilesListHtml() {
@@ -49,27 +56,47 @@ Object.assign(window.BlackBook, {
     const el = document.getElementById('profiles-list');
     if (!el) return;
     let profiles = [];
+    let folderProfiles = [];
     try {
       const res = await fetch('/api/profiles');
       const out = await res.json();
-      profiles = out.profiles || [];
-      this._defaultHasPassword = !!out.defaultHasPassword;
+      if (res.ok) {
+        profiles = out.profiles || [];
+        this._defaultHasPassword = !!out.defaultHasPassword;
+      }
     } catch (e) {}
+    if (window.BrowserProfileStore) folderProfiles = await BrowserProfileStore.list().catch(() => []);
     this._profilesWithPasswords = profiles.filter(p => p.hasPassword).map(p => p.name);
-    let html = '<div class="settings-row' + (!this.profile ? ' settings-row-active' : '') + '"><span class="settings-row-name">DEFAULT</span><span class="settings-row-meta">' + (this.profile ? 'switch to default data set' : 'active · ' + this.baseCurrency()) + '</span>' +
-      (!this.profile ? '<button class="btn btn-sm btn-secondary" onclick="BlackBook.openProfileEdit()">EDIT</button>' : '<button class="btn btn-sm btn-secondary" onclick="BlackBook.switchProfile(\'\')">OPEN</button>') + '</div>';
-    if (!profiles.length) html += '<div style="padding:8px;color:var(--text-muted);font-size:13px;">No extra profiles yet.</div>';
+    let html = '';
+    if (folderProfiles.length) {
+      html += '<div class="settings-section-title" style="padding:8px 12px 4px;">FOLDER PROFILES</div>';
+      for (const p of folderProfiles) {
+        const active = this._browserFolderMode && this._localProfileRecord && p.id === this._localProfileRecord.id;
+        html += '<div class="settings-row' + (active ? ' settings-row-active' : '') + '">' +
+          '<span class="settings-row-name">' + this.escapeHtml(p.name).toUpperCase() + '</span><span class="settings-row-meta">' + this.escapeHtml(p.handle && p.handle.name || 'FOLDER') + '</span>' +
+          (!active ? '<button class="btn btn-sm btn-secondary" data-folder-profile-action="open" data-profile-id="' + this.escapeHtml(p.id) + '">OPEN</button>' : '<button class="btn btn-sm btn-secondary" onclick="BlackBook.openProfileEdit()">EDIT</button>') +
+          '<button class="btn btn-sm btn-secondary" title="Remove this browser connection only" data-folder-profile-action="forget" data-profile-id="' + this.escapeHtml(p.id) + '">FORGET</button></div>';
+      }
+    }
     for (const p of profiles) {
-      const active = p.name === this.profile;
+      const active = !this._browserFolderMode && p.name === this.profile;
       html += '<div class="settings-row' + (active ? ' settings-row-active' : '') + '">' +
         '<span class="settings-row-name">' + this.escapeHtml(p.name).toUpperCase() + '</span>' +
-        '<span class="settings-row-meta">' + (p.hasPassword ? '\ud83d\udd12 ' : '') + (active ? 'active · ' + this.baseCurrency() : '') + '</span>' +
-        (!active ? '<button class="btn btn-sm btn-secondary" onclick="BlackBook.switchProfile(\x27' + this.escapeHtml(p.name) + '\x27)">OPEN</button>' : '') +
-        (active ? '<button class="btn btn-sm btn-secondary" onclick="BlackBook.openProfileEdit()">EDIT</button>' : '') +
-        '<button class="btn btn-sm btn-secondary" onclick="BlackBook.passwordModal(\x27' + this.escapeHtml(p.name) + '\x27)">PASSWORD</button>' +
-        '<button class="btn btn-sm btn-danger btn-icon" title="Delete profile" onclick="BlackBook.deleteProfile(\x27' + this.escapeHtml(p.name) + '\x27)">' + this.xIcon() + '</button></div>';
+        (!active ? '<button class="btn btn-sm btn-secondary" data-app-profile-action="open" data-profile-name="' + this.escapeHtml(p.name) + '">OPEN</button>' : '<button class="btn btn-sm btn-secondary" onclick="BlackBook.openProfileEdit()">EDIT</button>') +
+        '<button class="btn btn-sm btn-danger btn-icon" title="Delete profile" data-app-profile-action="delete" data-profile-name="' + this.escapeHtml(p.name) + '">' + this.xIcon() + '</button></div>';
     }
+    if (!folderProfiles.length && !profiles.length) html = '<div class="empty-state" style="padding:20px;"><div class="empty-state-text">No profiles are connected in this browser yet. Create a profile in a folder or open an existing one.</div></div>';
     el.innerHTML = html;
+    el.querySelectorAll('[data-folder-profile-action]').forEach(button => button.addEventListener('click', () => {
+      if (button.dataset.folderProfileAction === 'open') this.reconnectBrowserFolderProfile(folderProfiles.find(profile => profile.id === button.dataset.profileId));
+      else this.forgetBrowserFolderProfile(button.dataset.profileId);
+    }));
+    el.querySelectorAll('[data-app-profile-action]').forEach(button => button.addEventListener('click', () => {
+      const name = button.dataset.profileName;
+      if (button.dataset.appProfileAction === 'open') this.switchProfile(name);
+      else if (button.dataset.appProfileAction === 'password') this.passwordModal(name);
+      else this.deleteProfile(name);
+    }));
   },
 
   switchProfile(name) {
@@ -85,10 +112,105 @@ Object.assign(window.BlackBook, {
       this._undoBaseline = null;
       this._undoReady = false;
     }
+    localStorage.setItem('bb_profile_storage', 'server');
+    localStorage.removeItem('bb_folder_profile');
     localStorage.setItem('mb_profile', name || '');
     location.reload();
   },
+  async createBrowserFolderProfile() {
+    try {
+      this._folderProfileHandle = await BrowserProfileStore.pickDirectory();
+      this._creatingFolderProfile = true;
+      if (this.data) this.populateNewProfileModal();
+      else { const currency = document.getElementById('new-profile-currency'); currency.innerHTML = this.allCurrencyCodes().map(code => '<option value="' + code + '">' + code + '</option>').join(''); currency.value = 'RSD'; }
+      this.resetNewProfilePassword();
+      const note = document.getElementById('new-profile-folder-note');
+      if (note) { note.textContent = 'Black Book keeps this profile in the selected folder and does not upload its data. Files are plain JSON, so protect the folder with your device or cloud account. Keep the hidden .blackbook folder with profile.json for merging changes across devices.'; note.classList.remove('hidden'); }
+      const password = document.getElementById('new-profile-password');
+      const confirm = document.getElementById('new-profile-password-confirm');
+      if (password) password.closest('.form-group').classList.add('hidden');
+      if (confirm) confirm.closest('.form-group').classList.add('hidden');
+      const title = document.querySelector('#new-profile-modal .modal-header h2');
+      if (title) title.textContent = 'New Folder Profile';
+      this.bindSettingsModals();
+      this.openModal('new-profile-modal');
+      setTimeout(() => { const field = document.getElementById('new-profile-name'); if (field) field.focus(); }, 30);
+    } catch (error) {
+      this._creatingFolderProfile = false;
+      if (error.name !== 'AbortError') alert(error.message || 'Could not select a profile folder.');
+    }
+  },
+
+  async copyCurrentProfileToFolder() {
+    try {
+      this.closeModal('edit-profile-modal');
+      const handle = await BrowserProfileStore.pickDirectory();
+      const accepted = await this.confirmModal({ title: 'Copy Profile to Folder', message: 'This creates a plain JSON copy in the selected folder. The current app profile stays where it is. Protect the folder with your device or cloud account.', confirmText: 'Copy to Folder' });
+      if (!accepted) return;
+      const name = this.profile || (this.data.settings.profileName || 'Default');
+      const data = this.stripTransient(this.data);
+      data.settings = data.settings || {};
+      data.settings.profileName = name;
+      const record = await BrowserProfileStore.createDirectory(handle, name, data);
+      localStorage.setItem('bb_profile_storage', 'folder');
+      localStorage.setItem('bb_folder_profile', record.id);
+      localStorage.setItem('mb_profile', record.name);
+      location.reload();
+    } catch (error) { if (error.name !== 'AbortError') alert(error.message || 'Could not copy the profile into that folder.'); }
+  },
+
+  async changeProfileFolder() {
+    if (!window.BrowserProfileStore || !BrowserProfileStore.supported()) return alert('This browser does not support profile folders here.');
+    if (!this._browserFolderMode || !this._localProfileRecord) return this.copyCurrentProfileToFolder();
+    this.closeModal('edit-profile-modal');
+    try {
+      const handle = await BrowserProfileStore.pickDirectory();
+      const accepted = await this.confirmModal({ title: 'Change Profile Folder', message: 'This copies the current profile into the selected empty folder and points Black Book there. The old folder and files stay untouched.', confirmText: 'Change Folder' });
+      if (!accepted) return;
+      if (!(await this.save())) throw new Error('The current profile could not be saved. Its folder was not changed.');
+      const name = this.profile || (this.data.settings.profileName || 'Default');
+      const data = this.stripTransient(this.data);
+      data.settings = data.settings || {};
+      data.settings.profileName = name;
+      const record = await BrowserProfileStore.changeDirectory(this._localProfileRecord, handle, data);
+      this._localProfileRecord = record;
+      localStorage.setItem('bb_profile_storage', 'folder');
+      localStorage.setItem('bb_folder_profile', record.id);
+      localStorage.setItem('mb_profile', record.name);
+      location.reload();
+    } catch (error) { if (error.name !== 'AbortError') alert(error.message || 'Could not change the profile folder.'); }
+  },
+
+  async openBrowserFolderProfile() {
+    try {
+      const handle = await BrowserProfileStore.pickDirectory();
+      const record = await BrowserProfileStore.openDirectory(handle);
+      await this.switchBrowserFolderProfile(record.id);
+    } catch (error) { if (error.name !== 'AbortError') alert(error.message || 'Could not open this profile folder.'); }
+  },
+
+  async forgetBrowserFolderProfile(id) {
+    const record = await BrowserProfileStore.get(id);
+    if (!record) return this.refreshProfilesList();
+    if (!(await this.confirmModal({ title: 'Forget Folder Connection', message: 'Remove ' + record.name + ' from this browser? The folder and its profile files will not be deleted.', confirmText: 'Forget' }))) return;
+    await BrowserProfileStore.forget(id);
+    if (this._localProfileRecord && this._localProfileRecord.id === id) {
+      localStorage.removeItem('bb_profile_storage');
+      localStorage.removeItem('bb_folder_profile');
+      location.reload();
+    } else this.refreshProfilesList();
+  },
+
+  async createBrowserFolderProfileFromHome() { return this.createBrowserFolderProfile(); },
+  async openBrowserFolderProfileFromHome() { return this.openBrowserFolderProfile(); },
+
   createProfile() {
+    this._creatingFolderProfile = false;
+    this._folderProfileHandle = null;
+    const note = document.getElementById('new-profile-folder-note'); if (note) note.classList.add('hidden');
+    const password = document.getElementById('new-profile-password'); const confirm = document.getElementById('new-profile-password-confirm');
+    if (password) password.closest('.form-group').classList.remove('hidden'); if (confirm) confirm.closest('.form-group').classList.remove('hidden');
+    const title = document.querySelector('#new-profile-modal .modal-header h2'); if (title) title.textContent = 'New Profile';
     this.populateNewProfileModal();
     this.resetNewProfilePassword();
     this.openModal('new-profile-modal');
@@ -185,6 +307,20 @@ Object.assign(window.BlackBook, {
     if (!name) { alert('Enter a name for the new profile.'); nameEl.focus(); return; }
     if (!account) { alert('Enter a name for the first account.'); accEl.focus(); return; }
     if (!currency) { alert('Choose a default currency.'); curEl.focus(); return; }
+    if (this._creatingFolderProfile) {
+      try {
+        const data = BrowserProfileStore.defaultProfile(name, account, currency);
+        const record = await BrowserProfileStore.createDirectory(this._folderProfileHandle, name, data);
+        this._folderProfileHandle = null;
+        this._creatingFolderProfile = false;
+        localStorage.setItem('bb_profile_storage', 'folder');
+        localStorage.setItem('bb_folder_profile', record.id);
+        localStorage.setItem('mb_profile', record.name);
+        this.closeModal('new-profile-modal');
+        location.reload();
+      } catch (error) { alert(error.message || 'Could not create the folder profile.'); }
+      return;
+    }
     if (password && password !== passwordConfirm) { alert('The passwords do not match.'); pwEl.focus(); return; }
     try {
       await this._createProfile(name, account, currency, password);
@@ -218,6 +354,31 @@ Object.assign(window.BlackBook, {
     const currency = document.getElementById('edit-profile-currency');
     currency.innerHTML = this.currencyList().map(code => '<option value="' + this.escapeHtml(code) + '">' + this.escapeHtml(code) + '</option>').join('');
     currency.value = this.baseCurrency();
+    const defaultAccount = document.getElementById('edit-profile-default-account');
+    const defaultCategory = document.getElementById('edit-profile-default-category');
+    defaultAccount.innerHTML = '<option value="">None</option>' + this.visibleAccounts().map(account => '<option value="' + account.id + '">' + this.escapeHtml(account.name) + '</option>').join('');
+    defaultCategory.innerHTML = '<option value="">None</option>' + this.categoriesAvailableOn(this.today()).map(category => '<option value="' + category.id + '">' + this.escapeHtml(this.categoryLabel(category)) + '</option>').join('');
+    defaultAccount.value = this.data.settings.defaultAccountId || '';
+    defaultCategory.value = this.data.settings.defaultCategoryId || '';
+    const folderGroup = document.getElementById('edit-profile-folder-group');
+    const folderStatus = document.getElementById('edit-profile-folder-status');
+    const folderButton = folderGroup && folderGroup.querySelector('button');
+    const folderSupported = !!(window.BrowserProfileStore && BrowserProfileStore.supported());
+    if (folderGroup) folderGroup.classList.toggle('hidden', !folderSupported);
+    if (folderStatus) folderStatus.textContent = this._browserFolderMode && this._localProfileRecord
+      ? (this._localProfileRecord.handle && this._localProfileRecord.handle.name || 'Selected folder')
+      : 'Stored with the app';
+    if (folderButton) folderButton.textContent = this._browserFolderMode ? 'CHANGE FOLDER' : 'CHOOSE FOLDER';
+    const passwordGroup = document.getElementById('edit-profile-password-group');
+    const passwordStatus = document.getElementById('edit-profile-password-status');
+    const passwordButton = document.getElementById('edit-profile-password-button');
+    const hasPassword = this.profile ? (this._profilesWithPasswords || []).includes(this.profile) : !!this._defaultHasPassword;
+    if (passwordStatus) passwordStatus.textContent = this._browserFolderMode ? 'Folder files are plain JSON' : hasPassword ? 'Password protected' : 'No password';
+    if (passwordButton) {
+      passwordButton.textContent = this._browserFolderMode ? 'UNAVAILABLE' : hasPassword ? 'CHANGE PASSWORD' : 'SET PASSWORD';
+      passwordButton.disabled = !!this._browserFolderMode;
+      passwordButton.title = this._browserFolderMode ? 'Password encryption is not supported for folder profiles.' : '';
+    }
     this.upgradeAllSelects(document.getElementById('edit-profile-modal'));
     this.openModal('edit-profile-modal');
   },
@@ -229,9 +390,14 @@ Object.assign(window.BlackBook, {
     const newName = !oldName && enteredName.toLowerCase() === 'default' ? '' : enteredName;
     const oldCurrency = this.baseCurrency();
     const oldEnabled = this.data.settings.enabledCurrencies;
+    const oldDefaultAccountId = this.data.settings.defaultAccountId || null;
+    const oldDefaultCategoryId = this.data.settings.defaultCategoryId || null;
     const newCurrency = document.getElementById('edit-profile-currency').value;
+    const newDefaultAccountId = document.getElementById('edit-profile-default-account').value || null;
+    const newDefaultCategoryId = document.getElementById('edit-profile-default-category').value || null;
+    const defaultsChanged = newDefaultAccountId !== oldDefaultAccountId || newDefaultCategoryId !== oldDefaultCategoryId;
     if (!enteredName || !newCurrency) return;
-    if (newName === oldName && newCurrency === oldCurrency) { this.closeModal('edit-profile-modal'); return; }
+    if (newName === oldName && newCurrency === oldCurrency && !defaultsChanged) { this.closeModal('edit-profile-modal'); return; }
     if (newCurrency !== oldCurrency) {
       const rates = this.getRates();
       const hasRate = code => code === 'EUR' || Number((rates[code] || {}).rate) > 0;
@@ -241,7 +407,48 @@ Object.assign(window.BlackBook, {
       this.data.settings.baseCurrency = newCurrency;
       const enabled = this.data.settings.enabledCurrencies || [];
       if (!enabled.includes(newCurrency)) this.data.settings.enabledCurrencies = [...enabled, newCurrency];
-      if (!(await this.save())) { this.data.settings.baseCurrency = oldCurrency; this.data.settings.enabledCurrencies = oldEnabled; alert('Could not save the base currency. No profile changes were made.'); return; }
+      this.data.settings.defaultAccountId = newDefaultAccountId;
+      this.data.settings.defaultCategoryId = newDefaultCategoryId;
+      if (!(await this.save())) {
+        this.data.settings.baseCurrency = oldCurrency;
+        this.data.settings.enabledCurrencies = oldEnabled;
+        this.data.settings.defaultAccountId = oldDefaultAccountId;
+        this.data.settings.defaultCategoryId = oldDefaultCategoryId;
+        alert('Could not save the profile settings. No changes were made.');
+        return;
+      }
+    } else if (defaultsChanged) {
+      this.data.settings.defaultAccountId = newDefaultAccountId;
+      this.data.settings.defaultCategoryId = newDefaultCategoryId;
+      if (!(await this.save())) {
+        this.data.settings.defaultAccountId = oldDefaultAccountId;
+        this.data.settings.defaultCategoryId = oldDefaultCategoryId;
+        alert('Could not save the profile defaults. No changes were made.');
+        return;
+      }
+    }
+    if (newName !== oldName && this._browserFileMode) {
+      this.data.settings.profileName = newName;
+      this.profile = newName;
+      await this.save();
+      const hp = document.getElementById('header-profile');
+      if (hp) hp.textContent = '\u00b7 ' + newName.toUpperCase();
+      this.closeModal('edit-profile-modal');
+      this.renderSettings();
+      return;
+    }
+    if (newName !== oldName && this._browserFolderMode) {
+      const previous = this.data.settings.profileName;
+      this.data.settings.profileName = newName;
+      if (!(await this.save())) { this.data.settings.profileName = previous; alert('Could not save the folder profile name.'); return; }
+      try { this._localProfileRecord = await BrowserProfileStore.rename(this._localProfileRecord, newName); }
+      catch (error) { alert('Profile data was saved, but its browser label could not be updated: ' + error.message); return; }
+      this.profile = newName;
+      localStorage.setItem('mb_profile', newName);
+      const hp = document.getElementById('header-profile'); if (hp) hp.textContent = '\u00b7 ' + newName.toUpperCase();
+      this.closeModal('edit-profile-modal');
+      this.renderSettings();
+      return;
     }
     if (newName !== oldName) {
       try {
@@ -249,7 +456,13 @@ Object.assign(window.BlackBook, {
         const out = await res.json();
         if (!res.ok) throw new Error(out.error || 'Rename failed');
       } catch (error) {
-        if (newCurrency !== oldCurrency) { this.data.settings.baseCurrency = oldCurrency; this.data.settings.enabledCurrencies = oldEnabled; await this.save(); }
+        if (newCurrency !== oldCurrency || defaultsChanged) {
+          this.data.settings.baseCurrency = oldCurrency;
+          this.data.settings.enabledCurrencies = oldEnabled;
+          this.data.settings.defaultAccountId = oldDefaultAccountId;
+          this.data.settings.defaultCategoryId = oldDefaultCategoryId;
+          await this.save();
+        }
         alert('Could not rename profile: ' + error.message);
         return;
       }
@@ -263,6 +476,7 @@ Object.assign(window.BlackBook, {
     this.renderSettings();
   },
   async deleteProfile(name) {
+    if (this._browserFolderMode && this._localProfileRecord && this._localProfileRecord.name === name) return this.forgetBrowserFolderProfile(this._localProfileRecord.id);
     if (!(await this.confirmModal({ title: 'Delete Profile', message: 'Delete profile "' + name + '" and all of its data?', confirmText: 'Delete' }))) return;
     const res = await fetch('/api/profiles', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'delete', name: name }) });
     const out = await res.json();
@@ -347,7 +561,7 @@ Object.assign(window.BlackBook, {
     if (nativeNote) {
       nativeNote.hidden = !this._csvBlackBookExport;
       nativeNote.textContent = this._csvBlackBookExport
-        ? 'Black Book export detected. Accounts, cards, categories, transfers, secondary currency amounts, and people tags will be matched automatically; account/card names missing from this profile are skipped.'
+        ? 'Black Book export detected. Accounts, cards, categories, transfers, secondary currency amounts, split parts, and people tags will be matched automatically; account/card names missing from this profile are skipped.'
         : '';
     }
     if (columnOptions) columnOptions.hidden = !!this._csvBlackBookExport;
@@ -516,6 +730,24 @@ Object.assign(window.BlackBook, {
       if (!date || !Number.isFinite(amount) || !['income', 'expense', 'transfer'].includes(type)) { skipped++; continue; }
       const currency = get(row, 'currency').toUpperCase() || this.baseCurrency();
       const note = get(row, 'note');
+      const splitText = get(row, 'split_parts');
+      let splitPayload = null;
+      if (splitText) {
+        try { splitPayload = JSON.parse(splitText); } catch { skipped++; continue; }
+        if (!Array.isArray(splitPayload)) { skipped++; continue; }
+        const splitAmounts = splitPayload.map(part => Number(part && part.amount));
+        const remainderCount = splitPayload.filter(part => part && part.autoRemainder === true).length;
+        const invalidPart = splitPayload.some((part, index) => {
+          if (!part || !Number.isFinite(splitAmounts[index])) return true;
+          if (part.autoRemainder === true) return splitAmounts[index] < 0;
+          const quantity = part.quantity == null ? 1 : Number(part.quantity);
+          const unitAmount = part.unitAmount == null ? splitAmounts[index] : Number(part.unitAmount);
+          if (splitAmounts[index] <= 0 || !Number.isFinite(quantity) || quantity <= 0 || !Number.isFinite(unitAmount) || unitAmount <= 0) return true;
+          return Math.round(Math.round(unitAmount * 100) * quantity) !== Math.round(splitAmounts[index] * 100);
+        });
+        if (type === 'transfer' || splitPayload.length < 2 || remainderCount > 1 || invalidPart ||
+            splitAmounts.reduce((sum, value) => sum + Math.round(value * 100), 0) !== Math.round(Math.abs(amount) * 100)) { skipped++; continue; }
+      }
       if (type === 'transfer') {
         const from = accounts.get(key(get(row, 'from_account')));
         const to = accounts.get(key(get(row, 'to_account')));
@@ -550,6 +782,22 @@ Object.assign(window.BlackBook, {
         transaction.nativeAmount = Object.is(secondaryAmount, -0) ? 0 : secondaryAmount;
         transaction.nativeCurrency = get(row, 'secondary_currency').toUpperCase() || currency;
       }
+      if (splitPayload) {
+        transaction.parts = splitPayload.map(part => ({
+          id: crypto.randomUUID(),
+          description: String(part.description || '').trim(),
+          categoryId: categoryId(String(part.category || '')),
+          amount: Math.round(Number(part.amount) * 100) / 100,
+          ...(!part.autoRemainder ? {
+            quantity: part.quantity == null ? 1 : Number(part.quantity),
+            unitAmount: Math.round(Number(part.unitAmount == null ? part.amount : part.unitAmount) * 100) / 100
+          } : { autoRemainder: true }),
+          ...(part.nativeAmount == null ? {} : { nativeAmount: Number(part.nativeAmount), nativeCurrency: String(part.nativeCurrency || currency).toUpperCase() }),
+          personIds: personIds(String(part.people || ''))
+        }));
+        if (transaction.parts.some(part => part.autoRemainder)) transaction.splitRemainder = true;
+        transaction.categoryId = transaction.parts[0].categoryId;
+      }
       staged.push(transaction);
     }
     if (!staged.length) { alert('No valid Black Book transactions found. Check that account and card names in the CSV exist in this profile.'); return; }
@@ -562,7 +810,7 @@ Object.assign(window.BlackBook, {
       (tx.fromAccountId || '') === (candidate.fromAccountId || '') && (tx.toAccountId || '') === (candidate.toAccountId || '') &&
       Number(tx.amountIn || 0) === Number(candidate.amountIn || 0) && (tx.currencyIn || '') === (candidate.currencyIn || '') &&
       Number(tx.nativeAmount || 0) === Number(candidate.nativeAmount || 0) && (tx.nativeCurrency || '') === (candidate.nativeCurrency || '') &&
-      (tx.categoryId || '') === (candidate.categoryId || '') && (tx.note || '') === (candidate.note || '') && peopleMatch(tx, candidate)
+      (tx.categoryId || '') === (candidate.categoryId || '') && cleanDescription(tx.note || '') === cleanDescription(candidate.note || '') && peopleMatch(tx, candidate)
     )).length;
     const message = staged.length + ' valid Black Book row' + (staged.length === 1 ? '' : 's') + ' ready. ' +
       (duplicateCount ? duplicateCount + ' exact duplicate' + (duplicateCount === 1 ? ' may' : 's may') + ' already exist. ' : '') +
@@ -586,15 +834,34 @@ Object.assign(window.BlackBook, {
     const category = document.getElementById('import-rule-category');
     if (!category) return;
     document.getElementById('import-rule-match').value = '';
-    category.innerHTML = this.categoriesAvailableOn(this.today()).map(item => '<option value="' + item.id + '">' + this.escapeHtml(item.name) + '</option>').join('');
+    category.innerHTML = this.categoriesAvailableOn(this.today()).map(item => '<option value="' + this.escapeHtml(item.id) + '">' + this.escapeHtml(this.categoryLabel(item)) + '</option>').join('');
     this.upgradeSelect(category);
+    this.renderImportRulesList();
     this.openModal('import-rule-modal');
     setTimeout(() => document.getElementById('import-rule-match').focus(), 20);
   },
 
+  renderImportRulesList() {
+    const list = document.getElementById('import-rules-list');
+    if (!list) return;
+    const rules = this.data.importRules || [];
+    list.innerHTML = rules.length ? rules.map(rule => {
+      const category = this.data.categories.find(item => item.id === rule.categoryId);
+      return '<div class="settings-row"><span class="settings-row-name">IF DESCRIPTION HAS “' + this.escapeHtml(rule.match) + '”</span><span class="settings-row-meta">→ ' + this.escapeHtml(category ? this.categoryLabel(category) : 'missing category') + '</span><button type="button" class="btn btn-sm btn-danger btn-icon" title="Delete import rule" aria-label="Delete import rule" data-delete-import-rule="' + this.escapeHtml(rule.id) + '">' + this.xIcon() + '</button></div>';
+    }).join('') : '<div class="settings-row-meta" style="padding:10px 4px;">No rules yet. Rules apply while rows are staged for import.</div>';
+    list.querySelectorAll('[data-delete-import-rule]').forEach(button => button.addEventListener('click', () => this.deleteImportRule(button.dataset.deleteImportRule)));
+  },
+
   async deleteImportRule(id) {
-    this.data.importRules = this.data.importRules.filter(rule => rule.id !== id);
-    await this.save(); this.renderSettings();
+    const previous = this.data.importRules || [];
+    this.data.importRules = previous.filter(rule => rule.id !== id);
+    if (!(await this.save())) { this.data.importRules = previous; return; }
+    this.renderImportRulesList();
+  },
+
+  openProfilePasswordFromEdit() {
+    this.closeModal('edit-profile-modal');
+    this.passwordModal(this.profile || '');
   },
 
   exportCsv() { this.openCsvExport(); },
@@ -754,11 +1021,12 @@ Object.assign(window.BlackBook, {
     const cardName = id => (this.data.creditCards || []).find(item => item.id === id)?.name || '';
     const categoryName = id => (this.data.categories || []).find(item => item.id === id)?.name || '';
     const personNames = ids => (ids || []).map(id => (this.data.people || []).find(item => item.id === id)?.name).filter(Boolean).join('; ');
-    const rows = [['date', 'type', 'amount', 'currency', 'account', 'card', 'category', 'secondary_amount', 'secondary_currency', 'transfer_to_amount', 'transfer_to_currency', 'from_account', 'to_account', 'people', 'note']];
+    const rows = [['date', 'type', 'amount', 'currency', 'account', 'card', 'category', 'secondary_amount', 'secondary_currency', 'transfer_to_amount', 'transfer_to_currency', 'from_account', 'to_account', 'people', 'note', 'split_parts']];
     for (const tx of transactions) rows.push([
       tx.date, tx.type, tx.amount, tx.currency || this.baseCurrency(), accountName(tx.accountId), cardName(tx.cardId), categoryName(tx.categoryId),
       tx.nativeAmount, tx.nativeCurrency, tx.type === 'transfer' ? (tx.amountIn ?? tx.amount) : '', tx.type === 'transfer' ? (tx.currencyIn || tx.currency || this.baseCurrency()) : '',
-      accountName(tx.fromAccountId), accountName(tx.toAccountId), personNames([...new Set([...(Array.isArray(tx.personIds) ? tx.personIds : []), tx.personId].filter(Boolean))]), tx.note || tx.description || tx.details || ''
+      accountName(tx.fromAccountId), accountName(tx.toAccountId), personNames([...new Set([...(Array.isArray(tx.personIds) ? tx.personIds : []), tx.personId].filter(Boolean))]), cleanDescription(tx.note || tx.description || tx.details || ''),
+      Array.isArray(tx.parts) && tx.parts.length ? JSON.stringify(tx.parts.map(part => ({ description: cleanDescription(part.description), category: categoryName(part.categoryId), amount: Number(part.amount) || 0, ...(part.autoRemainder ? { autoRemainder: true } : { quantity: part.quantity == null ? 1 : Number(part.quantity), unitAmount: Number(part.unitAmount == null ? part.amount : part.unitAmount) }), ...(part.nativeAmount == null ? {} : { nativeAmount: Number(part.nativeAmount), nativeCurrency: part.nativeCurrency || tx.nativeCurrency || tx.currency || this.baseCurrency() }), people: personNames(part.personIds) }))) : ''
     ]);
     const csv = rows.map(row => row.map(esc).join(',')).join('\r\n');
     const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8' });
@@ -813,22 +1081,15 @@ Object.assign(window.BlackBook, {
       const updated = r.source === 'manual' ? '<span class="rate-manual-tag">manual</span>' : this.fmtUpd24(r.updated);
       const isBase = code === base;
       const removable = !isBase;
-      const idx = orderArr.indexOf(code);
-      const canUp = !isBase && idx > 0 && orderArr[idx - 1] !== base;
-      const canDown = !isBase && idx >= 0 && idx < orderArr.length - 1 && orderArr[idx + 1] !== base;
       const setCell = '<button class="btn btn-sm btn-secondary" ' +
         (isBase ? 'disabled title="Base currency is always 1"' : 'title="Set manually" onclick="BlackBook.openManualRateModal(\x27' + code + '\x27)"') +
         ' aria-label="Set ' + code + ' rate manually"><span class="rate-action-text">RATE</span><span class="rate-action-icon" aria-hidden="true">✎</span></button>';
-      const orderCell = '<span class="settings-row-order">' +
-        '<button type="button" class="btn btn-sm btn-secondary" ' + (canUp ? 'onclick="BlackBook.moveCurrency(\x27' + code + '\x27,-1)"' : 'disabled') + ' title="Move up">&#9650;</button>' +
-        '<button type="button" class="btn btn-sm btn-secondary" ' + (canDown ? 'onclick="BlackBook.moveCurrency(\x27' + code + '\x27,1)"' : 'disabled') + ' title="Move down">&#9660;</button>' +
-        '</span>';
+      const orderable = !isBase && orderArr.includes(code);
       const refreshCell = '<button class="btn btn-sm btn-secondary btn-icon" title="Refresh rate" onclick="BlackBook.refreshRate(\x27' + code + '\x27)">' + this.refreshIcon() + '</button>';
-      rows += '<div class="rate-grid-row">' +
+      rows += '<div class="rate-grid-row mobile-settings-swipe-row" data-mobile-settings-kind="currency" data-mobile-entity-id="' + code + '" data-currency-base="' + isBase + '"' + (orderable ? ' data-reorder-key="' + code + '"' : '') + '>' +
         '<span class="rate-info"><span class="rate-code">' + code + '</span><span class="rate-val">' + rateVal + '</span></span>' +
         '<span class="rate-upd">' + updated + '</span>' +
         '<span class="rate-actions">' + setCell +
-        orderCell +
         refreshCell +
         (removable ? '<button class="btn btn-sm btn-danger btn-icon" title="Remove currency" onclick="BlackBook.removeCurrency(\x27' + code + '\x27)">' + this.xIcon() + '</button>' : '<button class="btn btn-sm btn-danger btn-icon rate-remove-placeholder" disabled tabindex="-1" aria-hidden="true">' + this.xIcon() + '</button>') +
         '</span>' +
@@ -895,7 +1156,29 @@ Object.assign(window.BlackBook, {
     this.populateCurrencyDropdowns();
   },
 
+  async reorderCurrencies(ids) {
+    const current = this.data.settings.enabledCurrencies || [];
+    const base = this.baseCurrency();
+    const baseIndex = Math.max(0, current.indexOf(base));
+    const ordered = ids.filter(code => code !== base && current.includes(code));
+    if (ordered.length !== current.filter(code => code !== base).length) return;
+    const next = ordered.slice();
+    next.splice(Math.min(baseIndex, next.length), 0, base);
+    if (next.join('|') === current.join('|')) return;
+    this.data.settings.enabledCurrencies = next;
+    await this.save({ undoable:true, label:'Reorder currencies' });
+    this.renderPage(this.currentPage);
+    this.populateCurrencyDropdowns();
+  },
+
   bindSettingsEvents(el) {
+    el.querySelectorAll('[data-currency-display]').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        this.data.settings.currencyDisplay = btn.getAttribute('data-currency-display');
+        await this.save();
+        this.renderSettings();
+      });
+    });
     el.querySelectorAll('[data-theme-btn]').forEach(btn => {
       btn.addEventListener('click', () => {
         this.setTheme(btn.getAttribute('data-theme-btn'));
@@ -1009,19 +1292,38 @@ Object.assign(window.BlackBook, {
           title: 'Replace Current Profile?',
           message: file.name + '\\n\\nCurrent profile: ' + currentCount + ' transactions\\nImport: ' +
             imported.accounts.length + ' accounts, ' + imported.categories.length + ' categories, ' +
-            imported.transactions.length + ' transactions\\n\\nThe current profile will be copied to its BACKUPS folder before replacement.',
+            imported.transactions.length + ' transactions\\n\\n' + (this._browserFileMode ? 'This replaces the profile in this tab. Export a backup first, then use SAVE FILE to export the replacement.' : this._browserFolderMode ? 'The selected folder will receive the imported profile and keep its merge journals.' : 'The current profile will be copied to its BACKUPS folder before replacement.'),
           confirmText: 'Replace Profile'
         });
         if (!accepted) return;
         try {
-          const response = await fetch('/api/import', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ profile: this.profile || '', data: imported })
-          });
-          const result = await response.json();
-          if (!response.ok) throw new Error(result.error || 'Import failed');
-          this.data = imported;
+          if (this._browserFileMode) {
+            imported.settings = imported.settings || {};
+            this.data = imported;
+            await this.save();
+            this.resetUndoHistory();
+            this.selectedAccount = null;
+            this.selectedCategories = null;
+            this.applyTheme();
+            this.applyThemeColors();
+            this.updateNavVisibility();
+            this.renderPage(this.currentPage);
+            this.showToast('Profile imported into this tab. Use SAVE FILE to export it.');
+            return;
+          } else if (this._browserFolderMode) {
+            imported.settings = imported.settings || {};
+            this.data = imported;
+            if (!(await this.save())) throw new Error('The folder could not save the imported profile.');
+          } else {
+            const response = await fetch('/api/import', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ profile: this.profile || '', data: imported })
+            });
+            const result = await response.json();
+            if (!response.ok) throw new Error(result.error || 'Import failed');
+            this.data = imported;
+          }
           location.reload();
         } catch (error) {
           alert('Import failed: ' + error.message + '. Your current profile was not replaced.');
@@ -1043,20 +1345,6 @@ Object.assign(window.BlackBook, {
         this.renderSettings();
       });
     }
-    const defaultAcc = el.querySelector('#settings-default-account');
-    if (defaultAcc) {
-      defaultAcc.addEventListener('change', async () => {
-        this.data.settings.defaultAccountId = defaultAcc.value || null;
-        await this.save();
-      });
-    }
-    const defaultCat = el.querySelector('#settings-default-category');
-    if (defaultCat) {
-      defaultCat.addEventListener('change', async () => {
-        this.data.settings.defaultCategoryId = defaultCat.value || null;
-        await this.save();
-      });
-    }
   },
 
   bindSettingsModals() {
@@ -1068,8 +1356,16 @@ Object.assign(window.BlackBook, {
         const match = document.getElementById('import-rule-match').value.trim();
         const categoryId = document.getElementById('import-rule-category').value;
         if (!match || !categoryId) return;
-        this.data.importRules.push({ id: crypto.randomUUID(), match, categoryId, active: true });
-        await this.save(); this.closeModal('import-rule-modal'); this.renderSettings();
+        this.data.importRules ||= [];
+        const rule = { id: crypto.randomUUID(), match, categoryId, active: true };
+        this.data.importRules.unshift(rule);
+        if (!(await this.save())) {
+          this.data.importRules = this.data.importRules.filter(item => item.id !== rule.id);
+          return;
+        }
+        document.getElementById('import-rule-match').value = '';
+        this.renderImportRulesList();
+        document.getElementById('import-rule-match').focus();
       });
     }
     const npForm = document.getElementById('new-profile-form');
@@ -1094,6 +1390,11 @@ Object.assign(window.BlackBook, {
         const shortName = document.getElementById('settings-account-shortname').value.trim().slice(0, 3);
         const currency = document.getElementById('settings-account-currency').value;
         const type = document.getElementById('settings-account-type').value;
+        const accountDetails = {
+          accountNumber: document.getElementById('settings-account-number').value.trim() || undefined,
+          pin: document.getElementById('settings-account-pin').value.trim() || undefined,
+          description: document.getElementById('settings-account-description').value.trim() || undefined
+        };
         if (!name) return;
         const prevCounts = { accounts: this.data.accounts.length, cards: (this.data.creditCards || []).length, accSnap: null, cardSnap: null };
         if (idVal && !idVal.startsWith('card:')) {
@@ -1110,7 +1411,7 @@ Object.assign(window.BlackBook, {
         const colorVal = isAuto ? null : this.normalizeHex(hexEl ? hexEl.value : colorEl.value);
         if (idVal.startsWith('card:') || (!idVal && type === 'creditcard')) {
           const rateVal = parseFloat(String(document.getElementById('settings-account-rate').value).replace(',', '.'));
-          const cardData = { name: name, shortName: shortName, currency: currency, ratePct: isNaN(rateVal) ? 5 : rateVal, dueDay: parseInt(document.getElementById('settings-account-due-day').value, 10) || 15, color: colorVal };
+          const cardData = Object.assign({ name: name, shortName: shortName, currency: currency, ratePct: isNaN(rateVal) ? 5 : rateVal, dueDay: parseInt(document.getElementById('settings-account-due-day').value, 10) || 15, color: colorVal }, accountDetails);
           if (!this.data.creditCards) this.data.creditCards = [];
           if (idVal.startsWith('card:')) {
             const card = this.cardById(idVal.slice(5));
@@ -1130,9 +1431,9 @@ Object.assign(window.BlackBook, {
           }
           if (idVal) {
             const acc = this.data.accounts.find(a => a.id === idVal);
-            if (acc) Object.assign(acc, { name: name, shortName: shortName, currency: currency, type: type, foreignFee: extra.foreignFee, color: extra.color, description: document.getElementById('settings-account-description').value.trim() || undefined });
+            if (acc) Object.assign(acc, { name: name, shortName: shortName, currency: currency, type: type, foreignFee: extra.foreignFee, color: extra.color }, accountDetails);
           } else {
-            this.data.accounts.push(Object.assign({ id: crypto.randomUUID(), name: name, shortName: shortName, currency: currency, type: type, color: extra.color, description: document.getElementById('settings-account-description').value.trim() || undefined }, extra));
+            this.data.accounts.push(Object.assign({ id: crypto.randomUUID(), name: name, shortName: shortName, currency: currency, type: type, color: extra.color }, accountDetails, extra));
           }
         }
         try {
@@ -1165,6 +1466,11 @@ Object.assign(window.BlackBook, {
         const id = document.getElementById('settings-category-id').value;
         const name = document.getElementById('settings-category-name').value.trim();
         if (!name) return;
+        const normalizedName = value => String(value || '').normalize('NFKC').trim().replace(/\s+/g, ' ').toLowerCase();
+        if (this.data.categories.some(category => category.id !== id && normalizedName(category.name) === normalizedName(name))) {
+          alert('A category with this name already exists.');
+          return;
+        }
         const colorEl = document.getElementById('settings-category-color');
         const hexEl = document.getElementById('settings-category-color-hex');
         const isAuto = hexEl && hexEl.dataset.auto === '1';
@@ -1190,9 +1496,29 @@ Object.assign(window.BlackBook, {
     document.getElementById('settings-account-fee-row').classList.toggle('hidden', !currencySel || currencySel.value === this.baseCurrency());
   },
 
+  toggleAccountPinVisibility() {
+    const input = document.getElementById('settings-account-pin');
+    const button = document.getElementById('settings-account-pin-toggle');
+    if (!input || !button) return;
+    const show = input.type === 'password';
+    input.type = show ? 'text' : 'password';
+    button.textContent = show ? 'HIDE' : 'SHOW';
+    button.setAttribute('aria-pressed', String(show));
+  },
+
+  resetAccountPinVisibility() {
+    const input = document.getElementById('settings-account-pin');
+    const button = document.getElementById('settings-account-pin-toggle');
+    if (input) input.type = 'password';
+    if (button) { button.textContent = 'SHOW'; button.setAttribute('aria-pressed', 'false'); }
+  },
+
   openNewAccount() {
     document.getElementById('settings-account-id').value = '';
     document.getElementById('settings-account-name').value = '';
+    document.getElementById('settings-account-number').value = '';
+    document.getElementById('settings-account-pin').value = '';
+    this.resetAccountPinVisibility();
     document.getElementById('settings-account-description').value = '';
     document.getElementById('settings-account-shortname').value = '';
     const accColor = this.nextCategoryColor();
@@ -1222,6 +1548,9 @@ Object.assign(window.BlackBook, {
     if (!acc) return;
     document.getElementById('settings-account-id').value = acc.id;
     document.getElementById('settings-account-name').value = acc.name;
+    document.getElementById('settings-account-number').value = acc.accountNumber || '';
+    document.getElementById('settings-account-pin').value = acc.pin || '';
+    this.resetAccountPinVisibility();
     document.getElementById('settings-account-description').value = acc.description || '';
     document.getElementById('settings-account-shortname').value = acc.shortName || '';
     const colorEl = document.getElementById('settings-account-color');
@@ -1247,7 +1576,10 @@ Object.assign(window.BlackBook, {
     if (!card) return;
     document.getElementById('settings-account-id').value = 'card:' + cardId;
     document.getElementById('settings-account-name').value = card.name;
-    document.getElementById('settings-account-description').value = '';
+    document.getElementById('settings-account-number').value = card.accountNumber || '';
+    document.getElementById('settings-account-pin').value = card.pin || '';
+    this.resetAccountPinVisibility();
+    document.getElementById('settings-account-description').value = card.description || '';
     document.getElementById('settings-account-shortname').value = card.shortName || '';
     const colorEl = document.getElementById('settings-account-color');
     colorEl.value = this.cardColor(card);
@@ -1273,6 +1605,17 @@ Object.assign(window.BlackBook, {
     if (i < 0 || j < 0 || j >= arr.length) return;
     const tmp = arr[i]; arr[i] = arr[j]; arr[j] = tmp;
     await this.save({ undoable: true, label: 'Reorder accounts' });
+    this.renderPage(this.currentPage);
+    if (this.syncAccountsPanel) this.syncAccountsPanel();
+  },
+
+  async reorderAccounts(ids) {
+    const idSet = new Set(ids);
+    const ordered = ids.map(id => this.data.accounts.find(account => account.id === id)).filter(Boolean);
+    if (ordered.length !== idSet.size) return;
+    let index = 0;
+    this.data.accounts = this.data.accounts.map(account => idSet.has(account.id) ? ordered[index++] : account);
+    await this.save({ undoable:true, label:'Reorder accounts' });
     this.renderPage(this.currentPage);
     if (this.syncAccountsPanel) this.syncAccountsPanel();
   },
@@ -1309,31 +1652,24 @@ Object.assign(window.BlackBook, {
     this.renderPage(this.currentPage);
   },
   settingsHtml() {
-    const defaultAccountId = this.data.settings.defaultAccountId || '';
-    const defaultCategoryId = this.data.settings.defaultCategoryId || '';
-
     let accountsList = '';
     const visibleAccts = this.visibleAccounts();
+    const folderControls = (window.BrowserProfileStore && BrowserProfileStore.supported()
+      ? '<button class="btn btn-sm btn-secondary" onclick="BlackBook.openBrowserFolderProfile()">OPEN FOLDER</button><button class="btn btn-sm btn-secondary" onclick="BlackBook.createBrowserFolderProfile()">+ FOLDER PROFILE</button>'
+      : '') + '<button class="btn btn-sm btn-secondary" onclick="BlackBook.openBrowserProfileFile()">OPEN FILE</button>';
     for (const a of visibleAccts) {
       const typeLabel = (a.type || 'cash').toUpperCase();
-      const arrIdx = this.data.accounts.findIndex(x => x.id === a.id);
-      const canUp = arrIdx > 0;
-      const canDown = arrIdx < this.data.accounts.length - 1;
-      accountsList += '<div class="settings-row">' +
+      accountsList += '<div class="settings-row settings-account-draggable mobile-settings-swipe-row" data-mobile-settings-kind="account" data-reorder-key="' + a.id + '">' +
         '<span class="row-swatch" style="background:' + this.accountColor(a) + ';"></span>' +
-        '<div class="settings-row-name-wrap"><span class="settings-row-name">' + this.escapeHtml(a.name) + this.healthMarker('accounts', a.id) + '</span>' + (a.description ? '<span class="settings-row-desc">' + this.escapeHtml(a.description) + '</span>' : '') + '</div>' +
+        '<span class="settings-row-name">' + this.escapeHtml(a.name) + this.healthMarker('accounts', a.id) + '</span>' +
         '<span class="settings-row-meta">' + a.currency + ' &middot; ' + typeLabel + '</span>' +
-        '<span class="settings-row-order">' +
-        '<button type="button" class="btn btn-sm btn-secondary" ' + (canUp ? 'onclick="BlackBook.moveAccount(\x27' + a.id + '\x27,-1)"' : 'disabled') + ' title="Move up">&#9650;</button>' +
-        '<button type="button" class="btn btn-sm btn-secondary" ' + (canDown ? 'onclick="BlackBook.moveAccount(\x27' + a.id + '\x27,1)"' : 'disabled') + ' title="Move down">&#9660;</button>' +
-        '</span>' +
         '<button class="btn btn-sm btn-secondary" onclick="BlackBook.openEditAccount(\x27' + a.id + '\x27)">EDIT</button>' +
         '<button class="btn btn-sm btn-danger btn-icon" title="Delete account" onclick="BlackBook.deleteAccount(\x27' + a.id + '\x27)">' + this.xIcon() + '</button></div>';
     }
     for (const c of (this.data.creditCards || [])) {
-      accountsList += '<div class="settings-row">' +
+      accountsList += '<div class="settings-row mobile-settings-swipe-row" data-mobile-settings-kind="card" data-mobile-entity-id="' + c.id + '">' +
         '<span class="row-swatch" style="background:' + this.cardColor(c) + ';"></span>' +
-        '<span class="settings-row-name">' + this.escapeHtml(c.name) + this.healthMarker('creditCards', c.id) + '</span>' +
+        '<span class="settings-row-name">' + this.escapeHtml(this.categoryLabel(c)) + this.healthMarker('creditCards', c.id) + '</span>' +
         '<span class="settings-row-meta">CREDIT CARD &middot; INT ' + (c.ratePct != null ? c.ratePct : 5) + '%</span>' +
         '<button class="btn btn-sm btn-secondary" onclick="BlackBook.openEditAccount(\x27card:' + c.id + '\x27)">EDIT</button>' +
         '<button class="btn btn-sm btn-danger btn-icon" title="Delete card" onclick="BlackBook.deleteCard(\x27' + c.id + '\x27)">' + this.xIcon() + '</button></div>';
@@ -1343,38 +1679,40 @@ Object.assign(window.BlackBook, {
     let categoriesList = '';
     const sortedCats = this.data.categories.slice().sort((a, b) => a.name.localeCompare(b.name));
     for (const c of sortedCats) {
-      const categoryTx = this.data.transactions.filter(t => t.categoryId === c.id);
+      const categoryTx = this.data.transactions.filter(t => this.transactionAllocationRows(t).some(row => row.categoryId === c.id));
       const txCount = categoryTx.length;
       let spent = 0, income = 0, transfers = 0;
       for (const tx of categoryTx) {
         const amount = Math.abs(this.transactionToBase(tx));
-        if (tx.type === 'income') income += amount;
-        else if (tx.type === 'transfer') transfers += amount;
-        else spent += amount;
+        for (const allocation of this.transactionAllocationRows(tx).filter(row => row.categoryId === c.id)) {
+          const ratio = tx.parts && Math.abs(Number(tx.amount)) > 0 ? Math.abs(allocation.amount) / Math.abs(Number(tx.amount)) : 1;
+          const partAmount = amount * ratio;
+          if (tx.type === 'income') income += partAmount;
+          else if (tx.type === 'transfer') transfers += partAmount;
+          else spent += partAmount;
+        }
       }
       const categoryTotal = spent + income + transfers;
-      const compactTotal = new Intl.NumberFormat('en-US', { notation: 'compact', maximumFractionDigits: 1 }).format(categoryTotal);
+      const compactTotal = this.fmtNumber(categoryTotal);
+      const currencyLabel = this.currencyShortLabel(this.baseCurrency());
       const tooltipLines = [txCount + ' transaction' + (txCount === 1 ? '' : 's'), 'Spent: ' + this.fmtBase(spent)];
       if (income > 0) tooltipLines.push('Income: ' + this.fmtBase(income));
       if (transfers > 0) tooltipLines.push('Transfers: ' + this.fmtBase(transfers));
       const isProtected = c.name.toLowerCase() === 'transfer' || c.name.toLowerCase() === 'uncategorized' || c.name.toLowerCase() === 'invoice' || c.name.toLowerCase() === 'debt';
       const archived = CategoryAvailability.archivedOn(c, this.today());
       const categoryTooltip = this.escapeHtml(tooltipLines.join('\n'));
-      categoriesList += '<div class="settings-row' + (archived ? ' category-archived' : '') + '">' +
+      categoriesList += '<div class="settings-row mobile-settings-swipe-row' + (archived ? ' category-archived' : '') + '" data-mobile-settings-kind="category" data-mobile-entity-id="' + c.id + '" data-category-archived="' + archived + '" data-category-protected="' + isProtected + '">' +
         '<span class="row-swatch" style="background:' + this.categoryColor(c) + ';"></span>' +
-        '<span class="settings-row-name">' + this.escapeHtml(c.name) + this.healthMarker('creditCards', c.id) + '</span>' +
-        '<span class="settings-row-meta settings-category-total" tabindex="0" role="note" data-tooltip="' + categoryTooltip + '" onmouseenter="BlackBook.showSettingsCategoryTooltip(this)" onmouseleave="BlackBook.hideDonutTooltip()" onfocus="BlackBook.showSettingsCategoryTooltip(this)" onblur="BlackBook.hideDonutTooltip()">' + txCount + 'TX · ' + this.escapeHtml(compactTotal) + ' ' + this.escapeHtml(this.baseCurrency()) + (archived ? ' · ARCHIVED' : '') + '</span>' +
+        '<span class="settings-row-name">' + this.escapeHtml(this.categoryLabel(c)) + this.healthMarker('creditCards', c.id) + '</span>' +
+        '<span class="settings-row-meta settings-category-total" tabindex="0" role="note" data-tooltip="' + categoryTooltip + '" onmouseenter="BlackBook.showSettingsCategoryTooltip(this)" onmouseleave="BlackBook.hideDonutTooltip()" onfocus="BlackBook.showSettingsCategoryTooltip(this)" onblur="BlackBook.hideDonutTooltip()">' + txCount + 'TX · ' + this.escapeHtml(compactTotal) + (currencyLabel ? ' ' + this.escapeHtml(currencyLabel) : '') + (archived ? ' · ARCHIVED' : '') + '</span>' +
         '<button class="btn btn-sm btn-secondary" onclick="BlackBook.openEditCategory(\x27' + c.id + '\x27)">EDIT</button>' +
         (isProtected ? '' : '<button class="btn btn-sm btn-secondary" onclick="BlackBook.' + (archived ? 'restoreCategory' : 'archiveCategory') + '(\x27' + c.id + '\x27)">' + (archived ? 'RESTORE' : 'ARCHIVE') + '</button>') +
         (isProtected ? '<button class="btn btn-sm btn-danger btn-icon" onclick="BlackBook.deleteCategory(\x27' + c.id + '\x27)" disabled style="opacity:0.5;cursor:not-allowed;" title="Protected category">' + this.xIcon() + '</button>' : '<button class="btn btn-sm btn-danger btn-icon" title="Delete category" onclick="BlackBook.deleteCategory(\x27' + c.id + '\x27)">' + this.xIcon() + '</button>') + '</div>';
     }
     if (!this.data.categories.length) categoriesList = '<div style="padding:8px;color:var(--text-muted);font-size:13px;">No categories yet.</div>';
 
-    const defaultAccountOpts = '<option value="">None</option>' + this.visibleAccounts().map(a => '<option value="' + a.id + '"' + (a.id === defaultAccountId ? ' selected' : '') + '>' + this.escapeHtml(a.name) + '</option>').join('');
-    const defaultCategoryOpts = '<option value="">None</option>' + this.categoriesAvailableOn(this.today()).map(c => '<option value="' + c.id + '"' + (c.id === defaultCategoryId ? ' selected' : '') + '>' + this.escapeHtml(c.name) + '</option>').join('');
-
     let pagesList = '';
-    const PAGE_LABELS = { forecast: 'Forecast', bills: 'Bills', budget: 'Budget', cards: 'Credit Cards', savings: 'Savings', debts: 'Debts', invoices: 'Invoices', reports: 'Reports' };
+    const PAGE_LABELS = { bills: 'Bills', budget: 'Budget', cards: 'Credit Cards', savings: 'Savings', debts: 'Debts', invoices: 'Invoices', reports: 'Reports' };
     for (const p of Object.keys(PAGE_LABELS)) {
       const on = this.isPageEnabled(p);
       pagesList += '<div class="settings-row">' +
@@ -1387,26 +1725,20 @@ Object.assign(window.BlackBook, {
       '<div>' +
       '<div class="settings-section">' +
       '<div class="settings-section-header"><span class="settings-section-title">APPEARANCE</span></div>' +
-      '<div class="form-group" style="margin-bottom:10px;"><label>Theme</label><div style="display:flex;gap:6px;">' +
+      '<div class="settings-theme-highlight-row"><div class="form-group settings-theme-field"><label>Theme</label><div style="display:flex;gap:6px;">' +
       '<button class="btn btn-sm ' + (this.currentTheme() === 'dark' ? 'btn-primary' : 'btn-secondary') + '" data-theme-btn="dark">DARK</button>' +
       '<button class="btn btn-sm ' + (this.currentTheme() === 'light' ? 'btn-primary' : 'btn-secondary') + '" data-theme-btn="light">LIGHT</button>' +
-      '</div></div>' +
-      '<div class="form-row-2col">' +
-      '<div class="form-group"><label>Highlight Color</label><div style="display:flex;align-items:center;gap:8px;"><input type="color" id="settings-highlight-color" value="' + (this.data.settings.highlightColor || '#fa8c3c') + '" style="width:28px;height:28px;border:none;background:none;cursor:pointer;padding:0;"><span style="font-size:13px;color:var(--text-dim);">' + (this.data.settings.highlightColor || '#fa8c3c') + '</span></div></div>' +
+      '</div></div><div class="form-group settings-highlight-field"><label>Highlight Color</label><div style="display:flex;align-items:center;gap:8px;"><input type="color" id="settings-highlight-color" value="' + (this.data.settings.highlightColor || '#fa8c3c') + '" style="width:28px;height:28px;border:none;background:none;cursor:pointer;padding:0;"><span style="font-size:13px;color:var(--text-dim);">' + (this.data.settings.highlightColor || '#fa8c3c') + '</span></div></div></div>' +
+      '<div class="form-row-2col settings-appearance-fields"><div class="settings-mobile-pair settings-color-pair">' +
       '<div class="form-group"><label>Income Color</label><div style="display:flex;align-items:center;gap:8px;"><input type="color" id="settings-income-color" value="' + (this.data.settings.incomeColor || '#4ade80') + '" style="width:28px;height:28px;border:none;background:none;cursor:pointer;padding:0;"><span style="font-size:13px;color:var(--text-dim);">' + (this.data.settings.incomeColor || '#4ade80') + '</span></div></div>' +
       '<div class="form-group"><label>Expense Color</label><div style="display:flex;align-items:center;gap:8px;"><input type="color" id="settings-expense-color" value="' + (this.data.settings.expenseColor || '#f87171') + '" style="width:28px;height:28px;border:none;background:none;cursor:pointer;padding:0;"><span style="font-size:13px;color:var(--text-dim);">' + (this.data.settings.expenseColor || '#f87171') + '</span></div></div>' +
-      '<div class="form-group"><label for="settings-date-format">Date Format</label><input id="settings-date-format" class="input" type="text" value="' + this.escapeHtml(this.dateFormatPattern()) + '" spellcheck="false" autocomplete="off" aria-describedby="settings-date-format-help settings-date-format-error"><div class="form-hint" id="settings-date-format-help">D or DD · M, MM or MMM · YY or YYYY</div><div class="form-hint amount-negative" id="settings-date-format-error" role="status"></div></div>' +
-      '</div><div class="form-group"><label>Attention Bar</label><button id="settings-attention-toggle" aria-pressed="' + !this.data.settings.attentionBarHidden + '" class="btn btn-sm ' + (this.data.settings.attentionBarHidden ? 'btn-secondary' : 'btn-primary') + '" onclick="BlackBook.toggleAttentionBar()">' + (this.data.settings.attentionBarHidden ? 'HIDE' : 'SHOW') + '</button></div></div>' +
-
-      '<div class="settings-section">' +
-      '<div class="settings-section-header"><span class="settings-section-title">DEFAULTS</span></div>' +
-      '<div style="display:flex;gap:12px;flex-wrap:wrap;">' +
-      '<div class="form-group"><label>Default Account</label><select id="settings-default-account" class="input">' + defaultAccountOpts + '</select></div>' +
-      '<div class="form-group"><label>Default Category</label><select id="settings-default-category" class="input">' + defaultCategoryOpts + '</select></div>' +
+      '</div><div class="settings-mobile-pair settings-date-currency-pair">' +
+      '<div class="form-group"><label for="settings-date-format">Date Format</label><input id="settings-date-format" class="input" type="text" value="' + this.escapeHtml(this.dateFormatPattern()) + '" spellcheck="false" autocomplete="off" aria-describedby="settings-date-format-help settings-date-format-error"><div class="form-hint" id="settings-date-format-help">D/DD, M/MM/MMM, YY/YYYY</div><div class="form-hint amount-negative" id="settings-date-format-error" role="status"></div></div>' +
+      '<div class="form-group"><label>Shorthand Currency</label><div style="display:flex;gap:6px;"><button type="button" class="btn btn-sm ' + ((this.data.settings.currencyDisplay || 'symbol') === 'symbol' ? 'btn-primary' : 'btn-secondary') + '" data-currency-display="symbol">SYMBOLS</button><button type="button" class="btn btn-sm ' + (this.data.settings.currencyDisplay === 'code' ? 'btn-primary' : 'btn-secondary') + '" data-currency-display="code">CODES</button></div></div>' +
       '</div></div>' +
-
+      '<div class="form-group settings-attention-field"><label>Attention Bar</label><button id="settings-attention-toggle" aria-pressed="' + !this.data.settings.attentionBarHidden + '" class="btn btn-sm ' + (this.data.settings.attentionBarHidden ? 'btn-secondary' : 'btn-primary') + '" onclick="BlackBook.toggleAttentionBar()">' + (this.data.settings.attentionBarHidden ? 'HIDE' : 'SHOW') + '</button></div>' +
       '<div class="settings-section">' +
-      '<div class="settings-section-header"><span class="settings-section-title">PAGES &middot; PROFILE ' + this.escapeHtml((this.profile || 'default').toUpperCase()) + '</span></div>' +
+      '<div class="settings-section-header"><span class="settings-section-title">PAGES</span></div>' +
       '<div class="settings-list">' + pagesList + '</div></div>' +
       '</div>' +
 
@@ -1417,20 +1749,21 @@ Object.assign(window.BlackBook, {
       '<button class="btn btn-sm btn-secondary btn-icon" id="settings-refresh-all-rates" title="Refresh all rates">' + this.refreshIcon() + '</button>' +
       '<button class="btn btn-sm btn-primary" onclick="BlackBook.openAddCurrencyModal()">+ ADD CURRENCY</button>' +
       '</span></div>' +
-      '<div class="settings-rate-card">' + this.ratesTableHtml() + '</div></div>' +
+      '<div class="settings-rate-card" id="settings-currency-list">' + this.ratesTableHtml() + '</div></div>' +
 
       '<div class="settings-section">' +
-      '<div class="settings-section-header"><span class="settings-section-title">PROFILES</span><button class="btn btn-sm btn-primary" onclick="BlackBook.createProfile()">+ NEW PROFILE</button></div>' +
+      '<div class="settings-section-header"><span class="settings-section-title">PROFILES' + (this._browserFolderMode ? ' · FOLDER' : '') + '</span><span style="display:flex;gap:6px;flex-wrap:wrap;">' + folderControls + '<button class="btn btn-sm btn-primary" onclick="BlackBook.createProfile()">+ NEW PROFILE</button></span></div>' +
       '<div class="settings-list" id="profiles-list">' + this.profilesListHtml() + '</div></div>' +
       '<div class="settings-section">' +
       '<div class="settings-section-header"><span class="settings-section-title">DATA</span></div>' +
       '<div class="settings-data-actions">' + this.healthSummaryHtml() + '</div>' +
       '<div class="settings-data-actions"><button class="btn btn-secondary" id="settings-export">EXPORT JSON</button>' +
-      '<button class="btn btn-secondary" id="settings-export-csv">EXPORT CSV...</button>' +
+      '<button class="btn btn-secondary" id="settings-export-csv">EXPORT CSV</button>' +
       '<button class="btn btn-secondary" id="settings-import-btn">IMPORT JSON</button>' +
       '<input type="file" id="settings-import-file" accept=".json" style="display:none;">' +
 '<button class="btn btn-secondary" id="settings-import-csv-btn">IMPORT CSV/XLSX</button>' +
       '<input type="file" id="settings-import-csv-file" accept=".csv,.txt,.xlsx,.xls,text/csv,text/plain,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel" style="display:none;">' +
+'<button class="btn btn-secondary" id="settings-import-rules-btn" onclick="BlackBook.openImportRule()">IMPORT RULES</button>' +
       '</div></div>' +
       '<div class="settings-section">' +
       '<div class="settings-section-header"><span class="settings-section-title">ABOUT &amp; UPDATES</span></div>' +
@@ -1441,17 +1774,12 @@ Object.assign(window.BlackBook, {
     '<div class="settings-cols">' +
       '<div class="settings-section">' +
       '<div class="settings-section-header"><span class="settings-section-title">ACCOUNTS</span><button class="btn btn-sm btn-primary" onclick="BlackBook.openNewAccount()">+ ADD</button></div>' +
-      '<div class="settings-list">' + accountsList + '</div></div>' +
+      '<div class="settings-list" id="settings-account-list">' + accountsList + '</div></div>' +
 
       '<div class="settings-section">' +
       '<div class="settings-section-header"><span class="settings-section-title">CATEGORIES</span><button class="btn btn-sm btn-primary" onclick="BlackBook.openNewCategory()">+ ADD</button></div>' +
       '<div class="settings-list">' + categoriesList + '</div></div>' +
     '</div>' +
-
-      '<div class="settings-cols settings-cols-import-rules"><div class="settings-section">' +
-      '<div class="settings-section-header"><span class="settings-section-title">IMPORT RULES</span><button class="btn btn-sm btn-primary" onclick="BlackBook.openImportRule()">+ RULE</button></div>' +
-      '<div class="settings-list">' + ((this.data.importRules || []).map(rule => { const cat = this.data.categories.find(c => c.id === rule.categoryId); return '<div class="settings-row"><span class="settings-row-name">IF DESCRIPTION HAS “' + this.escapeHtml(rule.match) + '”</span><span class="settings-row-meta">→ ' + this.escapeHtml(cat ? cat.name : 'missing category') + '</span><button class="btn btn-sm btn-danger btn-icon" onclick="BlackBook.deleteImportRule(\'' + rule.id + '\')">' + this.xIcon() + '</button></div>'; }).join('') || '<div style="padding:8px;color:var(--text-muted);font-size:13px;">No rules yet. Rules apply while rows are staged for import.</div>') + '</div></div>' +
-      '<div></div></div>' +
 
       '<div class="settings-footer">BLACK BOOK <span id="settings-footer-version">v0.0.0</span> &middot; Created by <a href="https://nine9.rs" target="_blank" rel="noopener">Nikola Ne&scaron;i&#263;</a></div>';
   },
@@ -1591,16 +1919,23 @@ Object.assign(window.BlackBook, {
       await this.confirmModal({ title: 'Protected Category', message: '"' + cat.name + '" is a system category and cannot be deleted.', danger: false });
       return;
     }
-    const txCount = this.data.transactions.filter(t => t.categoryId === id).length;
+    const txCount = this.data.transactions.filter(t => t.categoryId === id || (Array.isArray(t.parts) && t.parts.some(part => part.categoryId === id))).length;
     let purgeTxs = false;
     if (txCount > 0) {
-      if (!(await this.confirmModal({ title: 'Delete Category & Transactions', message: '"' + cat.name + '" is used by ' + txCount + ' transaction' + (txCount === 1 ? '' : 's') + '.\n\nConfirm = delete the category AND its transactions.\nCancel = do nothing.', confirmText: 'Delete' }))) return;
+      if (!(await this.confirmModal({ title: 'Delete Category & Transactions', message: '"' + cat.name + '" is used by ' + txCount + ' transaction' + (txCount === 1 ? '' : 's') + '.\n\nUnsplit transactions will be deleted. Split transactions will be kept, with only their matching part uncategorized.\nCancel = do nothing.', confirmText: 'Delete' }))) return;
       purgeTxs = true;
     } else {
       if (!(await this.confirmModal({ title: 'Delete Category', message: 'Delete category "' + cat.name + '"?' , confirmText: 'Delete' }))) return;
     }
     this.data.categories = this.data.categories.filter(c => c.id !== id);
-    if (purgeTxs) this.data.transactions = this.data.transactions.filter(t => t.categoryId !== id);
+    if (purgeTxs) this.data.transactions = this.data.transactions.filter(t => {
+      if (Array.isArray(t.parts) && t.parts.length) {
+        t.parts = t.parts.map(part => part.categoryId === id ? { ...part, categoryId: null } : part);
+        if (t.categoryId === id) t.categoryId = t.parts[0]?.categoryId || null;
+        return true;
+      }
+      return t.categoryId !== id;
+    });
     if (this.selectedCategories) {
       this.selectedCategories.delete(id);
       if (!this.selectedCategories.size) this.selectedCategories = null;

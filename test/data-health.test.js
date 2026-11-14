@@ -27,6 +27,24 @@ test('duplicate identifiers, missing rates, and suspicious duplicate transaction
   assert.ok(issues.some(i => i.kind === 'possible-duplicate'));
   assert.ok(issues.some(i => i.kind === 'missing-rate'));
 });
+test('health check scans a large group of matching transactions without quadratic duplicate work', () => {
+  const transactions = Array.from({ length: 10_000 }, (_, index) => ({
+    id: 'tx-' + index,
+    type: 'expense',
+    date: '2026-10-17',
+    amount: -1,
+    currency: 'RSD',
+    accountId: 'a',
+    categoryId: 'c',
+    note: 'Stress test'
+  }));
+  const issues = scan({ accounts: [{ id: 'a' }], categories: [{ id: 'c' }], transactions });
+  const duplicates = issues.filter(issue => issue.kind === 'possible-duplicate');
+  assert.equal(duplicates.length, transactions.length);
+  assert.equal(duplicates[0].relatedIds.length, transactions.length);
+  assert.equal(duplicates.at(-1).relatedIds[0], 'tx-0');
+  assert.equal(duplicates.at(-1).relatedIds.at(-1), 'tx-9999');
+});
 test('missing funding accounts and savings-entry transactions are reported at their owning records', () => {
   const issues = scan({ bills: [{ id: 'b', payAccountId: 'gone' }], creditCards: [{ id: 'c', payAccountId: 'gone' }], savingsGoals: [{ id: 's', entries: [{ id: 'e' }] }] });
   for (const collection of ['bills', 'creditCards', 'savingsGoals']) assert.ok(issues.some(i => i.collection === collection && i.kind === 'broken-link'));

@@ -14,19 +14,24 @@ Object.assign(window.BlackBook, {
   },
   instDueAmount(inst, seq) { return Math.round((this.instBaseAmount(inst, seq) + (seq === 1 ? this.instInterest(inst) : 0)) * 100) / 100; },
   instPaymentPairId(inst, seq) { return 'inst-' + inst.id + '-s' + seq; },
-  instPaymentTxs(inst, seq) {
+  instPaymentTxs(inst, seq, excludeTxId = '') {
     const pairId = this.instPaymentPairId(inst, seq);
-    return (this.data.transactions || []).filter(tx => tx && tx.pairId === pairId);
+    return (this.data.transactions || []).filter(tx => tx && tx.id !== excludeTxId && (tx.pairId === pairId ||
+      (tx.cardBillPayment && (tx.installmentAllocations || []).some(allocation => allocation && allocation.installmentId === inst.id && Number(allocation.seq) === Number(seq)))));
   },
-  instSlotPaidAmount(inst, seq) {
+  instSlotPaidAmount(inst, seq, excludeTxId = '') {
     const creditStart = Math.max(0, Number(inst.advance) || 0);
     const entries = this.instPaidEntries(inst);
     let credit = creditStart, paidAtTarget = 0;
     for (let slot = 1; slot <= seq; slot++) {
       const due = this.instDueAmount(inst, slot);
       const entry = entries.find(item => item.seq === slot);
-      const txs = this.instPaymentTxs(inst, slot);
-      const txPaid = txs.reduce((sum, tx) => sum + (Number.isFinite(Number(tx.amount)) ? Math.abs(Number(tx.amount)) : 0), 0);
+      const txs = this.instPaymentTxs(inst, slot, excludeTxId);
+      const txPaid = txs.reduce((sum, tx) => {
+        const allocation = (tx.installmentAllocations || []).find(item => item && item.installmentId === inst.id && Number(item.seq) === Number(slot));
+        const amount = allocation ? allocation.amount : tx.amount;
+        return sum + (Number.isFinite(Number(amount)) ? Math.abs(Number(amount)) : 0);
+      }, 0);
       let paid = entry && entry.via === 'advance' ? due : txPaid;
       if (entry && entry.via === 'tx' && !txs.length) paid = due;
       paid = Math.min(due, Math.max(0, paid));
@@ -37,9 +42,9 @@ Object.assign(window.BlackBook, {
     }
     return paidAtTarget;
   },
-  instOutstanding(inst) {
+  instOutstanding(inst, excludeTxId = '') {
     let paid = 0;
-    for (let seq = 1; seq <= inst.months; seq++) paid += this.instSlotPaidAmount(inst, seq);
+    for (let seq = 1; seq <= inst.months; seq++) paid += this.instSlotPaidAmount(inst, seq, excludeTxId);
     return Math.max(0, Math.round((this.instGrandTotal(inst) - paid) * 100) / 100);
   },
   instIsClosed(inst) {
@@ -76,6 +81,183 @@ Object.assign(window.BlackBook, {
     const inst = this.data.installments.find(i => i.id === instId);
     const tx = inst ? this.instPurchaseTx(inst) : null;
     if (tx) this.openLinkedTransaction(tx.id);
+  },
+
+  allocateCardBillShares(plans, amount, excludeTxId = '') {
+    const ordered = plans.slice().sort((a, b) => String(a.name || '').localeCompare(String(b.name || ''), undefined, { sensitivity: 'base' }) || String(a.id).localeCompare(String(b.id)));
+    const shares = new Map(ordered.map(plan => [plan.id, 0]));
+    const capacities = new Map(ordered.map(plan => [plan.id, Math.max(0, Math.round(this.instOutstanding(plan, excludeTxId) * 100))]));
+    let centsLeft = Math.max(0, Math.round(Math.abs(Number(amount) || 0) * 100));
+    while (centsLeft > 0) {
+      const active = ordered.filter(plan => (capacities.get(plan.id) || 0) > (shares.get(plan.id) || 0));
+      if (!active.length) break;
+      const equalShare = Math.floor(centsLeft / active.length);
+      const extraCents = centsLeft % active.length;
+      let distributed = 0;
+      active.forEach((plan, index) => {
+        const requested = equalShare + (index < extraCents ? 1 : 0);
+        const capacityLeft = (capacities.get(plan.id) || 0) - (shares.get(plan.id) || 0);
+        const take = Math.min(requested, capacityLeft, centsLeft - distributed);
+        if (take > 0) {
+          shares.set(plan.id, (shares.get(plan.id) || 0) + take);
+          distributed += take;
+        }
+      });
+      if (!distributed) break;
+      centsLeft -= distributed;
+    }
+    return new Map([...shares].map(([id, cents]) => [id, cents / 100]));
+  },
+
+  cardBillInstallmentAllocations(plans, amount, excludeTxId = '') {
+    const shares = this.allocateCardBillShares(plans, amount, excludeTxId);
+    const allocations = [];
+    for (const plan of plans) {
+      let remaining = shares.get(plan.id) || 0;
+      for (let seq = 1; seq <= plan.months && remaining > 0.009; seq++) {
+        const slotLeft = Math.max(0, Math.round((this.instDueAmount(plan, seq) - this.instSlotPaidAmount(plan, seq, excludeTxId)) * 100) / 100);
+        const allocated = Math.min(remaining, slotLeft);
+        if (allocated > 0.009) {
+          allocations.push({ installmentId: plan.id, seq, amount: Math.round(allocated * 100) / 100 });
+          remaining = Math.round((remaining - allocated) * 100) / 100;
+        }
+      }
+      if (remaining > 0.009) return null;
+    }
+    const allocatedTotal = Math.round(allocations.reduce((sum, allocation) => sum + allocation.amount, 0) * 100) / 100;
+    return Math.abs(allocatedTotal - Math.abs(Number(amount) || 0)) <= 0.009 ? allocations : null;
+  },
+
+  async applyCardBillPayment(cardId, amount, date, accountId) {
+    const card = this.cardById(cardId);
+    const parsed = Math.round(Math.abs(Number(amount) || 0) * 100) / 100;
+    if (!card || !(parsed > 0)) return null;
+    const plans = (this.data.installments || []).filter(plan => (this.instCard(plan) || {}).id === cardId && this.instOutstanding(plan) > 0.009);
+    if (!plans.length) { this.showToast('There are no active purchases to pay on this card.'); return null; }
+    const totalOutstanding = Math.round(plans.reduce((sum, plan) => sum + this.instOutstanding(plan), 0) * 100) / 100;
+    if (parsed > totalOutstanding + 0.009) { this.showToast('That amount is higher than the tracked balance on this card.'); return null; }
+    const account = (this.data.accounts || []).find(item => item.id === accountId && !item.hidden && item.type !== 'credit' && item.type !== 'creditcard');
+    if (!account) { this.showToast('Select an account to pay this card bill from.'); return null; }
+    const baseCurrency = this.baseCurrency() || 'RSD';
+    const accountCurrency = account.currency || baseCurrency;
+    const accountAmount = accountCurrency === baseCurrency ? parsed : this.convertBetweenCurrencies(parsed, baseCurrency, accountCurrency);
+    if (!(Number.isFinite(accountAmount) && accountAmount > 0)) { this.showToast('Set an exchange rate for ' + accountCurrency + ' before recording this payment.'); return null; }
+    const allocations = this.cardBillInstallmentAllocations(plans, parsed);
+    if (!allocations) { this.showToast('The payment could not be fully allocated across the active purchases.'); return null; }
+    const tx = {
+      id: 'tx-card-bill-' + Date.now() + '-' + Math.floor(Math.random() * 10000),
+      date: date || this.today(),
+      type: 'expense',
+      amount: -Math.round(accountAmount * 100) / 100,
+      currency: accountCurrency,
+      accountId: account.id,
+      cardBillPaymentId: card.id,
+      cardBillPayment: true,
+      installmentAllocations: allocations,
+      categoryId: this.instFeeCategory(),
+      note: 'Credit card payment · ' + card.name
+    };
+    if (accountCurrency !== baseCurrency) {
+      tx.nativeAmount = -parsed;
+      tx.nativeCurrency = baseCurrency;
+    }
+    if (!this.data.transactions) this.data.transactions = [];
+    this.data.transactions.push(tx);
+    if (this.syncViewToDate) this.syncViewToDate(tx.date);
+    const saved = await this.save({ undoable: true, label: 'Pay credit card bill' });
+    if (!saved) this.data.transactions = this.data.transactions.filter(item => item.id !== tx.id);
+    return saved ? tx : null;
+  },
+
+  adjustCardBillPaymentForEdit(transaction, updatedTransaction) {
+    if (updatedTransaction.type !== 'expense' || updatedTransaction.parts) {
+      return { ok: false, message: 'Keep a card bill payment as one expense. Its item allocations are managed on the Cards page.' };
+    }
+    const baseCurrency = this.baseCurrency() || 'RSD';
+    const amountInBase = updatedTransaction.nativeAmount != null && updatedTransaction.nativeCurrency === baseCurrency
+      ? Math.abs(Number(updatedTransaction.nativeAmount) || 0)
+      : (updatedTransaction.currency || baseCurrency) === baseCurrency
+        ? Math.abs(Number(updatedTransaction.amount) || 0)
+        : this.convertBetweenCurrencies(Math.abs(Number(updatedTransaction.amount) || 0), updatedTransaction.currency, baseCurrency);
+    if (!(Number.isFinite(amountInBase) && amountInBase > 0)) return { ok: false, message: 'Set a valid amount and exchange rate for this card payment.' };
+    const plans = (this.data.installments || []).filter(plan => (this.instCard(plan) || {}).id === transaction.cardBillPaymentId && this.instOutstanding(plan, transaction.id) > 0.009);
+    const totalOutstanding = plans.reduce((sum, plan) => sum + this.instOutstanding(plan, transaction.id), 0);
+    if (amountInBase > totalOutstanding + 0.009) return { ok: false, message: 'That amount is higher than the tracked card balance.' };
+    const allocations = this.cardBillInstallmentAllocations(plans, amountInBase, transaction.id);
+    if (!allocations) return { ok: false, message: 'The edited amount could not be allocated across the active purchases.' };
+    updatedTransaction.installmentAllocations = allocations;
+    return { ok: true };
+  },
+
+  openMobileCardBill() {
+    const activeCards = (this.data.creditCards || []).filter(card =>
+      (this.data.installments || []).some(plan => (this.instCard(plan) || {}).id === card.id && this.instOutstanding(plan) > 0.009));
+    if (!activeCards.length) { this.showToast('No card payment is due.'); return; }
+    if (activeCards.length === 1) { this.openPayCardBill(activeCards[0].id); return; }
+    document.getElementById('mobile-card-bill-picker')?.remove();
+    const modal = document.createElement('div');
+    modal.id = 'mobile-card-bill-picker';
+    modal.className = 'modal hidden';
+    modal.innerHTML = '<div class="modal-backdrop"></div><div class="modal-content" style="max-width:420px;"><div class="modal-header"><span class="modal-title">PAY BILL</span><button type="button" class="modal-close" aria-label="Close">&times;</button></div><div class="mobile-card-bill-options"></div></div>';
+    const close = () => this.closeModal('mobile-card-bill-picker');
+    modal.querySelector('.modal-backdrop').addEventListener('click', close);
+    modal.querySelector('.modal-close').addEventListener('click', close);
+    const options = modal.querySelector('.mobile-card-bill-options');
+    activeCards.forEach(card => {
+      const outstanding = (this.data.installments || []).filter(plan => (this.instCard(plan) || {}).id === card.id).reduce((sum, plan) => sum + this.instOutstanding(plan), 0);
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'btn btn-secondary mobile-card-bill-option';
+      button.innerHTML = '<span>' + this.escapeHtml(card.name) + '</span><strong>' + this.escapeHtml(this.fmtBase(outstanding)) + '</strong>';
+      button.addEventListener('click', () => { close(); this.openPayCardBill(card.id); });
+      options.appendChild(button);
+    });
+    document.body.appendChild(modal);
+    this.openModal(modal.id);
+  },
+
+  openPayCardBill(cardId) {
+    const card = this.cardById(cardId);
+    if (!card) return;
+    const accounts = this.visibleAccounts();
+    if (!accounts.length) { this.showToast('Set a funding account before paying a credit card bill.'); return; }
+    const defaultId = this.fundingAccountId();
+    const accountOptions = accounts.map(account => '<option value="' + this.escapeHtml(account.id) + '"' + (account.id === defaultId ? ' selected' : '') + '>' + this.escapeHtml(account.name + (account.currency && account.currency !== this.baseCurrency() ? ' (' + account.currency + ')' : '')) + '</option>').join('');
+    const outstanding = (this.data.installments || []).filter(plan => (this.instCard(plan) || {}).id === card.id).reduce((sum, plan) => sum + this.instOutstanding(plan), 0);
+    const existing = document.getElementById('pay-card-bill-modal');
+    if (existing) existing.remove();
+    const wrapper = document.createElement('div');
+    wrapper.id = 'pay-card-bill-modal';
+    wrapper.className = 'modal hidden';
+    wrapper.innerHTML = '<div class="modal-backdrop" onclick="BlackBook.closeModal(\'pay-card-bill-modal\')"></div><div class="modal-content" style="max-width:420px;">' +
+      '<div class="modal-header"><span class="modal-title">Pay Bill · ' + this.escapeHtml(card.name) + '</span><button class="modal-close" onclick="BlackBook.closeModal(\'pay-card-bill-modal\')">&times;</button></div>' +
+      '<div style="padding:14px;"><div style="font-size:13px;color:var(--text-muted);margin-bottom:12px;">Outstanding across active purchases: ' + this.fmtBase(outstanding) + '. Payment is divided evenly across them.</div>' +
+      '<div class="form-group"><label for="pay-card-bill-amount">Amount Paid</label><input type="text" inputmode="decimal" id="pay-card-bill-amount" class="input" placeholder="AMOUNT" autocomplete="off"></div>' +
+      '<div class="form-row-2col"><div class="form-group"><label for="pay-card-bill-date">Date</label><input type="text" inputmode="numeric" id="pay-card-bill-date" class="input" placeholder="DD/MM/YYYY" value="' + this.escapeHtml(this.fmtDateInput(this.today())) + '" autocomplete="off"></div>' +
+      '<div class="form-group"><label for="pay-card-bill-account">Pay From</label><select id="pay-card-bill-account" class="input">' + accountOptions + '</select></div></div>' +
+      '<div style="display:flex;gap:8px;margin-top:14px;justify-content:flex-end;"><button class="btn btn-sm btn-secondary" onclick="BlackBook.closeModal(\'pay-card-bill-modal\')">CANCEL</button><button class="btn btn-sm btn-primary" onclick="BlackBook.submitPayCardBill(\'' + card.id + '\')">PAY BILL</button></div></div></div>';
+    document.body.appendChild(wrapper);
+    this.openModal('pay-card-bill-modal');
+    const accountSelect = document.getElementById('pay-card-bill-account');
+    if (accountSelect) this.syncCustomSelect(accountSelect);
+    const amountInput = document.getElementById('pay-card-bill-amount');
+    if (amountInput) {
+      amountInput.focus();
+      amountInput.addEventListener('keydown', event => { if (event.key === 'Enter') { event.preventDefault(); this.submitPayCardBill(card.id); } });
+    }
+  },
+
+  async submitPayCardBill(cardId) {
+    const amount = this.evalAmount((document.getElementById('pay-card-bill-amount') || {}).value || '');
+    if (!(amount > 0)) { this.showToast('Enter a valid payment amount.'); return; }
+    const rawDate = (document.getElementById('pay-card-bill-date') || {}).value || '';
+    const date = this.parseDateInput(rawDate);
+    if (!date) { this.showToast('Enter a valid date (' + this.dateFormatPattern() + ').'); return; }
+    const accountId = (document.getElementById('pay-card-bill-account') || {}).value || '';
+    const tx = await this.applyCardBillPayment(cardId, amount, date, accountId);
+    if (!tx) return;
+    this.closeModal('pay-card-bill-modal');
+    this.renderPage(this.currentPage === 'cards' ? 'cards' : this.currentPage);
   },
 
   installmentProgressMarkers(plan) {
@@ -120,14 +302,25 @@ Object.assign(window.BlackBook, {
   cardBlockHtml(card) {
     const plans = this.data.installments.filter(i => (this.instCard(i) || {}).id === card.id);
     const debt = plans.reduce((s, p) => s + this.instOutstanding(p), 0);
-    let html = '<div class="card-block">' +
+    const activePlans = plans.filter(plan => this.instOutstanding(plan) > 0.009);
+    let html = '<div class="card-block' + this.focusRecordHtml('card', card.id) + '">' +
       '<div class="savings-header">' +
       '<span class="savings-name"><span class="cat-dot" style="background:' + this.cardColor(card) + ';"></span> ' + this.escapeHtml(card.name) + '</span>' +
+      '<span class="savings-actions">' + (activePlans.length ? '<button class="btn btn-sm btn-primary mobile-card-inline-pay" onclick="BlackBook.openPayCardBill(\'' + card.id + '\')" title="Record one payment for this card and split it across active purchases">PAY BILL</button>' : '') + '</span>' +
       '</div>' +
       '<div class="bill-meta-line" style="display:block;margin-bottom:6px;">INT ' + (card.ratePct != null ? card.ratePct : 5) + '% &middot; DUE DAY ' + (card.dueDay || 15) + ' &middot; DEBT ' + this.fmtBase(debt) + '</div>';
     if (!plans.length) html += '<div class="empty-state" style="padding:14px;"><div class="empty-state-text">No purchases yet. Click + NEW to add a transaction.</div></div>';
-    else html += plans.map(p => this.planBlockHtml(p)).join('');
+    else html += this.cardBillPaymentHistoryHtml(card) + plans.map(p => this.planBlockHtml(p)).join('');
     return html + '</div>';
+  },
+
+  cardBillPaymentHistoryHtml(card) {
+    const payments = (this.data.transactions || []).filter(tx => tx && tx.cardBillPayment && tx.cardBillPaymentId === card.id)
+      .sort((a, b) => String(b.date || '').localeCompare(String(a.date || '')) || String(b.id).localeCompare(String(a.id)));
+    if (!payments.length) return '';
+    const rows = payments.map(tx => '<div class="linked-payment-row"><span class="linked-payment-date">' + this.escapeHtml(this.fmtDateInput(tx.date) || '—') + '</span><span class="linked-payment-amount">' + this.fmtAmount(Math.abs(tx.amount || 0), tx.currency || this.baseCurrency()) + '</span><span class="linked-payment-actions">' +
+      this.linkedTransactionButton(tx.id) + '<button type="button" class="btn btn-sm btn-danger btn-icon" title="Delete this card payment" aria-label="Delete this card payment" onclick="BlackBook.deleteTransaction(\'' + this.escapeHtml(tx.id) + '\')">' + this.xIcon() + '</button></span></div>').join('');
+    return '<details class="item-details card-payment-history"><summary>CARD PAYMENT HISTORY · ' + payments.length + '</summary><div class="linked-payment-history">' + rows + '</div></details>';
   },
 
 planBlockHtml(inst) {
@@ -142,15 +335,14 @@ planBlockHtml(inst) {
     const pct = grandTotal > 0 ? Math.min(Math.round((grandTotal - outstanding) / grandTotal * 100), 100) : 0;
     const advance = inst.advance || 0;
     const tx = this.instPurchaseTx(inst);
-    let html = '<div class="plan-card' + this.focusRecordHtml('card', inst.id) + '"' + (closed ? ' style="opacity:0.55;"' : '') + '>';
+    let html = '<div class="plan-card' + this.focusRecordHtml('card', inst.id) + '" data-mobile-plan-id="' + this.escapeHtml(inst.id) + '" data-mobile-tx-id="' + this.escapeHtml(tx ? tx.id : '') + '"' + (closed ? ' style="opacity:0.55;"' : '') + '>';
     html += '<div class="savings-header">' +
       '<span class="savings-name">' + this.escapeHtml(inst.name) + this.healthMarker('installments', inst.id) + '</span>' +
       '<span class="savings-actions">' +
       (tx ? '<button class="btn btn-sm btn-secondary" onclick="BlackBook.openCardPlanTxs(\x27' + inst.id + '\x27)" title="View this plan\u2019s transactions">LINK</button>' : '') +
       '<span class="inst-count-badge"' + (closed ? ' style="border-color:' + color + ';color:var(--on-fill);background:' + color + ';"' : '') + '>' + paidCount + '/' + inst.months + ' PAID</span>' +
-      (closed ? '' : '<button class="btn btn-sm btn-primary" onclick="BlackBook.openPayInstallment(\x27' + inst.id + '\x27)" title="Pay toward this plan">PAY</button>') +
-      (tx ? '<button class="btn btn-sm btn-secondary" onclick="BlackBook.openEditCardTx(\x27' + tx.id + '\x27)" title="Edit this purchase">EDIT</button>' : '') +
-      '<button class="btn btn-sm btn-danger btn-icon" title="Delete installment plan" onclick="BlackBook.deleteInstallment(\x27' + inst.id + '\x27)">' + this.xIcon() + '</button></span></div>';
+      (tx ? '<button class="btn btn-sm btn-secondary mobile-card-edit" onclick="BlackBook.openEditCardTx(\x27' + tx.id + '\x27)" title="Edit this purchase">EDIT</button>' : '') +
+      '<button class="btn btn-sm btn-danger btn-icon mobile-card-delete" title="Delete installment plan" onclick="BlackBook.deleteInstallment(\x27' + inst.id + '\x27)">' + this.xIcon() + '</button></span></div>';
     html += '<div class="savings-progress-text"><span>' + (closed ? '&#10003; FULLY PAID OFF' :
       'LEFT ' + this.fmtBase(this.instOutstanding(inst)) + ' of ' + this.fmtBase(this.instGrandTotal(inst))) + '</span><span>' + pct + '%</span></div>' +
       '<div class="savings-progress-bar inst-progress-bar"><div class="savings-progress-fill" style="width:' + pct + '%;background:' + color + ';"></div>' + this.installmentProgressMarkers(inst) + '</div>';
@@ -175,9 +367,7 @@ planBlockHtml(inst) {
         '<span class="inst-month">' + this.monthLabel(mk) + '</span>' +
         '<span class="inst-amt">' + (slotPartial ? this.fmtBase(slotPaid) + ' of ' : '') + this.fmtBase(due) + (s === 1 ? ' <span class="tip-dim">(incl INT)</span>' : '') + '</span>' +
         '<span class="inst-paid-date">' + (slotPaid > 0 ? (paymentTx ? this.fmtDateInput(paymentTx.date) : (entry && entry.via === 'advance' ? 'ADVANCE' : 'PAID')) : '') + '</span>' +
-        '<span class="inst-status">' + (slotComplete
-          ? '<button class="btn btn-sm btn-toggle-paid" onclick="BlackBook.payInstallmentSlot(\x27' + inst.id + '\x27,' + s + ')" title="Click to undo this payment">PAID</button>'
-          : '<button class="btn btn-sm btn-secondary" onclick="BlackBook.openPayInstallment(\x27' + inst.id + '\x27,' + s + ')" title="Add payment toward this installment">' + (slotPartial ? 'ADD' : 'PAY') + '</button>') + '</span>' +
+        '<span class="inst-status ' + (slotComplete ? 'amount-positive' : slotPartial ? 'amount-negative' : 'tip-dim') + '">' + (slotComplete ? 'PAID' : slotPartial ? 'PARTIAL' : 'DUE') + '</span>' +
         '<span class="inst-tx-link">' + paymentTxs.map(item => this.linkedTransactionButton(item.id)).join('') + '</span>' +
         '</div>';
     }
@@ -319,6 +509,11 @@ planBlockHtml(inst) {
     if (!inst) return;
     if (!(await this.confirmModal({ title: 'Delete Plan', message: 'Delete purchase plan "' + inst.name + '"? Paid payments stay as transactions.' , confirmText: 'Delete' }))) return;
     const pid = 'inst-' + inst.id + '-';
+    for (const transaction of (this.data.transactions || [])) {
+      if (transaction && transaction.cardBillPayment && Array.isArray(transaction.installmentAllocations)) {
+        transaction.installmentAllocations = transaction.installmentAllocations.filter(allocation => allocation.installmentId !== instId);
+      }
+    }
     this.data.installments = this.data.installments.filter(i => i.id !== instId);
     this.data.transactions = this.data.transactions.filter(t => !t.pairId || t.pairId.indexOf(pid) !== 0);
     await this.save({ undoable: true, label: 'Delete purchase plan' });

@@ -1,3 +1,5 @@
+const validBrowserProfile = value => value && Array.isArray(value.accounts) && Array.isArray(value.transactions) && Array.isArray(value.categories);
+
 window.BlackBook = {
   data: null,
   profile: localStorage.getItem('mb_profile') || '',
@@ -24,36 +26,92 @@ window.BlackBook = {
   _undoReady: false,
   _undoBusy: false,
   _saveQueue: Promise.resolve(),
+  _appLoading: true,
+  _browserFolderMode: false,
+  _localProfileRecord: null,
+  _localProfileBase: null,
 
   async init() {
+    this._appLoading = true;
+    this.setSaveState('loading');
     this.enhancePasswordFields();
-    let response;
-    try {
-      const profilesResponse = await fetch('/api/profiles');
-      const profilesInfo = await profilesResponse.json();
-      if (!profilesResponse.ok) throw new Error(profilesInfo.error || 'Could not list profiles.');
-      const profiles = profilesInfo.profiles || [];
-      if (this.profile && !profiles.some(p => p.name === this.profile)) {
-        this.profile = '';
-        localStorage.removeItem('mb_profile');
+    let response = { status: 200 };
+    this._browserFolderMode = localStorage.getItem('bb_profile_storage') === 'folder';
+    this._browserFileMode = localStorage.getItem('bb_profile_storage') === 'file';
+    if (this._browserFileMode) {
+      if (!this._browserFileInitialData) { await this.showBrowserFolderStart(); return; }
+      this.data = this._browserFileInitialData;
+      this._browserFileInitialData = null;
+      this.profile = this.data.settings && this.data.settings.profileName || this._browserFileName || 'Profile';
+      this._transactionLoad = null;
+      this._firstRun = false;
+    } else if (this._browserFolderMode) {
+      try {
+        const record = await BrowserProfileStore.get(localStorage.getItem('bb_folder_profile') || '');
+        if (!record) { await this.showBrowserFolderStart('Reconnect or choose the folder that contains this profile.'); return; }
+        const loaded = await BrowserProfileStore.load(record);
+        if (loaded.permissionRequired) { this.showBrowserFolderReconnect(record); return; }
+        if (!validBrowserProfile(loaded.data)) throw new Error('The selected folder does not contain a valid Black Book profile.');
+        this._localProfileRecord = record;
+        this._localProfileWriterId = BrowserProfileStore.writerId(record.id);
+        this._localProfileBase = structuredClone(loaded.data);
+        this._localProfileFileStamp = loaded.stamp;
+        this.profile = record.name;
+        localStorage.setItem('mb_profile', record.name);
+        this._transactionLoad = null;
+        this._firstRun = false;
+        this.data = loaded.data;
+      } catch (error) {
+        await this.showBrowserFolderStart(error.message || 'Could not open the profile folder.');
+        return;
       }
-      this._firstRun = !profiles.length;
-      response = await fetch('/api/load' + (this.profile ? '?profile=' + encodeURIComponent(this.profile) : ''));
-      if (response.status !== 401) {
-        const loaded = await response.json();
-        if (!response.ok || !Array.isArray(loaded.accounts) || !Array.isArray(loaded.transactions) || !Array.isArray(loaded.categories)) {
-          throw new Error(loaded.error || 'The server returned an invalid profile.');
+    } else {
+      try {
+        const profilesResponse = await fetch('/api/profiles');
+        const profilesInfo = await profilesResponse.json();
+        if (!profilesResponse.ok) throw new Error(profilesInfo.error || 'Could not list profiles.');
+        const profiles = profilesInfo.profiles || [];
+        if (this.profile && !profiles.some(p => p.name === this.profile)) {
+          this.profile = '';
+          localStorage.removeItem('mb_profile');
         }
-        this.data = loaded;
+        this._firstRun = !profiles.length;
+        response = await fetch('/api/load?initialTransactions=1000' + (this.profile ? '&profile=' + encodeURIComponent(this.profile) : ''));
+        if (response.status !== 401) {
+          const loaded = await response.json();
+          if (!response.ok || !validBrowserProfile(loaded)) throw new Error(loaded.error || 'The server returned an invalid profile.');
+          this._transactionLoad = loaded._transactionLoad || null;
+          this._partialLoadSaveOccurred = false;
+          if (this._transactionLoad) {
+            const load = this._transactionLoad;
+            load.sourceIndex = Symbol('transactionLoadSourceIndex');
+            (load.firstIndexes || []).forEach((index, transactionIndex) => {
+              const transaction = loaded.transactions[transactionIndex];
+              if (Number.isSafeInteger(index) && transaction && typeof transaction === 'object') {
+                Object.defineProperty(transaction, load.sourceIndex, { value: index, configurable: true });
+              }
+            });
+          }
+          delete loaded._transactionLoad;
+          this.data = loaded;
+        }
+      } catch (error) {
+        if (window.BrowserProfileStore) {
+          await this.showBrowserFolderStart('Open a profile from your device, or create a new profile.');
+          return;
+        }
+        this._appLoading = false;
+        this.setSaveState('saved');
+        this.applyTheme();
+        document.getElementById('page-overview').innerHTML =
+          '<div class="empty-state"><div class="empty-state-title">LOADING FAILED</div><div class="empty-state-text">' + this.escapeHtml(error.message || 'Could not load data from the Black Book server.') + ' Your existing files have not been changed. Check the profile folder permissions, then retry.</div>' +
+          '<div style="margin-top:14px;"><button class="btn btn-primary" onclick="location.reload()">RETRY</button></div></div>';
+        return;
       }
-    } catch (e) {
-      this.applyTheme();
-      document.getElementById('page-overview').innerHTML =
-        '<div class="empty-state"><div class="empty-state-title">LOADING FAILED</div><div class="empty-state-text">' + this.escapeHtml(e.message || 'Could not load data from the Black Book server.') + ' Your existing files have not been changed. Check the profile folder permissions, then retry.</div>' +
-        '<div style="margin-top:14px;"><button class="btn btn-primary" onclick="location.reload()">RETRY</button></div></div>';
-      return;
     }
-    if (response.status === 401) {
+    if (!this._browserFolderMode && response.status === 401) {
+      this._appLoading = false;
+      this.setSaveState('saved');
       this.showUnlockOverlay(this.profile);
       return;
     }
@@ -71,17 +129,19 @@ window.BlackBook = {
     if (!this.data.recurringRules) this.data.recurringRules = [];
     if (!this.data.settings) this.data.settings = {};
     if (this.migrateCreditCards()) await this.save();
-    if (this.migrateTransfers()) await this.save();
+    if (!this._transactionLoad && this.migrateTransfers()) await this.save();
     if (this.normalizeLegacyCurrencySettings()) await this.save();
     if (!(this.data.categories || []).some(c => c && c.name && String(c.name).toLowerCase() === 'invoice')) {
       this.invoiceCategory();
       await this.save();
     }
     let signFixed = false;
-    for (const t of (this.data.transactions || [])) {
-      if (!t || typeof t.amount !== 'number') continue;
-      if (t.type === 'expense' && t.amount > 0) { t.amount = -t.amount; signFixed = true; }
-      else if (t.type === 'income' && t.amount < 0) { t.amount = -t.amount; signFixed = true; }
+    if (!this._transactionLoad) {
+      for (const t of (this.data.transactions || [])) {
+        if (!t || typeof t.amount !== 'number') continue;
+        if (t.type === 'expense' && t.amount > 0) { t.amount = -t.amount; signFixed = true; }
+        else if (t.type === 'income' && t.amount < 0) { t.amount = -t.amount; signFixed = true; }
+      }
     }
     if (signFixed) await this.save();
     if (!this.data.billPayments) this.data.billPayments = [];
@@ -100,8 +160,7 @@ window.BlackBook = {
       }).catch(() => {});
     }
 
-this.connectWebSocket();
-    this.bindWsRecovery();
+if (!this._browserFolderMode && !this._browserFileMode) { this.connectWebSocket(); this.bindWsRecovery(); }
     if (window.UpdateUi) { UpdateUi.init(); }
     const hp = document.getElementById('header-profile');
     if (hp) { hp.textContent = '\u00b7 ' + (this.profile ? this.profile.toUpperCase() : 'DEFAULT'); }
@@ -122,6 +181,7 @@ this.connectWebSocket();
     this.bindBillModalSubmit();
     this.bindSavingsGoalForm();
     this.bindSavingsEntryForm();
+    this.bindWishlistForm();
     this.bindBudgetForm();
     this.bindTransferForm();
     this.bindSettingsModals();
@@ -130,6 +190,7 @@ this.connectWebSocket();
     document.querySelector('#bill-modal .modal-backdrop').addEventListener('click', () => this.closeModal('bill-modal'));
     document.querySelector('#savings-modal .modal-backdrop').addEventListener('click', () => this.closeModal('savings-modal'));
     document.querySelector('#savings-entry-modal .modal-backdrop').addEventListener('click', () => this.closeModal('savings-entry-modal'));
+    document.querySelector('#wishlist-modal .modal-backdrop').addEventListener('click', () => this.closeModal('wishlist-modal'));
     document.querySelector('#budget-modal .modal-backdrop').addEventListener('click', () => this.closeModal('budget-modal'));
     document.querySelector('#budget-allocation-modal .modal-backdrop').addEventListener('click', () => this.closeBudgetAllocationEditor());
     document.querySelector('#forecast-recurring-modal .modal-backdrop').addEventListener('click', () => this.closeModal('forecast-recurring-modal'));
@@ -223,6 +284,92 @@ this.connectWebSocket();
       this.navigateTo('settings');
       this.createProfile();
     }
+    if (this._transactionLoad) this.loadRemainingTransactions(this._transactionLoad.id);
+    else {
+      this._appLoading = false;
+      this.setSaveState(this._pendingSaves > 0 ? 'saving' : (this._lastSaveFailure || 0) > (this._lastSaveSuccess || 0) ? 'failed' : 'saved');
+    }
+    if (this._browserFolderMode) this.startBrowserFolderSync();
+  },
+
+  async showBrowserFolderStart(message) {
+    this._appLoading = false;
+    this.setSaveState('saved');
+    this.applyTheme();
+    const el = document.getElementById('page-overview');
+    const profiles = window.BrowserProfileStore ? await BrowserProfileStore.list().catch(() => []) : [];
+    const rows = profiles.map(record => '<div class="settings-row"><span class="settings-row-name">' + this.escapeHtml(record.name.toUpperCase()) + '</span><button class="btn btn-sm btn-primary" data-folder-open-id="' + this.escapeHtml(record.id) + '">OPEN</button></div>').join('');
+    const available = window.BrowserProfileStore && BrowserProfileStore.supported();
+    el.innerHTML = '<div class="empty-state" style="max-width:680px;margin:8vh auto;padding:28px;text-align:left;">' +
+      '<div class="empty-state-title">PROFILE FOLDER</div>' +
+      '<div class="empty-state-text" style="margin:12px 0 22px;">' + this.escapeHtml(message || 'Choose where this browser should open your Black Book profile. Your profile stays in that folder.') + '</div>' +
+      (available ? '<div style="display:flex;gap:8px;flex-wrap:wrap;"><button class="btn btn-primary" id="browser-folder-create">NEW PROFILE IN A FOLDER</button><button class="btn btn-secondary" id="browser-folder-open">OPEN EXISTING PROFILE FOLDER</button></div>' : '<div class="empty-state-text">This browser does not support direct folder access here. Open the profile with the Black Book desktop app or use a supported browser over HTTPS.</div>') +
+      (rows ? '<div style="margin-top:24px;"><div class="settings-section-title" style="margin-bottom:8px;">CONNECTED FOLDERS</div>' + rows + '</div>' : '') +
+      '<div class="form-hint" style="margin-top:22px;">The browser remembers folder access, not a readable path. Keep the whole folder together, including its hidden .blackbook change journals. Profile data stays in your folder; the browser remembers access to it, not a plain path. Choose the same synced folder once on each device.</div></div>';
+    const create = document.getElementById('browser-folder-create');
+    const open = document.getElementById('browser-folder-open');
+    if (create) create.addEventListener('click', () => this.createBrowserFolderProfileFromHome());
+    if (open) open.addEventListener('click', () => this.openBrowserFolderProfileFromHome());
+    el.querySelectorAll('[data-folder-open-id]').forEach((button, index) => button.addEventListener('click', () => this.reconnectBrowserFolderProfile(profiles[index])));
+  },
+
+  showBrowserFolderReconnect(record) {
+    this._appLoading = false;
+    this.setSaveState('saved');
+    this.applyTheme();
+    document.getElementById('page-overview').innerHTML = '<div class="empty-state" style="max-width:640px;margin:10vh auto;padding:28px;text-align:left;"><div class="empty-state-title">RECONNECT PROFILE FOLDER</div><div class="empty-state-text" style="margin:12px 0 20px;">' + this.escapeHtml(record.name) + ' needs permission to read and save in its folder.</div><button class="btn btn-primary" id="browser-folder-reconnect" data-profile-id="' + this.escapeHtml(record.id) + '">RECONNECT FOLDER</button><button class="btn btn-secondary" style="margin-left:8px;" id="browser-folder-choose-another">CHOOSE ANOTHER</button></div>';
+    document.getElementById('browser-folder-reconnect').addEventListener('click', () => this.reconnectBrowserFolderProfile(record));
+    document.getElementById('browser-folder-choose-another').addEventListener('click', () => this.showBrowserFolderStart('Choose another profile folder.'));
+  },
+
+  async switchBrowserFolderProfile(id) {
+    const record = await BrowserProfileStore.get(id);
+    if (!record) return this.showBrowserFolderStart('That browser connection is no longer available.');
+    localStorage.setItem('bb_profile_storage', 'folder');
+    localStorage.setItem('bb_folder_profile', record.id);
+    localStorage.setItem('mb_profile', record.name);
+    location.reload();
+  },
+
+  async reconnectBrowserFolderProfile(value) {
+    const record = typeof value === 'object' ? value : await BrowserProfileStore.get(value);
+    if (!record) return this.showBrowserFolderStart('That browser connection is no longer available.');
+    try {
+      if (await BrowserProfileStore.reconnect(record)) return this.switchBrowserFolderProfile(record.id);
+      this.showBrowserFolderStart('Folder permission was not granted. Choose the folder again to reconnect.');
+    } catch (error) { this.showBrowserFolderStart(error.message); }
+  },
+
+  startBrowserFolderSync() {
+    if (!this._browserFolderMode || !this._localProfileRecord) return;
+    clearInterval(this._localProfileSyncTimer);
+    this._localProfileSyncTimer = setInterval(() => this.syncBrowserFolderProfile(), 6000);
+    document.addEventListener('visibilitychange', () => { if (!document.hidden) this.syncBrowserFolderProfile(); });
+  },
+
+  async syncBrowserFolderProfile() {
+    if (!this._browserFolderMode || this._localProfileSyncBusy || this._pendingSaves || document.hidden) return;
+    if (document.querySelector('.modal:not(.hidden)')) return;
+    this._localProfileSyncBusy = true;
+    try {
+      const stamp = await BrowserProfileStore.fileStamp(this._localProfileRecord);
+      if (stamp === null) return this.showBrowserFolderReconnect(this._localProfileRecord);
+      if (stamp === this._localProfileFileStamp) return;
+      const changedLocally = !!this._localProfileDataDirty;
+      const result = changedLocally
+        ? await BrowserProfileStore.save(this._localProfileRecord, this._localProfileBase, this.stripTransient(this.data), this._localProfileWriterId)
+        : await BrowserProfileStore.load(this._localProfileRecord);
+      if (result.permissionRequired) return this.showBrowserFolderReconnect(this._localProfileRecord);
+      this.data = result.data;
+      this._localProfileBase = structuredClone(result.data);
+      this._localProfileFileStamp = result.stamp;
+      this._localProfileDataDirty = false;
+      this.resetUndoHistory();
+      this.renderPage(this.currentPage);
+      this.setSaveState('saved');
+    } catch (error) {
+      console.warn('Could not refresh the folder profile:', error);
+    } finally { this._localProfileSyncBusy = false; }
   },
 
   bindNav() {
@@ -277,12 +424,18 @@ this.connectWebSocket();
       if (e.key === 'Escape') {
         const confirmEl = document.getElementById('confirm-modal');
         if (confirmEl && !confirmEl.classList.contains('hidden')) { e.preventDefault(); this._resolveConfirm(false); return; }
+        const reportsWheel = document.querySelector('.mobile-reports-wheel');
+        if (reportsWheel) { e.preventDefault(); reportsWheel.remove(); return; }
         const palette = document.getElementById('command-overlay');
         if (!palette.classList.contains('hidden')) {
           this.closeCommandPalette();
           return;
         }
         document.querySelectorAll('.modal:not(.hidden)').forEach(m => this.closeModal(m.id));
+        return;
+      }
+      if (document.querySelector('.mobile-reports-wheel')) {
+        if (!['Tab', 'Enter', ' '].includes(e.key)) e.preventDefault();
         return;
       }
       const tag = document.activeElement.tagName;
@@ -294,6 +447,17 @@ this.connectWebSocket();
         if (e.key === 'n' || e.key === 'N' || e.key === 'Escape') { e.preventDefault(); this._resolveConfirm(false); return; }
         return;
       }
+      const transactionModal = document.getElementById('transaction-modal');
+      const active = document.activeElement;
+      const isTypingField = active && ((['INPUT', 'SELECT', 'TEXTAREA'].includes(active.tagName)) || active.isContentEditable) &&
+        !(active.dataset && active.dataset.numericOnlyBound === 'true');
+      if (transactionModal && !transactionModal.classList.contains('hidden') &&
+          (e.key === 's' || e.key === 'S') && !e.ctrlKey && !e.metaKey && !e.altKey && !e.repeat && !isTypingField) {
+        e.preventDefault();
+        this.toggleTransactionSplit();
+        return;
+      }
+      if (e.target && e.target.closest && e.target.closest('#transaction-modal')) return;
       if ((e.ctrlKey || e.metaKey) && !e.altKey && (e.key === 'z' || e.key === 'Z')) {
         const active = document.activeElement;
         const editable = active && (['INPUT', 'SELECT', 'TEXTAREA'].includes(active.tagName) || active.isContentEditable);
@@ -308,7 +472,12 @@ this.connectWebSocket();
         else this.openCommandPalette();
         return;
       }
-      if (tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA' || modalOpen || paletteOpen) return;
+      if (tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA' || (active && active.isContentEditable) || modalOpen || paletteOpen) return;
+      if (!e.ctrlKey && !e.metaKey && !e.altKey && !e.repeat && (e.key === 'f' || e.key === 'F')) {
+        e.preventDefault();
+        this.openFindReplace();
+        return;
+      }
       if (e.key === 'ArrowLeft') { e.preventDefault(); this.arrowPeriod(-1); return; }
       if (e.key === 'ArrowRight') { e.preventDefault(); this.arrowPeriod(1); return; }
       if (e.key === 'a' || e.key === 'A') { e.preventDefault(); this.openNewTransaction(); }
@@ -346,7 +515,7 @@ this.connectWebSocket();
         if (this.currentPage === 'overview') { this.toggleOverviewGraph(); return; }
         if (this.currentPage === 'bills') { this.toggleBillsGraph(); return; }
         if (this.currentPage === 'budget') { this.toggleBudgetGraph(); return; }
-        if (this.currentPage === 'forecast') { this.toggleForecastGraph(); return; }
+        if (this.currentPage === 'reports' && this.reportsState && this.reportsState().view === 'forecast') { this.toggleForecastGraph(); return; }
       }
       if (e.key === 'Tab' && this.currentPage === 'overview') { e.preventDefault(); this.cycleAccount(); return; }
       if (e.key === 'Tab' && this.currentPage === 'reports' && this.reportsState) { e.preventDefault(); this.cycleReportsView(e.shiftKey ? -1 : 1); return; }
@@ -395,6 +564,11 @@ this.connectWebSocket();
   },
 
   accountColor(acc) { if (acc && acc.color) return acc.color; return this.colorForName(acc && (acc.name || acc.shortName)); },
+  categoryLabel(category) {
+    const name = typeof category === 'string' ? category : category && category.name;
+    const label = String(name || '');
+    return label.trim().toLocaleLowerCase() === 'uncategorized' ? 'None' : label;
+  },
   categoryColor(cat) { if (cat && cat.color) return cat.color; return this.colorForName(cat && (cat.name || '?')); },
   cardColor(card) { if (card && card.color) return card.color; return this.colorForName(card && (card.name || card.shortName)); },
 
@@ -412,7 +586,7 @@ this.connectWebSocket();
     return '#' + [r, g, b].map(x => Math.round(x * 255).toString(16).padStart(2, '0')).join('');
   },
 
-  pageList() { return ['overview', 'bills', 'budget', 'cards', 'savings', 'debts', 'invoices', 'forecast', 'reports', 'settings']; },
+  pageList() { return ['overview', 'bills', 'budget', 'cards', 'savings', 'debts', 'invoices', 'reports', 'settings']; },
 
   isPageEnabled(page) {
     if (page === 'settings' || page === 'overview') return true;
@@ -452,6 +626,11 @@ this.connectWebSocket();
   },
 
   navigateTo(page) {
+    if (page === 'forecast') {
+      if (this.reportsState) this.reportsState().view = 'forecast';
+      page = 'reports';
+    }
+    if (page === 'wishlist') { this._savingsView = 'wishlist'; page = 'savings'; }
     const known = this.pageList();    if (!known.includes(page) || !this.isPageEnabled(page)) page = this.firstEnabledPage();
     if (this.overviewPieChart) { this.overviewPieChart.destroy(); this.overviewPieChart = null; }
     if (this.overviewLineChart) { this.overviewLineChart.destroy(); this.overviewLineChart = null; }
@@ -483,15 +662,14 @@ this.connectWebSocket();
       e.stopPropagation();
       this.toggleSidebar();
     });
+    document.body.classList.remove('mobile-nav-open');
     try {
-      if (localStorage.getItem('bb-sidebar-collapsed') === '1') {
-        document.body.classList.add('sb-collapsed');
-      }
+      document.body.classList.toggle('sb-collapsed', localStorage.getItem('bb-sidebar-collapsed') === '1');
     } catch (err) {}
   },
 
   toggleSidebar() {
-    if (window.matchMedia && window.matchMedia('(max-width: 980px)').matches) {
+    if (window.matchMedia && window.matchMedia('(max-width: 500px)').matches) {
       document.body.classList.toggle('mobile-nav-open');
       return;
     }
@@ -520,7 +698,6 @@ this.connectWebSocket();
       if (this.refreshDataHealth) this.refreshDataHealth();
       this.hideDonutTooltip();
       if (page === 'overview') this.renderOverview();
-      else if (page === 'forecast') this.renderForecast();
       else if (page === 'budget') this.renderBudget();
       else if (page === 'bills') this.renderBills();
       else if (page === 'cards') this.renderCards();
@@ -542,17 +719,64 @@ this.connectWebSocket();
     }
   },
 
+  bindVerticalReorder(container, rowSelector, onReorder, options = {}) {
+    if (!container || container._verticalReorderBound) return;
+    container._verticalReorderBound = true;
+    let drag = null;
+    const rows = () => Array.from(container.querySelectorAll(rowSelector)).filter(row => row.dataset.reorderKey);
+    const clearDropIndicators = () => rows().forEach(row => row.classList.remove('reorder-drop-before', 'reorder-drop-after'));
+    const finish = (event) => {
+      if (!drag || (event && event.pointerId !== drag.pointerId)) return;
+      const current = drag;
+      drag = null;
+      current.row.classList.remove('reorder-dragging');
+      if (current.handle) current.handle.classList.remove('reorder-handle-active');
+      clearDropIndicators();
+      if (!current.moved) return;
+      const keys = rows().map(row => row.dataset.reorderKey);
+      if (keys.join('\u0000') !== current.initialOrder.join('\u0000')) onReorder(keys);
+    };
+    container.addEventListener('pointerdown', event => {
+      const handle = event.target.closest('.reorder-grip');
+      const row = options.dragAnywhere ? event.target.closest(rowSelector) : (handle && handle.closest(rowSelector));
+      if ((!options.dragAnywhere && !handle) || !row || !container.contains(row) || !row.dataset.reorderKey || (event.button != null && event.button !== 0)) return;
+      if (options.dragAnywhere && event.target.closest('button, a, input, select, textarea, [role="button"]')) return;
+      const siblings = rows();
+      if (siblings.length < 2) return;
+      drag = { row, handle, pointerId: event.pointerId, startY: event.clientY, moved: false, initialOrder: siblings.map(item => item.dataset.reorderKey) };
+      row.classList.add('reorder-dragging');
+      if (handle) handle.classList.add('reorder-handle-active');
+      try { row.setPointerCapture(event.pointerId); } catch (err) {}
+      event.preventDefault();
+    }, true);
+    container.addEventListener('pointermove', event => {
+      if (!drag || event.pointerId !== drag.pointerId) return;
+      if (!drag.moved && Math.abs(event.clientY - drag.startY) < 4) return;
+      drag.moved = true;
+      clearDropIndicators();
+      const targets = rows().filter(row => row !== drag.row);
+      const before = targets.find(row => event.clientY < row.getBoundingClientRect().top + row.getBoundingClientRect().height / 2);
+      if (before) container.insertBefore(drag.row, before);
+      else container.appendChild(drag.row);
+      (before || drag.row).classList.add(before ? 'reorder-drop-before' : 'reorder-drop-after');
+      event.preventDefault();
+    }, true);
+    container.addEventListener('pointerup', finish, true);
+    container.addEventListener('pointercancel', finish, true);
+  },
+
   updateGraphFooter() {
     const button = document.getElementById('footer-graph-toggle');
     if (!button) return;
-    const graphPage = this.currentPage === 'overview' || this.currentPage === 'bills' || this.currentPage === 'budget' || this.currentPage === 'forecast';
+    const forecastGraphPage = this.currentPage === 'reports' && this.reportsState && this.reportsState().view === 'forecast';
+    const graphPage = this.currentPage === 'overview' || this.currentPage === 'bills' || this.currentPage === 'budget' || forecastGraphPage;
     button.classList.toggle('hidden', !graphPage);
     if (!graphPage) return;
     const hidden = this.currentPage === 'overview'
       ? !!this.data.settings.hideOverviewGraph
       : this.currentPage === 'bills'
         ? !!this.data.settings.hideBillsGraph
-        : this.currentPage === 'budget'
+          : this.currentPage === 'budget'
           ? !!this.data.settings.hideBudgetGraph
           : !!this.data.settings.hideForecastGraph;
     button.textContent = hidden ? 'SHOW GRAPH' : 'HIDE GRAPH';
@@ -560,7 +784,7 @@ this.connectWebSocket();
       ? this.toggleOverviewGraph()
       : this.currentPage === 'bills'
         ? this.toggleBillsGraph()
-        : this.currentPage === 'budget'
+          : this.currentPage === 'budget'
           ? this.toggleBudgetGraph()
           : this.toggleForecastGraph();
   },
@@ -640,15 +864,19 @@ this.connectWebSocket();
   setSaveState(state) {
     const ind = document.getElementById('save-indicator');
     if (!ind) return;
+    if (this._transactionLoadError && state === 'saved') state = 'load-failed';
+    else if (!this._transactionLoadError && (this._appLoading || this._transactionLoad) && state !== 'failed' && state !== 'load-failed') state = 'loading';
+    ind.classList.toggle('loading', state === 'loading');
+    ind.classList.toggle('load-failed', state === 'load-failed');
     ind.classList.toggle('saving', state === 'saving');
     ind.classList.toggle('failed', state === 'failed');
     const label = ind.querySelector('.save-label');
     const dot = ind.querySelector('.save-dot');
-    if (label) label.textContent = state === 'saving' ? 'SAVING\u2026' : state === 'failed' ? 'UNSAVED' : 'SAVED';
-    ind.title = state === 'failed' ? 'Changes have not been saved. Click to retry.' : 'Save status';
-    ind.onclick = state === 'failed' ? () => this.save(this._saveRetryOptions || {}) : null;
-    ind.tabIndex = state === 'failed' ? 0 : -1;
-    ind.onkeydown = state === 'failed' ? event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); this.save(this._saveRetryOptions || {}); } } : null;
+    if (label) label.textContent = state === 'loading' ? 'LOADING\u2026' : state === 'load-failed' ? 'LOAD ERROR' : state === 'saving' ? 'SAVING\u2026' : state === 'failed' ? 'UNSAVED' : 'SAVED';
+    ind.title = state === 'loading' ? 'Loading profile' : state === 'load-failed' ? 'Older transactions could not be loaded. Click to retry.' : state === 'failed' ? 'Changes have not been saved. Click to retry.' : 'Save status';
+    ind.onclick = state === 'failed' ? () => this.save(this._saveRetryOptions || {}) : state === 'load-failed' ? () => this.loadRemainingTransactions(this._transactionLoad?.id) : null;
+    ind.tabIndex = state === 'failed' || state === 'load-failed' ? 0 : -1;
+    ind.onkeydown = state === 'failed' || state === 'load-failed' ? event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); if (state === 'failed') this.save(this._saveRetryOptions || {}); else this.loadRemainingTransactions(this._transactionLoad?.id); } } : null;
   },
 
   resetUndoHistory() {
@@ -669,6 +897,7 @@ this.connectWebSocket();
       add('A', 'NEW TRANSACTION');
       add('T', 'TRANSFER');
       add('D', 'TODAY');
+      add('F', 'FIND / REPLACE');
     }
     if (!editing && this.currentPage === 'overview') {
       const selected = this._bulkSel ? this._bulkSel.size : 0;
@@ -679,10 +908,16 @@ this.connectWebSocket();
       if (selected) add('B', 'FILTER SELECTED');
       if (selected || hovered) add('DEL', selected ? 'DELETE SELECTED' : 'DELETE');
     }
-    if (!editing && ['overview', 'bills', 'budget', 'forecast'].includes(this.currentPage)) add('H', 'GRAPH');
+    if (!editing && (['overview', 'bills', 'budget'].includes(this.currentPage) || (this.currentPage === 'reports' && this.reportsState && this.reportsState().view === 'forecast'))) add('H', 'GRAPH');
     if (!editing && this.currentPage === 'overview') add('TAB', 'ACCOUNT');
     if (!editing && this.currentPage === 'reports') add('TAB', 'REPORT');
-    if (!editing) add('← →', this.currentPage === 'reports' && this.reportsState && ['categories', 'people'].includes(this.reportsState().view) ? 'YEAR' : 'MONTH');
+    const reportState = this.currentPage === 'reports' && this.reportsState ? this.reportsState() : null;
+    if (!editing && (!reportState || !['items', 'forecast'].includes(reportState.view))) {
+      const yearly = reportState && (['categories', 'people', 'compare'].includes(reportState.view) ||
+        reportState.view === 'moneyflow' && reportState.flowPeriod === 'year' ||
+        reportState.view === 'calendar' && reportState.calendarMode === 'year');
+      add('← →', reportState ? (yearly ? 'YEAR' : 'MONTH') : 'MONTH');
+    }
     const pageCount = this.pageList().filter(page => this.isPageEnabled(page)).length;
     if (!editing && pageCount > 1) add('0–9', 'PAGES');
     if (!editing) add('Space', 'COMMAND');
@@ -733,15 +968,36 @@ this.connectWebSocket();
     this._saveSequence = sequence;
     this._pendingSaves = (this._pendingSaves || 0) + 1;
     this.setSaveState('saving');
-    const payload = JSON.parse(JSON.stringify(this.stripTransient(this.data)));
+    const payload = this.stripTransient(this.data);
+    if (this._browserFolderMode) this._localProfileDataDirty = true;
+    if (this._browserFileMode) this._browserFileDirty = true;
     const profile = this.profile;
+    const loadSessionId = this._transactionLoad?.id || '';
+    if (loadSessionId) this._partialLoadSaveOccurred = true;
+    const loadedTransactionCount = Number(this._transactionLoad?.nextOffset) || (this.data.transactions || []).length;
+    const body = profile || loadSessionId ? { profile, data: payload, ...(loadSessionId ? { loadSessionId, loadedTransactionCount } : {}) } : payload;
+    const serializedBody = this._browserFolderMode || this._browserFileMode ? '' : JSON.stringify(body);
+    const after = this._undoHistory && this._undoHistory.snapshot(payload);
     const perform = async () => {
-      const before = this._undoBaseline || (this._undoHistory && this._undoHistory.snapshot(payload));
-      const after = this._undoHistory && this._undoHistory.snapshot(payload);
+      const hasUndoSteps = this._undoHistory && (this._undoHistory.undoStack.length || this._undoHistory.redoStack.length);
+      const shouldCompareHistory = this._undoReady && !options.historyReplay && (options.undoable || hasUndoSteps);
+      const before = shouldCompareHistory ? this._undoBaseline : null;
       const delta = before && after && this._undoHistory ? this._undoHistory.diff(before, after) : null;
       try {
-        const response = await fetch('/api/save', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(profile ? { profile, data: payload } : payload) });
-        if (!response.ok) throw new Error((await response.json().catch(() => ({}))).error || 'Save failed');
+        if (this._browserFileMode) {
+          // File mode keeps edits in memory until the user exports the profile.
+        } else if (this._browserFolderMode) {
+          const result = await BrowserProfileStore.save(this._localProfileRecord, this._localProfileBase, payload, this._localProfileWriterId);
+          if (this.profile === profile) {
+            this.data = result.data;
+            this._localProfileBase = structuredClone(result.data);
+            this._localProfileFileStamp = result.stamp;
+            this._localProfileDataDirty = false;
+          }
+        } else {
+          const response = await fetch('/api/save', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: serializedBody });
+          if (!response.ok) throw new Error((await response.json().catch(() => ({}))).error || 'Save failed');
+        }
         this._lastSaveSuccess = Math.max(this._lastSaveSuccess || 0, sequence);
         if (this._saveRetryProfile === profile && sequence >= (this._lastSaveFailure || 0)) {
           this._saveRetryProfile = null;
@@ -752,7 +1008,7 @@ this.connectWebSocket();
             if (options.undoable) this._undoHistory.push({ label: options.label || 'Financial change', delta });
             else this._undoHistory.clear();
           }
-          this._undoBaseline = after;
+          this._undoBaseline = this._browserFolderMode ? this._undoHistory.snapshot(this.stripTransient(this.data)) : after;
           this.updateFooterHotkeys();
         }
         return true;
@@ -773,6 +1029,103 @@ this.connectWebSocket();
     const queued = (this._saveQueue || Promise.resolve()).catch(() => false).then(perform);
     this._saveQueue = queued;
     return queued;
+  },
+
+  async loadRemainingTransactions(loadSessionId) {
+    if (!loadSessionId || !this.data || this._loadTransactionsBusy) return;
+    this._loadTransactionsBusy = true;
+    this._appLoading = true;
+    this._transactionLoadError = false;
+    this.setSaveState('loading');
+    const profile = this.profile || '';
+    try {
+      let offset = Number(this._transactionLoad?.nextOffset) || (this.data.transactions || []).length;
+      while (this._transactionLoad?.id === loadSessionId && offset < this._transactionLoad.total) {
+        const query = new URLSearchParams({ loadSessionId, offset: String(offset), limit: String(this._transactionLoad.chunkSize || 10_000) });
+        if (profile) query.set('profile', profile);
+        const response = await fetch('/api/load-chunk?' + query.toString());
+        const result = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(result.error || 'Could not load older transactions.');
+        if (!Array.isArray(result.transactions)) throw new Error('The server returned an invalid transaction batch.');
+        if (!Array.isArray(result.indexes) || result.indexes.length !== result.transactions.length) {
+          throw new Error('The server returned an invalid transaction batch.');
+        }
+        for (let index = 0; index < result.transactions.length; index++) {
+          const tx = result.transactions[index];
+          const sourceIndex = result.indexes[index];
+          if (!Number.isSafeInteger(sourceIndex) || sourceIndex < 0 || sourceIndex >= this._transactionLoad.total) {
+            throw new Error('The server returned an invalid transaction position.');
+          }
+          if (tx && typeof tx === 'object') {
+            Object.defineProperty(tx, this._transactionLoad.sourceIndex, { value: sourceIndex, configurable: true });
+          }
+          this.data.transactions.push(tx);
+        }
+        const nextOffset = Number(result.nextOffset);
+        if (!Number.isSafeInteger(nextOffset) || nextOffset < offset || (!result.done && nextOffset === offset)) {
+          throw new Error('The server returned an invalid transaction batch position.');
+        }
+        offset = nextOffset;
+        this._transactionLoad.nextOffset = offset;
+        if (result.done) break;
+        await new Promise(resolve => setTimeout(resolve, 0));
+      }
+      if (this._transactionLoad?.id !== loadSessionId) return;
+
+      // Rebuild the saved file order, while retaining edits/deletions made during hydration.
+      const load = this._transactionLoad;
+      const liveTransactions = this.data.transactions || [];
+      const originalOrder = new Array(load.total);
+      const addedDuringLoad = [];
+      for (const transaction of liveTransactions) {
+        const sourceIndex = transaction && typeof transaction === 'object' ? transaction[load.sourceIndex] : undefined;
+        if (Number.isSafeInteger(sourceIndex) && sourceIndex >= 0 && sourceIndex < load.total) {
+          originalOrder[sourceIndex] = transaction;
+          delete transaction[load.sourceIndex];
+        } else {
+          addedDuringLoad.push(transaction);
+        }
+      }
+      const restoredOrder = [];
+      for (let index = 0; index < originalOrder.length; index++) {
+        if (Object.hasOwn(originalOrder, index)) restoredOrder.push(originalOrder[index]);
+      }
+      this.data.transactions = addedDuringLoad.concat(restoredOrder);
+
+      const transfersChanged = this.migrateTransfers();
+      let signFixed = false;
+      for (const tx of (this.data.transactions || [])) {
+        if (!tx || typeof tx.amount !== 'number') continue;
+        if (tx.type === 'expense' && tx.amount > 0) { tx.amount = -tx.amount; signFixed = true; }
+        else if (tx.type === 'income' && tx.amount < 0) { tx.amount = -tx.amount; signFixed = true; }
+      }
+      // From here on every transaction is present, so future saves can safely write the full profile.
+      const needsFullSave = transfersChanged || signFixed || this._partialLoadSaveOccurred;
+      this._transactionLoad = null;
+      if (needsFullSave) {
+        await (this._saveQueue || Promise.resolve()).catch(() => false);
+        await this.save({ historyReplay: true });
+        await (this._saveQueue || Promise.resolve()).catch(() => false);
+      }
+      if (this._undoHistory) this._undoBaseline = this._undoHistory.snapshot(this.stripTransient(this.data));
+      await fetch('/api/load-complete', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ profile, loadSessionId })
+      }).catch(() => {});
+      this._partialLoadSaveOccurred = false;
+      this._appLoading = false;
+      this._transactionLoadError = false;
+      this.setSaveState(this._pendingSaves > 0 ? 'saving' : (this._lastSaveFailure || 0) > (this._lastSaveSuccess || 0) ? 'failed' : 'saved');
+      this.renderPage(this.currentPage);
+    } catch (error) {
+      this._appLoading = false;
+      this._transactionLoadError = true;
+      console.error('Older transactions could not be loaded:', error);
+      this.setSaveState('load-failed');
+      this.showToast('Older transactions could not be loaded. Click LOAD ERROR in the top-right to retry.');
+    } finally {
+      this._loadTransactionsBusy = false;
+    }
   },
 
   enhancePasswordFields() {
@@ -939,6 +1292,7 @@ this.connectWebSocket();
     for (const a of (this.data.accounts || [])) if (a.currency) list.add(a.currency);
     for (const b of (this.data.bills || [])) if (b.currency) list.add(b.currency);
     for (const g of (this.data.savingsGoals || [])) if (g.currency) list.add(g.currency);
+    for (const item of (this.data.wishlist || [])) if (item.currency) list.add(item.currency);
     for (const d of (this.data.debts || [])) if (d.currency) list.add(d.currency);
     for (const v of (this.data.invoices || [])) if (v.currency) list.add(v.currency);
     return Array.from(list);
@@ -958,7 +1312,7 @@ this.connectWebSocket();
 
   populateCurrencyDropdowns() {
     const curs = this.currencyList();
-    const selects = ['tx-native-currency-select', 'bill-currency', 'savings-goal-currency', 'settings-account-currency', 'debt-currency', 'invoice-currency'];
+    const selects = ['tx-native-currency-select', 'bill-currency', 'savings-goal-currency', 'wishlist-currency', 'settings-account-currency', 'debt-currency', 'invoice-currency'];
     for (const id of selects) {
       const sel = document.getElementById(id);
       if (!sel) continue;
@@ -986,8 +1340,55 @@ this.connectWebSocket();
   transactionToBase(tx) {
     const base = this.baseCurrency();
     if (tx && tx.currency === base) return Number(tx.amount) || 0;
+    const parts = tx && Array.isArray(tx.parts) ? tx.parts : [];
+    if (parts.some(part => part && part.nativeAmount != null && Number.isFinite(Number(part.nativeAmount)))) {
+      const sign = Number(tx.amount) < 0 ? -1 : 1;
+      const total = parts.reduce((sum, part) => {
+        if (part && part.nativeAmount != null && (part.nativeCurrency || tx.nativeCurrency) === base) {
+          return sum + sign * Math.abs(Number(part.nativeAmount) || 0);
+        }
+        return sum + this.toBase(sign * Math.abs(Number(part && part.amount) || 0), (part && part.currency) || tx.currency || base);
+      }, 0);
+      return Math.round(total * 100) / 100;
+    }
     if (tx && tx.nativeCurrency === base && tx.nativeAmount != null) return Number(tx.nativeAmount) || 0;
     return tx ? this.toBase(Number(tx.amount) || 0, tx.currency || base) : 0;
+  },
+
+  transactionAllocationRows(tx) {
+    if (!tx) return [];
+    const parts = Array.isArray(tx.parts) && tx.parts.length ? tx.parts : null;
+    if (!parts) return [{ ...tx, transactionId: tx.id || null, allocationId: tx.id || null, partDescription: '', isSplitPart: false }];
+    const sign = Number(tx.amount) < 0 ? -1 : 1;
+    return parts.map((part, index) => ({
+      ...tx,
+      transactionId: tx.id || null,
+      allocationId: part.id || ((tx.id || 'transaction') + ':part:' + index),
+      partDescription: String(part.description || '').trim() && Number(part.quantity) > 1
+        ? String(part.description).trim() + ' × ' + Number(part.quantity)
+        : String(part.description || ''),
+      isSplitPart: true,
+      categoryId: part.categoryId || null,
+      nativeAmount: part.nativeAmount == null ? null : sign * Math.abs(Number(part.nativeAmount) || 0),
+      nativeCurrency: part.nativeAmount == null ? null : (part.nativeCurrency || tx.nativeCurrency || null),
+      // Parent tags apply to the whole purchase; part-level tags add context.
+      personIds: [...new Set([...(Array.isArray(tx.personIds) ? tx.personIds : []), ...(Array.isArray(part.personIds) ? part.personIds : [])])],
+      amount: sign * Math.abs(Number(part.amount) || 0)
+    })).filter(row => !row.autoRemainder || Math.abs(Number(row.amount) || 0) > 0);
+  },
+
+  transactionSplitValidation(total, parts) {
+    const source = Array.isArray(parts) ? parts : [];
+    const amounts = source.map(part => Number(part && part.amount));
+    const validAmounts = amounts.length >= 1 && amounts.every(amount => Number.isFinite(amount) && amount > 0);
+    const totalCents = Math.round(Math.abs(Number(total) || 0) * 100);
+    const allocatedCents = amounts.reduce((sum, amount) => sum + (Number.isFinite(amount) ? Math.round(amount * 100) : 0), 0);
+    return {
+      valid: validAmounts && totalCents > 0 && allocatedCents === totalCents,
+      totalCents,
+      allocatedCents,
+      remainingCents: totalCents - allocatedCents
+    };
   },
 
   getRates() {
@@ -1276,6 +1677,15 @@ this.connectWebSocket();
     r(value);
   },
 
+  chartGridColor(baseColor) {
+    const color = String(baseColor || '').trim();
+    if (this.currentTheme() !== 'dark') return color;
+    const match = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.exec(color);
+    if (!match) return color;
+    const hex = match[1].length === 3 ? match[1].split('').map(value => value + value).join('') : match[1];
+    const brighter = [0, 2, 4].map(index => Math.min(255, parseInt(hex.slice(index, index + 2), 16) + 6).toString(16).padStart(2, '0'));
+    return '#' + brighter.join('');
+  },
   lineChartOptions(xTicks = {}) {
     return {
       responsive: true, maintainAspectRatio: false, animation: false,
@@ -1289,8 +1699,8 @@ this.connectWebSocket();
             : '') }
       },
       scales: {
-        x: { ticks: { color: '#888888', maxRotation: 0, autoSkip: false, font: { size: 11 }, ...xTicks }, grid: { color: '#2a2a2a', drawBorder: false }, border: { display: false } },
-        y: { ticks: { color: '#888888', font: { size: 11 }, maxTicksLimit: 5, callback: value => new Intl.NumberFormat('en-US', { notation: 'compact', maximumFractionDigits: 1 }).format(value).toLowerCase().replace(/^-0(?:\.0+)?$/, '0') }, grid: { color: '#2a2a2a', drawBorder: false }, border: { display: false } }
+        x: { ticks: { color: '#888888', maxRotation: 0, autoSkip: false, font: { size: 11 }, ...xTicks }, grid: { color: this.chartGridColor('#2a2a2a'), drawBorder: false }, border: { display: false } },
+        y: { ticks: { color: '#888888', font: { size: 11 }, maxTicksLimit: 5, callback: value => Math.abs(value) < 10000 ? this.fmtNumber(value) : new Intl.NumberFormat('en-US', { notation: 'compact', maximumFractionDigits: 1 }).format(value).toLowerCase().replace(/^-0(?:\.0+)?$/, '0') }, grid: { color: this.chartGridColor('#2a2a2a'), drawBorder: false }, border: { display: false } }
       }
     };
   },
@@ -1331,10 +1741,21 @@ this.connectWebSocket();
     return amounts.map(value => value > 0 ? floor + remainder * value / total : 0);
   },
 
+  sqrtNormalizedValues(values, minimumShare = 0.02) {
+    const amounts = values.map(value => Math.max(0, Number(value) || 0));
+    const positiveCount = amounts.filter(value => value > 0).length;
+    if (!positiveCount) return amounts;
+    const squareRoots = amounts.map(value => Math.sqrt(value));
+    const total = squareRoots.reduce((sum, value) => sum + value, 0);
+    const floor = Math.min(minimumShare, 0.8 / positiveCount);
+    const remainder = 1 - floor * positiveCount;
+    return squareRoots.map(value => value > 0 ? floor + remainder * value / total : 0);
+  },
+
   fmtNumber(amount) {
     const value = Number(amount) || 0;
-    const formatted = value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-    return formatted === '-0.00' ? '0.00' : formatted;
+    const formatted = value.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
+    return formatted === '-0' ? '0' : formatted;
   },
 
   fmtBase(amount) {
@@ -1352,6 +1773,19 @@ this.connectWebSocket();
 
   fmtAmount(amount, currency) {
     return this.fmtNumber(amount) + ' ' + currency;
+  },
+
+  currencyShortLabel(currency) {
+    const code = String(currency || '').toUpperCase();
+    if (this.data?.settings?.currencyDisplay === 'code') return code;
+    if (code === 'RSD') return '';
+    try {
+      const symbol = new Intl.NumberFormat('en-US', { style: 'currency', currency: code, currencyDisplay: 'narrowSymbol' })
+        .formatToParts(0).find(part => part.type === 'currency')?.value;
+      return symbol && symbol.toUpperCase() !== code ? symbol : '';
+    } catch (_) {
+      return '';
+    }
   },
 
   fmtDualCurrency(amount, currency, accountCurrency, nativeAmount, nativeCurrency) {
@@ -1426,9 +1860,7 @@ this.connectWebSocket();
           continue;
         }
         if (tx.accountId !== accountId) continue;
-        const exactBaseAmount = part.currency === this.baseCurrency()
-          ? part.amount : (part.nativeCurrency === this.baseCurrency() && part.nativeAmount != null ? part.nativeAmount : null);
-        total += exactBaseAmount != null ? exactBaseAmount : this.toBase(part.amount, part.currency);
+        total += this.transactionToBase(part);
       }
     }
     return total;
@@ -1597,7 +2029,7 @@ this.connectWebSocket();
       const parsed = this.parseCommand(query);
       this._cmdPaletteEnterAction = true;
       const typeLabel = parsed.type === 'expense' ? 'Expense' : 'Income';
-      const detail = typeLabel + ': ' + Math.abs(parsed.amount) + ' ' + this.baseCurrency() + (parsed.category ? ' / ' + parsed.category.name : '') + (parsed.date ? ' / ' + parsed.date : '') + (parsed.note ? ' / ' + parsed.note : '');
+      const detail = typeLabel + ': ' + Math.abs(parsed.amount) + ' ' + this.baseCurrency() + (parsed.category ? ' / ' + this.categoryLabel(parsed.category) : '') + (parsed.date ? ' / ' + parsed.date : '') + (parsed.note ? ' / ' + parsed.note : '');
       let cmdHtml = '<div class="command-section"><div style="padding:4px 12px;font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text-muted);">COMMAND</div>';
       cmdHtml += this._paletteItemHtml('Create: ' + detail, 'Enter');
       this._cmdPaletteItems.push({
@@ -1620,19 +2052,24 @@ this.connectWebSocket();
     const txResults = this.data.transactions
       .map((tx, index) => {
         const note = String(tx.note || '').toLowerCase();
+        const splitMatches = (Array.isArray(tx.parts) ? tx.parts : []).filter(part => String(part.description || '').toLowerCase().includes(lq));
         const amount = String(tx.amount);
         let relevance = -1;
         if (note === lq || amount === lq) relevance = 3;
         else if (note.startsWith(lq) || amount.startsWith(lq)) relevance = 2;
         else if (note.includes(lq) || amount.includes(lq)) relevance = 1;
-        return { tx, index, relevance };
+        for (const part of splitMatches) {
+          const description = String(part.description || '').toLowerCase();
+          relevance = Math.max(relevance, description === lq ? 3 : description.startsWith(lq) ? 2 : 1);
+        }
+        return { tx, index, relevance, splitMatches };
       })
       .filter(result => result.relevance >= 0)
-      .sort((a, b) => b.relevance - a.relevance || String(b.tx.date || '').localeCompare(String(a.tx.date || '')) || a.index - b.index)
-      .map(result => result.tx);
+      .sort((a, b) => b.relevance - a.relevance || String(b.tx.date || '').localeCompare(String(a.tx.date || '')) || a.index - b.index);
     if (txResults.length) {
       searchHtml += '<div class="command-section"><div style="padding:4px 12px;font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text-muted);">TRANSACTIONS</div>';
-      for (const tx of txResults) {
+      for (const result of txResults) {
+        const tx = result.tx;
         const cat = this.data.categories.find(c => c.id === tx.categoryId);
         const transfer = tx.type === 'transfer';
         const amountClass = transfer ? 'amt-transfer' : tx.type === 'income' ? 'amt-income' : 'amt-expense';
@@ -1640,8 +2077,8 @@ this.connectWebSocket();
         const amount = sign + this.fmtNumber(Math.abs(tx.amount)) + ' ' + (tx.currency || this.baseCurrency());
         const label = '<span class="command-transaction-meta"><span>' + this.escapeHtml(this.fmtDateInput(tx.date)) + '</span>' +
           '<span class="' + amountClass + '">' + this.escapeHtml(amount) + '</span>' +
-          '<span style="color:' + (transfer ? 'var(--text-muted)' : cat ? this.categoryColor(cat) : 'var(--text-muted)') + '">' + this.escapeHtml(transfer ? 'Transfer' : cat ? cat.name : '?') + '</span></span>' +
-          '<span class="command-transaction-note">' + this.transactionDescriptionHtml(tx) + '</span>';
+          '<span style="color:' + (transfer ? 'var(--text-muted)' : cat ? this.categoryColor(cat) : 'var(--text-muted)') + '">' + this.escapeHtml(transfer ? 'Transfer' : cat ? this.categoryLabel(cat) : '?') + '</span></span>' +
+          '<span class="command-transaction-note">' + this.transactionDescriptionHtml(tx) + (result.splitMatches.length ? '<small class="command-split-matches">' + result.splitMatches.map(part => this.escapeHtml(part.description || 'Split part')).join(' · ') + '</small>' : '') + '</span>';
         searchHtml += '<div class="command-item command-transaction-item" data-idx="' + this._cmdPaletteItems.length + '"><span class="command-item-label">' + label + '</span></div>';
         this._cmdPaletteItems.push({ execute: (_txId => () => { this.closeCommandPalette(); this.openLinkedTransaction(_txId); })(tx.id) });
       }
@@ -1718,7 +2155,7 @@ this.connectWebSocket();
     let clear = false, amount = 0;
     if ((parts[2] || '').toLowerCase() === 'clear') { clear = true; }
     else { amount = this.evalAmount(parts[2]); if (isNaN(amount) || amount <= 0) throw new Error('budget amount invalid'); }
-    const label = (clear ? 'Clear budget: ' : 'Set budget: ') + cat.name + (clear ? '' : ' \u00b7 ' + Math.round(amount * 100) / 100 + ' ' + this.baseCurrency() + '/mo');
+    const label = (clear ? 'Clear budget: ' : 'Set budget: ') + this.categoryLabel(cat) + (clear ? '' : ' \u00b7 ' + Math.round(amount * 100) / 100 + ' ' + this.baseCurrency() + '/mo');
     return {
       label: label,
       execute: async () => {
@@ -2097,6 +2534,13 @@ this.connectWebSocket();
   installmentForTx(txId) {
     const tx = (this.data.transactions || []).find(t => t.id === txId);
     if (!tx) return null;
+    if (tx.cardBillPayment && Array.isArray(tx.installmentAllocations)) {
+      for (const allocation of tx.installmentAllocations) {
+        if (!allocation) continue;
+        const inst = (this.data.installments || []).find(i => String(i.id) === String(allocation.installmentId));
+        if (inst) return { inst, seq: Number(allocation.seq) || null, cardPayment: true };
+      }
+    }
     if (tx.pairId && String(tx.pairId).indexOf('inst-') === 0) {
       const m = String(tx.pairId).match(/^inst-(.+)-s(\d+)$/);
       if (m) {
@@ -2491,26 +2935,37 @@ this.connectWebSocket();
   },
 
   navigateToRecord(type, id) {
-    const tx = this.data.transactions.find(t => t.id === id);
+    const txId = id;
+    const tx = this.data.transactions.find(t => t.id === txId);
     let page = null;
     let month = null;
     if (type === 'bill') {
-      const bp = this.billPaymentForTx(id);
+      const bp = this.billPaymentForTx(txId);
+      const bill = bp && (this.data.bills || []).find(item => item.id === bp.billId);
+      if (bill) id = bill.id;
       page = 'bills';
       if (bp && bp.month) { const parts = bp.month.split('-'); month = { y: parseInt(parts[0], 10), m: parseInt(parts[1], 10) - 1 }; }
     } else if (type === 'debt') {
+      const debt = this.debtForPaymentTx(txId);
+      if (debt) id = debt.id;
       page = 'debts';
     } else if (type === 'invoice') {
+      const linked = this.invoiceForPaymentTx(txId);
+      if (linked && linked.invoice) id = linked.invoice.id;
       page = 'invoices';
     } else if (type === 'savings') {
+      const linked = this.savingsForTx(txId);
+      if (linked && linked.goal) id = linked.goal.id;
       page = 'savings';
     } else if (type === 'card') {
+      const linked = this.installmentForTx(txId);
+      if (linked && linked.inst) id = linked.inst.id;
+      else if (tx && tx.cardId) id = tx.cardId;
       page = 'cards';
     }
     if (!page) return;
     if (tx && !month) {
-      const t = this.data.transactions.find(x => x.id === id);
-      if (t && t.date) { const { y, m } = this.ymOf(t.date); if (!isNaN(y) && !isNaN(m)) month = { y, m }; }
+      if (tx.date) { const { y, m } = this.ymOf(tx.date); if (!isNaN(y) && !isNaN(m)) month = { y, m }; }
     }
     if (month) {
       if (!this._pageView) this._pageView = {};
@@ -2624,13 +3079,13 @@ this.connectWebSocket();
     const sortedCats = (query = '') => {
       const needle = query.trim().toLocaleLowerCase();
       return this.categoriesAvailableOn(this.categoryPickerDate(inputId), hidden.value)
-        .filter((cat) => !needle || cat.name.toLocaleLowerCase().includes(needle))
+        .filter((cat) => !needle || this.categoryLabel(cat).toLocaleLowerCase().includes(needle))
         .sort((a, b) => a.name.localeCompare(b.name));
     };
     const closeDropdown = () => dropdown.classList.add('hidden');
     const pick = (cat) => {
       if (!cat) return;
-      input.value = cat.name.toUpperCase();
+      input.value = this.categoryLabel(cat).toUpperCase();
       hidden.value = cat.id;
       input.classList.remove('pick-empty');
       closeDropdown();
@@ -2646,7 +3101,7 @@ this.connectWebSocket();
     const openDropdown = (query = '') => {
       const cats = sortedCats(query);
       dropdown.innerHTML = cats.length ? cats.map(c =>
-        '<div class="category-dropdown-item' + (c.id === hidden.value ? ' active' : '') + '" data-id="' + c.id + '"><span class="cat-dot" style="background:' + this.categoryColor(c) + ';"></span>' + this.escapeHtml(c.name) + '</div>'
+        '<div class="category-dropdown-item' + (c.id === hidden.value ? ' active' : '') + '" data-id="' + c.id + '"><span class="cat-dot" style="background:' + this.categoryColor(c) + ';"></span>' + this.escapeHtml(this.categoryLabel(c)) + '</div>'
       ).join('') : '<div class="category-dropdown-empty">No categories yet</div>';
       const act = dropdown.querySelector('.category-dropdown-item.active');
       if (act) act.scrollIntoView({ block: 'nearest' });
@@ -2728,6 +3183,13 @@ this.connectWebSocket();
     };
 
     btn.addEventListener('click', (e) => { e.stopPropagation(); toggle(); });
+    btn.addEventListener('wheel', (e) => {
+      if (el.disabled || el.multiple || !el.options.length) return;
+      e.preventDefault();
+      e.stopPropagation();
+      const step = e.deltaY > 0 ? 1 : -1;
+      pickIndex((curIndex() + step + el.options.length) % el.options.length);
+    }, { passive: false });
     btn.addEventListener('keydown', (e) => {
       if (e.key === 'Escape') { e.stopPropagation(); close(); }
       else if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle(); }
@@ -2748,6 +3210,7 @@ this.connectWebSocket();
       pickIndex(parseInt(item.dataset.i, 10));
       close();
     });
+    list.addEventListener('wheel', (e) => e.stopPropagation(), { passive: true });
     document.addEventListener('pointerdown', (e) => {
       if (!list.classList.contains('hidden') && !wrap.contains(e.target)) close();
     });
@@ -2860,7 +3323,6 @@ this.connectWebSocket();
     if (pid === 'page-overview') return 'toggleOverviewGraph';
     if (pid === 'page-bills') return 'toggleBillsGraph';
     if (pid === 'page-budget') return 'toggleBudgetGraph';
-    if (pid === 'page-forecast') return 'toggleForecastGraph';
     const canvas = panel.querySelector('canvas');
     const id = canvas ? canvas.id : '';
     if (id === 'overview-chart' || id === 'overview-line-chart' || id === 'pie') return 'toggleOverviewGraph';
