@@ -351,12 +351,12 @@
         if (kind==='currency' && active.row.dataset.currencyBase==='true' && dx<0) { active.dx=0; resetRow(active.row); event.preventDefault(); event.stopImmediatePropagation(); return; }
         active.content.style.backgroundColor=active.content._mobileSwipeBackground;
         if(active.content._mobileSwipeBackgroundImage!=='none')active.content.style.backgroundImage=active.content._mobileSwipeBackgroundImage;
-        active.dx=kind==='category'?Math.max(-165,Math.min(72,dx)):Math.max(-72,Math.min(72,dx));
+        active.dx=kind==='category'?Math.max(-96,Math.min(48,dx)):Math.max(-48,Math.min(48,dx));
         active.content.style.transition='none';
         active.content.style.transform='translateX('+active.dx+'px)';
         active.row.classList.toggle('mobile-swipe-left',active.dx<0);
         active.row.classList.toggle('mobile-swipe-right',active.dx>0);
-        active.row.classList.toggle('mobile-swipe-delete',kind==='category'&&active.dx<=-138);
+        active.row.classList.toggle('mobile-swipe-delete',kind==='category'&&active.dx<=-84);
         active.row.classList.toggle('mobile-swipe-archive',kind==='category'&&active.dx<0);
       }
       if (event.cancelable) event.preventDefault();
@@ -376,16 +376,16 @@
       row._mobileSettingsSuppressClickUntil=Date.now()+360;
       let run=null, endX=0;
       if (kind==='account' || kind==='card' || kind==='currency') {
-        if (Math.abs(dx)>=54) {
-          endX=dx<0?-72:72;
+        if (Math.abs(dx)>=36) {
+          endX=dx<0?-48:48;
           if (kind==='account') run=()=>dx<0?window.BlackBook?.deleteAccount(row.dataset.reorderKey):window.BlackBook?.openEditAccount(row.dataset.reorderKey);
           else if (kind==='card') run=()=>dx<0?window.BlackBook?.deleteCard(row.dataset.mobileEntityId):window.BlackBook?.openEditAccount('card:'+row.dataset.mobileEntityId);
           else run=()=>dx<0?window.BlackBook?.removeCurrency(row.dataset.mobileEntityId):window.BlackBook?.openManualRateModal(row.dataset.mobileEntityId);
         }
       } else if (kind==='category') {
-        if (dx>=54) { endX=72; run=()=>window.BlackBook?.openEditCategory(row.dataset.mobileEntityId); }
-        else if (dx<=-138) { endX=-126; run=()=>window.BlackBook?.deleteCategory(row.dataset.mobileEntityId); }
-        else if (dx<=-64) { endX=-126; run=()=>row.dataset.categoryArchived==='true'?window.BlackBook?.restoreCategory(row.dataset.mobileEntityId):window.BlackBook?.archiveCategory(row.dataset.mobileEntityId); }
+        if (dx>=36) { endX=48; run=()=>window.BlackBook?.openEditCategory(row.dataset.mobileEntityId); }
+        else if (dx<=-84) { endX=-96; run=()=>window.BlackBook?.deleteCategory(row.dataset.mobileEntityId); }
+        else if (dx<=-36) { endX=-48; run=()=>row.dataset.categoryArchived==='true'?window.BlackBook?.restoreCategory(row.dataset.mobileEntityId):window.BlackBook?.archiveCategory(row.dataset.mobileEntityId); }
       }
       if (run) {
         const content=gesture.content||ensureMobileSwipeContent(row);
@@ -619,7 +619,7 @@
     if(mobileNavQuery.matches)setupMobileSettings(settingsRoot);else teardownMobileSettings();
     const activePage=document.querySelector('.page:not(.hidden)'),hasDate=!!activePage?.querySelector('.month-picker');
     let actions;
-    if(bb.currentPage==='overview')actions=[['accounts','ACCOUNTS'],['graph','GRAPH'],['transfer','TRANSFER'],['date','DATE']];
+    if(bb.currentPage==='overview')actions=[['none',''],['graph','GRAPH'],['transfer','TRANSFER'],['date','DATE']];
     else if(bb.currentPage==='bills')actions=[['search','SEARCH'],['graph','GRAPH'],['none',''],['none','']];
     else if(bb.currentPage==='budget')actions=[['search','SEARCH'],['graph','GRAPH'],['allocate','ALLOCATE'],['date','DATE']];
     else if(bb.currentPage==='settings')actions=mobileSettingsState?.activeKey==='currencies'
@@ -1164,6 +1164,24 @@
       categoryPanel.appendChild(filter);
     }
   }
+  function ensureMobileAccountsControl(toolbar) {
+    if (!toolbar) return null;
+    let button = toolbar.querySelector('.mobile-accounts-control');
+    if (!button) {
+      button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'mobile-overview-control mobile-accounts-control';
+      button.setAttribute('aria-label', 'Accounts');
+      button.title = 'Accounts';
+      button.setAttribute('aria-expanded', 'false');
+      button.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 4v16M12 4v16M18 4v16"></path></svg>';
+      button.addEventListener('click', event => window.BlackBook?.toggleAccountsPanel(event));
+    }
+    const search = toolbar.querySelector('.mobile-search-control');
+    if (search && search.nextElementSibling !== button) search.insertAdjacentElement('afterend', button);
+    return button;
+  }
+
   function setupOverviewToolbar(root) {
     let toolbar = root.querySelector('.mobile-overview-toolbar');
     if (!mobileOverviewQuery.matches) {
@@ -1278,6 +1296,7 @@
       const categoriesPanel = toolbar.querySelector('[data-mobile-panel="categories"]');
       if (categoriesButton && sortGroup && categoriesButton.nextElementSibling !== sortGroup) toolbar.insertBefore(sortGroup, categoriesButton.nextSibling);
     }
+    ensureMobileAccountsControl(toolbar);
     const sortButton = toolbar.querySelector('.ov-sort-cycle');
     if (sortButton && window.BlackBook) {
       const bb = window.BlackBook;
@@ -1378,37 +1397,55 @@
 
   function bindDrawerGestures() {
     let start = null;
+    const hasLayerToClose = () => {
+      if (document.body.classList.contains('mobile-nav-open')) return true;
+      if (mobileSettingsState && (!mobileSettingsState.profileModal.hidden || !mobileSettingsState.addMenu.hidden || mobileSettingsState.activeKey)) return true;
+      if (window.BlackBook?._accountsPanelOpen) return true;
+      const toolbar = activeMobileToolbar();
+      return !!toolbar?.querySelector('.mobile-control-popover:not([hidden])');
+    };
+    const closeTopLayer = () => {
+      if (document.body.classList.contains('mobile-nav-open')) { document.body.classList.remove('mobile-nav-open'); return true; }
+      if (mobileSettingsState) {
+        if (!mobileSettingsState.profileModal.hidden) { closeMobileSettingsProfiles(); return true; }
+        if (!mobileSettingsState.addMenu.hidden) { mobileSettingsState.addMenu.hidden = true; return true; }
+        if (mobileSettingsState.activeKey) { closeMobileSettingsSection(); return true; }
+      }
+      if (window.BlackBook?._accountsPanelOpen) { window.BlackBook.closeAccountsPanel(); return true; }
+      const toolbar = activeMobileToolbar();
+      if (toolbar?.querySelector('.mobile-control-popover:not([hidden])')) { closeMobilePanels(toolbar); return true; }
+      return false;
+    };
+    const blocked = target => target.closest('.tx-row, .mobile-bill-row, .budget-headrow, .plan-card, .savings-card, .mobile-settings-swipe-row, button, input, select, textarea, a, [role="button"], .month-picker, .cat-filter, .mobile-overview-toolbar, .chart-panel');
     const isOverlayOpen = () => !!document.querySelector('.modal:not(.hidden), #command-overlay:not(.hidden)');
     document.addEventListener('touchstart', event => {
-      if (!mobileNavQuery.matches || event.touches.length !== 1 || isOverlayOpen()) return;
+      if (!mobileNavQuery.matches || event.touches.length !== 1 || isOverlayOpen() || blocked(event.target)) return;
       const touch = event.touches[0];
       const isOpen = document.body.classList.contains('mobile-nav-open');
-      if (event.target.closest('.account-chips, .account-chip-list, .mobile-account-deck, .tx-list-wrap')) return;
-      if (!isOpen && touch.clientX <= 22) { start = { x: touch.clientX, y: touch.clientY, mode: 'drawer-open' }; return; }
-      if (isOpen && event.target.closest('.app-sidebar')) { start = { x: touch.clientX, y: touch.clientY, mode: 'drawer-close' }; return; }
-      const blocked = event.target.closest('button, input, select, textarea, a, [role="button"], .month-picker, .cat-filter, .mobile-overview-toolbar, .chart-panel, .tx-row');
-      if (!blocked && event.target.closest('.app-workspace')) start = { x: touch.clientX, y: touch.clientY, mode: 'page' };
-    }, { passive: true });
+      if (touch.clientX <= 24) start = { x:touch.clientX, y:touch.clientY, edge:'left', hadLayer:hasLayerToClose() };
+      else if (touch.clientX >= window.innerWidth - 24) start = { x:touch.clientX, y:touch.clientY, edge:'right', hadLayer:hasLayerToClose() };
+      else if (isOpen && event.target.closest('.app-sidebar')) start = { x:touch.clientX, y:touch.clientY, edge:'sidebar' };
+    }, { passive:true });
+    document.addEventListener('touchmove', event => {
+      if (!start || !mobileNavQuery.matches || event.touches.length !== 1) return;
+      const touch=event.touches[0], dx=touch.clientX-start.x, dy=touch.clientY-start.y;
+      if (Math.abs(dx)>8 && Math.abs(dx)>Math.abs(dy)*1.2) { start.horizontal=true; if(event.cancelable)event.preventDefault(); }
+    }, { passive:false });
     document.addEventListener('touchend', event => {
-      if (!start || !mobileNavQuery.matches || isOverlayOpen()) { start = null; return; }
-      const touch = event.changedTouches[0];
-      const dx = touch.clientX - start.x;
-      const dy = touch.clientY - start.y;
-      if (Math.abs(dx) > 72 && Math.abs(dx) > Math.abs(dy) * 1.25) {
-        if (start.mode === 'drawer-open' && dx > 0) document.body.classList.add('mobile-nav-open');
-        else if (start.mode === 'drawer-close' && dx < 0) document.body.classList.remove('mobile-nav-open');
-        else if (start.mode === 'page' && window.BlackBook && window.BlackBook.cyclePage) window.BlackBook.cyclePage(dx < 0 ? 1 : -1);
+      if (!start || !mobileNavQuery.matches || isOverlayOpen()) { start=null; return; }
+      const touch=event.changedTouches[0], dx=touch.clientX-start.x;
+      if(start.horizontal && Math.abs(dx)>58) {
+        if((start.edge==='left'&&dx>0)||(start.edge==='right'&&dx<0)) {
+          if(!closeTopLayer()&&start.edge==='left')document.body.classList.add('mobile-nav-open');
+        } else if(start.edge==='sidebar'&&dx<0) document.body.classList.remove('mobile-nav-open');
       }
-      start = null;
-    }, { passive: true });
-    document.addEventListener('keydown', event => {
-      if (event.key === 'Escape') document.body.classList.remove('mobile-nav-open');
-    });
+      start=null;
+    }, { passive:true });
+    document.addEventListener('touchcancel',()=>{start=null;},{passive:true});
+    document.addEventListener('keydown', event => { if(event.key==='Escape')closeTopLayer(); });
     mobileNavQuery.addEventListener('change', event => {
       document.body.classList.remove('mobile-nav-open');
-      if (!event.matches) {
-        try { document.body.classList.toggle('sb-collapsed', localStorage.getItem('bb-sidebar-collapsed') === '1'); } catch (err) {}
-      }
+      if(!event.matches)try{document.body.classList.toggle('sb-collapsed',localStorage.getItem('bb-sidebar-collapsed')==='1');}catch(err){}
     });
   }
 
@@ -1417,13 +1454,22 @@
     if (!root || root._mobileTransactionGesturesBound) return;
     root._mobileTransactionGesturesBound = true;
     let active = null;
-    const reset = rows => {
-      if (!rows) return;
-      (Array.isArray(rows) ? rows : [rows]).forEach(row => {
-        if (!row) return;
+    const clearRows = rows => {
+      (Array.isArray(rows) ? rows : [rows]).filter(Boolean).forEach(row => {
         row.style.transform = '';
-        row.classList.remove('mobile-swipe-left', 'mobile-swipe-right');
+        row.style.transition = '';
+        row.classList.remove('mobile-swipe-left', 'mobile-swipe-right', 'mobile-swipe-dragging');
       });
+    };
+    const resetRows = (rows, animate = true) => {
+      const list = (Array.isArray(rows) ? rows : [rows]).filter(Boolean);
+      if (!list.length) return;
+      list.forEach(row => {
+        row.style.transition = animate ? 'transform 170ms cubic-bezier(.22,.61,.36,1)' : 'none';
+        row.style.transform = 'translateX(0px)';
+      });
+      if (animate) setTimeout(() => clearRows(list), 180);
+      else clearRows(list);
     };
     const actOnTransaction = (row, direction) => {
       const bb = window.BlackBook;
@@ -1431,11 +1477,7 @@
       const tx = bb && bb.data && bb.data.transactions.find(item => item.id === id);
       if (!bb || !tx) return;
       const bulkSelected = bb._bulkSel && bb._bulkSel.size > 1 && bb._bulkSel.has(id);
-      if (bulkSelected) {
-        if (direction < 0) bb.bulkDelete();
-        else bb.openBulkEdit();
-        return;
-      }
+      if (bulkSelected) { if (direction < 0) bb.bulkDelete(); else bb.openBulkEdit(); return; }
       if (direction < 0) bb.deleteTransaction(id);
       else if (tx.type === 'transfer') bb.openEditTransfer(id);
       else if (tx.cardId) bb.openEditCardTx(id);
@@ -1450,49 +1492,48 @@
       const rows = bb && bb._bulkSel && bb._bulkSel.size > 1 && bb._bulkSel.has(id)
         ? Array.from(root.querySelectorAll('.tx-row:not(.tx-split-part-row)')).filter(item => bb._bulkSel.has(item.id.replace(/^tx-row-/, '')))
         : [row];
-      active = { row, rows, x: event.clientX, y: event.clientY, dx: 0, horizontal: false, pointerId:event.pointerId };
+      active = { row, rows, x:event.clientX, y:event.clientY, dx:0, horizontal:false, pointerId:event.pointerId, side:0 };
       try { root.setPointerCapture(event.pointerId); } catch (_) {}
     }, true);
     root.addEventListener('pointermove', event => {
-      if (!active) return;
+      if (!active || event.pointerId !== active.pointerId) return;
       const dx = event.clientX - active.x;
       const dy = event.clientY - active.y;
-      if (!active.horizontal && Math.abs(dx) > 9 && Math.abs(dx) > Math.abs(dy) * 1.25) active.horizontal = true;
+      if (!active.horizontal && Math.abs(dx) > 9 && Math.abs(dx) > Math.abs(dy) * 1.25) {
+        active.horizontal = true;
+        active.rows.forEach(row => { row.style.transition = 'none'; row.classList.add('mobile-swipe-dragging'); });
+      }
       if (!active.horizontal) return;
       active.dx = Math.max(-48, Math.min(72, dx));
+      if (active.dx < -5) active.side = -1;
+      else if (active.dx > 5) active.side = 1;
       active.rows.forEach(row => {
         row.style.transform = 'translateX(' + active.dx + 'px)';
-        row.classList.toggle('mobile-swipe-left', active.dx < 0);
-        row.classList.toggle('mobile-swipe-right', active.dx > 0);
+        row.classList.toggle('mobile-swipe-left', active.side < 0);
+        row.classList.toggle('mobile-swipe-right', active.side > 0);
       });
-      event.preventDefault();
+      if (event.cancelable) event.preventDefault();
     }, true);
     const endGesture = event => {
-      if (!active) return;
+      if (!active || event.pointerId !== active.pointerId) return;
       const gesture = active;
       active = null;
-      const threshold = gesture.dx < 0 ? 48 : 72;
       if (gesture.horizontal) gesture.rows.forEach(row => { row._mobileSuppressClickUntil = Date.now() + 350; });
+      const direction = gesture.dx < 0 ? -1 : 1;
+      const threshold = direction < 0 ? 36 : 54;
       if (gesture.horizontal && Math.abs(gesture.dx) >= threshold) {
-        const direction = gesture.dx < 0 ? -1 : 1;
         const reveal = direction < 0 ? 48 : 72;
-        gesture.rows.forEach(row => {
-          row.style.transition = 'transform 140ms ease-out';
-          row.style.transform = 'translateX(' + (direction * reveal) + 'px)';
-        });
-        setTimeout(() => actOnTransaction(gesture.row, direction), 90);
-        setTimeout(() => { reset(gesture.rows); gesture.rows.forEach(row => { row.style.transition = ''; }); }, 210);
+        gesture.rows.forEach(row => { row.style.transition = 'transform 150ms cubic-bezier(.22,.61,.36,1)'; row.style.transform = 'translateX(' + (direction * reveal) + 'px)'; });
+        setTimeout(() => actOnTransaction(gesture.row, direction), 95);
+        setTimeout(() => resetRows(gesture.rows, true), 210);
         if (event.cancelable) event.preventDefault();
-      } else reset(gesture.rows);
+      } else resetRows(gesture.rows, true);
     };
     root.addEventListener('pointerup', endGesture, true);
-    root.addEventListener('pointercancel', event => { if (active) reset(active.rows); active = null; }, true);
+    root.addEventListener('pointercancel', event => { if (active && event.pointerId === active.pointerId) resetRows(active.rows, true); active = null; }, true);
     root.addEventListener('click', event => {
       const row = event.target.closest('.tx-row:not(.tx-split-part-row)');
-      if (row && Date.now() < (row._mobileSuppressClickUntil || 0)) {
-        event.preventDefault();
-        event.stopImmediatePropagation();
-      }
+      if (row && Date.now() < (row._mobileSuppressClickUntil || 0)) { event.preventDefault(); event.stopImmediatePropagation(); }
     }, true);
   }
 
@@ -1521,7 +1562,8 @@
       const dy = event.clientY - active.y;
       if (!active.horizontal && Math.abs(dx) > 9 && Math.abs(dx) > Math.abs(dy) * 1.25) active.horizontal = true;
       if (!active.horizontal) return;
-      active.dx = Math.max(-72, Math.min(0, dx));
+      active.row.style.transition = 'none';
+      active.dx = Math.max(-48, Math.min(0, dx));
       active.row.style.transform = 'translateX(' + active.dx + 'px)';
       active.card.classList.toggle('mobile-swipe-left', active.dx < 0);
       if (event.cancelable) event.preventDefault();
@@ -1531,9 +1573,9 @@
       const gesture = active;
       active = null;
       if (gesture.horizontal) gesture.card._mobileBudgetSuppressClickUntil = Date.now() + 350;
-      if (gesture.horizontal && gesture.dx <= -54) {
-        gesture.row.style.transition = 'transform 180ms ease-in-out';
-        gesture.row.style.transform = 'translateX(-72px)';
+      if (gesture.horizontal && gesture.dx <= -36) {
+        gesture.row.style.transition = 'transform 160ms cubic-bezier(.22,.61,.36,1)';
+        gesture.row.style.transform = 'translateX(-48px)';
         setTimeout(() => {
           const bb = window.BlackBook;
           const id = gesture.card.dataset.budgetCategoryId;
@@ -1584,7 +1626,8 @@
       const dy = event.clientY - active.y;
       if (!active.horizontal && Math.abs(dx) > 9 && Math.abs(dx) > Math.abs(dy) * 1.25) active.horizontal = true;
       if (!active.horizontal) return;
-      active.dx = Math.max(-72, Math.min(72, dx));
+      active.row.style.transition = 'none';
+      active.dx = Math.max(-48, Math.min(48, dx));
       active.row.style.transform = 'translateX(' + active.dx + 'px)';
       active.entry.classList.toggle('mobile-swipe-left', active.dx < 0);
       active.entry.classList.toggle('mobile-swipe-right', active.dx > 0);
@@ -1595,10 +1638,10 @@
       const gesture = active;
       active = null;
       if (gesture.horizontal) gesture.row._mobileBillSuppressClickUntil = Date.now() + 350;
-      if (gesture.horizontal && Math.abs(gesture.dx) >= 54) {
+      if (gesture.horizontal && Math.abs(gesture.dx) >= 36) {
         const direction = gesture.dx < 0 ? -1 : 1;
-        gesture.row.style.transition = 'transform 180ms ease-in-out';
-        gesture.row.style.transform = 'translateX(' + (direction * 72) + 'px)';
+        gesture.row.style.transition = 'transform 160ms cubic-bezier(.22,.61,.36,1)';
+        gesture.row.style.transform = 'translateX(' + (direction * 48) + 'px)';
         setTimeout(() => {
           const bb = window.BlackBook;
           const billId = gesture.entry.dataset.billId;
@@ -1647,7 +1690,8 @@
       const dx=event.clientX-active.x, dy=event.clientY-active.y;
       if (!active.horizontal && Math.abs(dx)>9 && Math.abs(dx)>Math.abs(dy)*1.25) active.horizontal=true;
       if (!active.horizontal) return;
-      active.dx=Math.max(-72,Math.min(72,dx));
+      active.card.style.transition='none';
+      active.dx=Math.max(-48,Math.min(48,dx));
       active.card.style.transform='translateX('+active.dx+'px)';
       active.card.classList.toggle('mobile-swipe-left',active.dx<0);
       active.card.classList.toggle('mobile-swipe-right',active.dx>0);
@@ -1657,10 +1701,10 @@
       if (!active || event.pointerId!==active.pointerId) return;
       const g=active; active=null;
       if (g.horizontal) g.card._mobileCardSuppressClickUntil=Date.now()+350;
-      if (g.horizontal && Math.abs(g.dx)>=54) {
+      if (g.horizontal && Math.abs(g.dx)>=36) {
         const direction=g.dx<0?-1:1;
-        g.card.style.transition='transform 180ms ease-in-out';
-        g.card.style.transform='translateX('+(direction*72)+'px)';
+        g.card.style.transition='transform 160ms cubic-bezier(.22,.61,.36,1)';
+        g.card.style.transform='translateX('+(direction*48)+'px)';
         setTimeout(() => {
           const bb=window.BlackBook;
           if (direction<0) bb?.deleteInstallment(g.card.dataset.mobilePlanId);
@@ -1719,25 +1763,25 @@
         active.rails.forEach(rail=>{rail.style.transition='none';});
       }
       if(!active.horizontal)return;
-      active.dx=Math.max(active.kind==='wishlist'?-144:-72,Math.min(72,dx));
+      active.dx=Math.max(active.kind==='wishlist'?-96:-48,Math.min(48,dx));
       active.content.style.transform='translateX('+active.dx+'px)';
       if(active.kind==='wishlist')active.rails.forEach(rail=>{rail.style.transform='translateX('+active.dx+'px)';});
       active.card.classList.toggle('mobile-swipe-left',active.dx<0);
       active.card.classList.toggle('mobile-swipe-right',active.dx>0);
-      active.card.classList.toggle('mobile-swipe-left-delete',active.kind==='wishlist'&&active.dx<=-136);
+      active.card.classList.toggle('mobile-swipe-left-delete',active.kind==='wishlist'&&active.dx<=-84);
       if(event.cancelable)event.preventDefault();
     },true);
     const end=event=>{
       if(!active||event.pointerId!==active.pointerId)return;
       const g=active;active=null;
       if(g.horizontal)g.card._mobileSavingsSuppressClickUntil=Date.now()+350;
-      const wishlistAction=g.kind==='wishlist'&&g.dx>=54?'edit':g.kind==='wishlist'&&g.dx<=-136?'delete':g.kind==='wishlist'&&g.dx<=-64?'bought':'';
-      if(g.horizontal&&(g.kind==='wishlist'?!!wishlistAction:Math.abs(g.dx)>=54)){
+      const wishlistAction=g.kind==='wishlist'&&g.dx>=36?'edit':g.kind==='wishlist'&&g.dx<=-84?'delete':g.kind==='wishlist'&&g.dx<=-36?'bought':'';
+      if(g.horizontal&&(g.kind==='wishlist'?!!wishlistAction:Math.abs(g.dx)>=36)){
         const direction=g.dx<0?-1:1;
-        const reveal=g.kind==='wishlist'?(wishlistAction==='delete'?144:wishlistAction==='bought'?78:72):72;
-        g.content.style.transition='transform 180ms ease-in-out';
+        const reveal=g.kind==='wishlist'?(wishlistAction==='delete'?96:wishlistAction==='bought'?48:48):48;
+        g.content.style.transition='transform 160ms cubic-bezier(.22,.61,.36,1)';
         g.content.style.transform='translateX('+(direction*reveal)+'px)';
-        if(g.kind==='wishlist')g.rails.forEach(rail=>{rail.style.transition='transform 180ms ease-in-out';rail.style.transform='translateX('+(direction*reveal)+'px)';});
+        if(g.kind==='wishlist')g.rails.forEach(rail=>{rail.style.transition='transform 160ms cubic-bezier(.22,.61,.36,1)';rail.style.transform='translateX('+(direction*reveal)+'px)';});
         setTimeout(()=>{
           const bb=window.BlackBook,kind=g.card.dataset.mobileSwipeKind,id=g.card.dataset.mobileSwipeId;
           if(!bb||!id)return;

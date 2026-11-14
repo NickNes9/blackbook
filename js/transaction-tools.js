@@ -124,16 +124,16 @@
       }
       return modal;
     },
-    peopleOptions(blank = 'All people') {
+    peopleOptions(blank = 'All') {
       return '<option value="">' + blank + '</option>' + (this.data.people || []).slice().sort((a,b) => a.name.localeCompare(b.name)).map(person => '<option value="' + this.escapeHtml(person.id) + '">' + this.escapeHtml(person.name) + '</option>').join('');
     },
     openFindReplace(restoreCustom = false, transactionIds = null) {
       const modal = this.toolsModal('find-replace-modal', 'Find & Replace',
-        '<div class="tools-grid"><label>Description contains<input id="replace-find" class="input"></label><label>Account<select id="replace-account" class="input"></select></label><label>Category<select id="replace-category" class="input"></select></label><label>Type<select id="replace-type" class="input"><option value="">All types</option><option value="expense">Expenses</option><option value="income">Income</option><option value="transfer">Transfers</option></select></label><label>From date<input id="replace-from" class="input"></label><label>To date<input id="replace-to" class="input"></label><label>Person<select id="replace-person" class="input"></select></label><label>Item<select id="replace-item" class="input"><option value="">All items</option></select></label></div>' +
+        '<div class="tools-grid"><label>Description contains<input id="replace-find" class="input"></label><label>Account<select id="replace-account" class="input"></select></label><label>Category<select id="replace-category" class="input"></select></label><label>Type<select id="replace-type" class="input"><option value="">All</option><option value="expense">Expenses</option><option value="income">Income</option><option value="transfer">Transfers</option></select></label><label>From date<input id="replace-from" class="input"></label><label>To date<input id="replace-to" class="input"></label><label>Person<select id="replace-person" class="input"></select></label><label>Item<select id="replace-item" class="input"><option value="">All</option></select></label></div>' +
         '<div class="tools-grid replace-action-row" id="replace-action-row"><label>Action<select id="replace-mode" class="input"><option value="replace">Replace text</option><option value="rewrite">Rewrite description</option><option value="assign-person">Assign person</option><option value="assign-item">Assign item</option></select></label><label id="replace-needle-field">Text to replace<input id="replace-needle" class="input"></label><label id="replace-text-field"><span id="replace-text-label">New text</span><input id="replace-text" class="input"></label><label id="replace-assignee-field" hidden><span id="replace-assignee-label">Name of person/item</span><input id="replace-assignee" class="input" type="text" autocomplete="off" aria-autocomplete="list" aria-controls="replace-assignee-suggestions" aria-expanded="false"><div id="replace-assignee-suggestions" class="people-suggestions replace-assignee-suggestions hidden" role="listbox" aria-label="Existing people and items"></div></label><label id="replace-name-to-replace-field" hidden>Text to replace<input id="replace-name-to-replace" class="input"></label></div>' +
         '<div class="tools-actions"><button id="replace-preview" class="btn btn-secondary">PREVIEW</button><button id="replace-apply" class="btn btn-primary" disabled>APPLY</button><span id="replace-count"></span></div><div id="replace-results" class="tools-scroll"></div><p id="replace-token-help" class="replace-token-help">#description · #date · #month · #year · #account · #category @person</p>');
-      modal.querySelector('#replace-account').innerHTML = '<option value="">All accounts</option>' + (this.data.accounts || []).map(a => '<option value="' + this.escapeHtml(a.id) + '">' + this.escapeHtml(a.name) + '</option>').join('') + (this.data.creditCards || []).map(a => '<option value="card:' + this.escapeHtml(a.id) + '">' + this.escapeHtml(a.name) + '</option>').join('');
-      modal.querySelector('#replace-category').innerHTML = '<option value="">All categories</option>' + (this.data.categories || []).map(c => '<option value="' + this.escapeHtml(c.id) + '">' + this.escapeHtml(c.name) + '</option>').join('');
+      modal.querySelector('#replace-account').innerHTML = '<option value="">All</option>' + (this.data.accounts || []).map(a => '<option value="' + this.escapeHtml(a.id) + '">' + this.escapeHtml(a.name) + '</option>').join('') + (this.data.creditCards || []).map(a => '<option value="card:' + this.escapeHtml(a.id) + '">' + this.escapeHtml(a.name) + '</option>').join('');
+      modal.querySelector('#replace-category').innerHTML = '<option value="">All</option>' + (this.data.categories || []).map(c => '<option value="' + this.escapeHtml(c.id) + '">' + this.escapeHtml(c.name) + '</option>').join('');
       modal.querySelector('#replace-person').innerHTML = this.peopleOptions();
       const itemSelect = modal.querySelector('#replace-item');
       if (!itemSelect.dataset.itemOptionsBound) {
@@ -348,7 +348,7 @@
         target.dataset.mode = mode;
         const entries = mode === 'set-category' ? this.data.categories || [] : mode === 'remove-person' ? this.data.people || [] : mode === 'link-bill' ? this.data.bills || [] : mode === 'set-account' ? [...(this.data.accounts || []), ...(this.data.creditCards || []).map(card => ({...card,id:'card:' + card.id}))] : [];
         document.getElementById('replace-target-label').textContent = mode === 'set-category' ? 'Category' : mode === 'remove-person' ? 'Person to remove' : mode === 'link-bill' ? 'Bill' : 'Account';
-        target.innerHTML = '<option value="">Choose…</option>' + (mode === 'remove-person' ? '<option value="__all__">All people</option>' : '') + entries.slice().sort((a,b) => a.name.localeCompare(b.name)).map(item => '<option value="' + this.escapeHtml(item.id) + '">' + this.escapeHtml((mode === 'remove-person' ? '@' : '') + item.name + (mode === 'set-account' ? ' · ' + (item.currency || this.baseCurrency()) : '')) + '</option>').join('');
+        target.innerHTML = '<option value="">Choose…</option>' + (mode === 'remove-person' ? '<option value="__all__">All</option>' : '') + entries.slice().sort((a,b) => a.name.localeCompare(b.name)).map(item => '<option value="' + this.escapeHtml(item.id) + '">' + this.escapeHtml((mode === 'remove-person' ? '@' : '') + item.name + (mode === 'set-account' ? ' · ' + (item.currency || this.baseCurrency()) : '')) + '</option>').join('');
       }
       document.getElementById('replace-apply').classList.toggle('btn-danger', mode === 'delete');
       document.getElementById('replace-apply').classList.toggle('btn-primary', mode !== 'delete');
@@ -736,7 +736,7 @@
       if (cache && cache.transactions === transactions && cache.sequence === sequence && cache.length === transactions.length) {
         if (select.dataset.itemOptionsLoaded !== 'true') {
           const current = select.value;
-          select.innerHTML = '<option value="">All items</option><option value="__none__">No item</option>' + cache.items.map(item => '<option value="' + this.escapeHtml(item.key) + '">$' + this.escapeHtml(item.name) + '</option>').join('');
+          select.innerHTML = '<option value="">All</option><option value="__none__">No item</option>' + cache.items.map(item => '<option value="' + this.escapeHtml(item.key) + '">$' + this.escapeHtml(item.name) + '</option>').join('');
           select.value = current;
           select.dataset.itemOptionsLoaded = 'true';
           this.syncCustomSelect(select);
@@ -746,7 +746,7 @@
       const items = this.existingTrackedItems().slice().sort((a,b) => a.name.localeCompare(b.name, undefined, { sensitivity:'base' }) || a.key.localeCompare(b.key));
       this._replaceItemOptionsCache = { transactions, sequence, length: transactions.length, items };
       const current = select.value;
-      select.innerHTML = '<option value="">All items</option><option value="__none__">No item</option>' + items.map(item => '<option value="' + this.escapeHtml(item.key) + '">$' + this.escapeHtml(item.name) + '</option>').join('');
+      select.innerHTML = '<option value="">All</option><option value="__none__">No item</option>' + items.map(item => '<option value="' + this.escapeHtml(item.key) + '">$' + this.escapeHtml(item.name) + '</option>').join('');
       select.value = current;
       select.dataset.itemOptionsLoaded = 'true';
       this.syncCustomSelect(select);

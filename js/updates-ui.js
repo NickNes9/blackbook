@@ -9,8 +9,11 @@ window.UpdateUi = {
 
   async init() {
     if (window.BlackBookDeployment && window.BlackBookDeployment.hosted) {
+      this.version = window.BlackBookDeployment.version || '0.9.8';
       this.status = null;
+      this._progress = null;
       this.renderBanner();
+      this.renderSettings();
       return;
     }
     await this.refresh(true);
@@ -245,15 +248,16 @@ window.UpdateUi = {
     if (el) {
       const s = this.status;
       const ver = this.esc(this.version);
-      let html =
-        '<div class="settings-row update-version-row"><span class="settings-row-name">Current Version</span><span class="settings-row-meta">v' + ver + '</span>' +
-        '<button class="btn btn-sm btn-secondary btn-icon" id="settings-updates-check" title="Check for updates" aria-label="Check for updates" onclick="UpdateUi.checkNow()"' + (this._updating ? ' disabled' : '') + '>' + (window.BlackBook?.refreshIcon ? window.BlackBook.refreshIcon() : '&#8635;') + '</button></div>';
-      if (s && s.updateAvailable && s.latest) {
+      let html = window.BlackBookDeployment && window.BlackBookDeployment.hosted
+        ? '<div class="settings-row update-version-row"><span class="settings-row-name">Current Version</span><span class="settings-row-meta">v' + ver + '</span></div>'
+        : '<div class="settings-row update-version-row"><span class="settings-row-name">Current Version</span><span class="settings-row-meta">v' + ver + '</span>' +
+          '<button class="btn btn-sm btn-secondary btn-icon" id="settings-updates-check" title="Check for updates" aria-label="Check for updates" onclick="UpdateUi.checkNow()"' + (this._updating ? ' disabled' : '') + '>' + (window.BlackBook?.refreshIcon ? window.BlackBook.refreshIcon() : '&#8635;') + '</button></div>';
+      if (!(window.BlackBookDeployment && window.BlackBookDeployment.hosted) && s && s.updateAvailable && s.latest) {
         html += '<div class="settings-row-note update-available-note">Update to v' + this.esc(s.latest.version) + ' available!</div>';
         if (s.latest.notes) html += '<div class="settings-row-note">' + this.esc(this.notesPreview(s.latest.notes)) + '</div>';
       }
-      if (this._progress) html += this.progressMarkup(this._progress, true);
-      if (s && s.updateAvailable && s.latest && s.reason === 'available') {
+      if (!(window.BlackBookDeployment && window.BlackBookDeployment.hosted) && this._progress) html += this.progressMarkup(this._progress, true);
+      if (!(window.BlackBookDeployment && window.BlackBookDeployment.hosted) && s && s.updateAvailable && s.latest && s.reason === 'available') {
         html += '<div class="settings-data-actions update-install-action"><button class="btn btn-primary" onclick="UpdateUi.updateNow()"' + (this._updating ? ' disabled' : '') + '>' + (this._updating ? 'UPDATING…' : 'UPDATE NOW') + '</button></div>';
       }
       el.innerHTML = html;

@@ -1772,7 +1772,7 @@ Object.assign(window.BlackBook, {
 '<button class="btn btn-secondary" id="settings-import-rules-btn" onclick="BlackBook.openImportRule()">IMPORT RULES</button>' +
       '</div></div>' +
       '<div class="settings-section">' +
-      '<div class="settings-section-header"><span class="settings-section-title">ABOUT &amp; UPDATES</span></div>' +
+      '<div class="settings-section-header"><span class="settings-section-title">' + (window.BlackBookDeployment && window.BlackBookDeployment.hosted ? 'VERSION' : 'ABOUT &amp; UPDATES') + '</span></div>' +
       '<div id="settings-updates"></div></div>' +
       '</div>' +
     '</div>' +
