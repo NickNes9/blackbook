@@ -62,6 +62,12 @@ Optional profile passwords encrypt your saved data. Keep a backup and remember y
 
 Charts, fonts, and spreadsheet importing are bundled for offline use. Refreshing exchange rates and downloading updates require an internet connection.
 
+## Website edition
+
+Black Book can also be served as a static website. Its website edition opens a profile JSON file from your device and keeps the profile contents in memory only while the page is open. It does not use browser storage for profile data or send that data to the website. Browser support differs: some can save directly to the selected file; Firefox and iPhone Safari require saving a replacement file manually. See [Using Black Book from the website](docs/browser-profiles.md) for the workflow and limits.
+
+The repository includes a **manual-only** GitHub Pages workflow. To publish, first set **Settings → Pages → Build and deployment → GitHub Actions**, then open **Actions → Deploy Black Book Pages → Run workflow**. Ordinary pushes do not publish the site. The workflow packages the `public/` app only; local profiles and release artwork are excluded.
+
 ## What's new
 
 ### In development — 0.9.7 Reports

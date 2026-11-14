@@ -2,14 +2,17 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
   <title>BLACK BOOK</title>
-  <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+  <script src="./deployment-mode.js"></script>
+  <link rel="icon" href="./favicon.ico" sizes="any">
+  <link rel="apple-touch-icon" href="./apple-touch-icon.png">
   <script>try { var t = localStorage.getItem('bb-theme'); if (t === 'light') document.documentElement.setAttribute('data-theme', 'light'); } catch (e) {}</script>
-  <link rel="stylesheet" href="/vendor/hack/hack.css">
-  <link rel="stylesheet" href="/style.css">
-  <link rel="stylesheet" href="/health.css">
-  <link rel="stylesheet" href="/reports.css">
+  <link rel="stylesheet" href="./vendor/hack/hack.css">
+  <link rel="stylesheet" href="./style.css?v=0.9.8-mobile">
+  <link rel="stylesheet" href="./health.css">
+  <link rel="stylesheet" href="./reports.css">
+  <link rel="stylesheet" href="./hosted.css?v=0.9.8-mobile">
 </head>
 <body>
   <header class="app-header">
@@ -827,35 +830,38 @@
     </div>
   </div>
 
-  <script src="/vendor/chart.umd.min.js"></script>
-  <script src="/vendor/xlsx.full.min.js"></script>
-  <script src="/js/amount-parser.js"></script>
-  <script src="/js/undo-history.js"></script>
-  <script src="/js/category-availability.js"></script>
-  <script src="/js/budget-allocator.js"></script>
-<script src="/js/forecast-engine.js"></script>
+  <script src="./vendor/chart.umd.min.js"></script>
+  <script src="./vendor/xlsx.full.min.js"></script>
+  <script src="./vendor/scrypt-js-3.0.1.js"></script>
+  <script src="./js/browser-profile-crypto.js"></script>
+  <script src="./js/browser-file-store.js"></script>
+  <script src="./js/amount-parser.js"></script>
+  <script src="./js/undo-history.js"></script>
+  <script src="./js/category-availability.js"></script>
+  <script src="./js/budget-allocator.js"></script>
+<script src="./js/forecast-engine.js"></script>
   <div class="modal hidden" id="data-health-modal" role="dialog" aria-modal="true" aria-labelledby="data-health-title"><div class="modal-backdrop"></div><div class="modal-content data-tools-modal"><div class="modal-header"><h2 id="data-health-title">Data Tools</h2><button type="button" class="modal-close" onclick="BlackBook.closeModal('data-health-modal')" aria-label="Close data tools">&times;</button></div><div class="data-tools-tabs" role="tablist" aria-label="Data tools"><button type="button" id="data-tools-check-tab" class="btn btn-secondary" role="tab" aria-controls="data-tools-check-panel" onclick="BlackBook.setDataToolsTab('check')">CHECK DATA</button><button type="button" id="data-tools-recurring-tab" class="btn btn-secondary" role="tab" aria-controls="data-tools-recurring-panel" onclick="BlackBook.setDataToolsTab('recurring')">RECURRING PAYMENTS</button></div><section id="data-tools-check-panel" role="tabpanel" aria-labelledby="data-tools-check-tab"><div id="data-health-results"></div></section><section id="data-tools-recurring-panel" class="hidden" role="tabpanel" aria-labelledby="data-tools-recurring-tab"><div id="recurring-payment-results"></div></section></div></div>
-  <script src="/js/data-health.js"></script>
-  <script src="/js/local-profile-store.js"></script>
-  <script src="/js/core.js"></script>
-  <script src="/js/health-ui.js"></script>
-  <script src="/js/updates-ui.js"></script>
-  <script src="/js/page-overview.js"></script>
-  <script src="/js/page-forecast.js"></script>
-  <script src="/js/page-reports.js"></script>
-  <script src="/js/responsive-ui.js"></script>
-  <script src="/js/mobile-ui.js"></script>
-  <script src="/js/page-transactions.js"></script>
-  <script src="/js/transaction-tools.js"></script>
-  <script src="/js/page-budget.js"></script>
-  <script src="/js/page-bills.js"></script>
-  <script src="/js/page-cards.js"></script>
-  <script src="/js/page-savings.js"></script>
-  <script src="/js/page-wishlist.js"></script>
-  <script src="/js/page-debts.js"></script>
-  <script src="/js/page-invoices.js"></script>
-  <script src="/js/page-settings.js"></script>
-  <script src="/js/browser-file-profile.js"></script>
+  <script src="./js/data-health.js"></script>
+  <script src="./js/local-profile-store.js"></script>
+  <script src="./js/core.js?v=0.9.8-mobile"></script>
+  <script src="./js/health-ui.js"></script>
+  <script src="./js/updates-ui.js"></script>
+  <script src="./js/page-overview.js?v=0.9.8-mobile"></script>
+  <script src="./js/page-forecast.js"></script>
+  <script src="./js/page-reports.js"></script>
+  <script src="./js/responsive-ui.js"></script>
+  <script src="./js/mobile-ui.js?v=0.9.8-mobile"></script>
+  <script src="./js/page-transactions.js"></script>
+  <script src="./js/transaction-tools.js"></script>
+  <script src="./js/page-budget.js"></script>
+  <script src="./js/page-bills.js"></script>
+  <script src="./js/page-cards.js"></script>
+  <script src="./js/page-savings.js"></script>
+  <script src="./js/page-wishlist.js"></script>
+  <script src="./js/page-debts.js"></script>
+  <script src="./js/page-invoices.js"></script>
+  <script src="./js/page-settings.js"></script>
+  <script src="./js/browser-file-profile.js"></script>
   <script>
     window.addEventListener('error', function (e) { console.error('Unhandled:', e.error || e.message); });
     document.addEventListener('DOMContentLoaded', function () { BlackBook.init(); });

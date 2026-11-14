@@ -18,7 +18,8 @@ Object.assign(window.BlackBook, {
     if (this.budgetDonutChart) { this.budgetDonutChart.destroy(); this.budgetDonutChart = null; }
     if (!this.data.budgets) this.data.budgets = [];
     if (!this.data.budgetAllocations) this.data.budgetAllocations = [];
-    const hideGraph = !!(this.data.settings && this.data.settings.hideBudgetGraph);
+    const mobileGraphView = window.matchMedia && window.matchMedia('(max-width:500px)').matches;
+    const hideGraph = mobileGraphView ? this._mobileBudgetGraphOn !== true : !!(this.data.settings && this.data.settings.hideBudgetGraph);
     el.innerHTML = this.monthPickerHtml() +
       this.budgetSummaryHtml() + this.budgetAllocationBannerHtml() +
       '<div class="list-sep"></div>' +
@@ -39,6 +40,11 @@ Object.assign(window.BlackBook, {
   },
 
   async toggleBudgetGraph() {
+    if (window.matchMedia && window.matchMedia('(max-width:500px)').matches) {
+      this._mobileBudgetGraphOn = this._mobileBudgetGraphOn !== true;
+      this.renderPage('budget');
+      return;
+    }
     this.data.settings.hideBudgetGraph = !(this.data.settings && this.data.settings.hideBudgetGraph);
     await this.save();
     this.renderPage('budget');

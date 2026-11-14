@@ -7,6 +7,37 @@ import { createProfileStore, safeProfileName, StorageError } from '../lib/storag
 
 const defaults = { accounts: [], settings: { baseCurrency: 'RSD' } };
 
+test('opened profile saves to its selected location and remembers that location', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'black-book-open-file-'));
+  try {
+    const profilesDir = join(dir, 'profiles');
+    const file = join(dir, 'Selected.json');
+    const original = { accounts:[], categories:[], transactions:[], settings:{ baseCurrency:'EUR' } };
+    writeFileSync(file, JSON.stringify(original));
+    const store = createProfileStore({ profilesDir, defaultData:defaults });
+    const name = store.registerFile(file);
+    store.write(name, { ...original, transactions:[{ id:'new', amount:123 }] });
+    assert.equal(JSON.parse(readFileSync(file, 'utf8')).transactions.length, 1);
+    assert.deepEqual(JSON.parse(readFileSync(file + '.bak', 'utf8')), original);
+    const reopened = createProfileStore({ profilesDir, defaultData:defaults });
+    assert.equal(reopened.profileFile(name), file);
+    assert.equal(reopened.read(name).transactions.length, 1);
+  } finally { rmSync(dir, { recursive:true, force:true }); }
+});
+
+test('opened encrypted profile uses its original password metadata', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'black-book-open-locked-'));
+  try {
+    const file = join(dir, 'Locked.json');
+    writeFileSync(file, JSON.stringify({ enc:'aes-256-gcm', iv:'test', data:'test' }));
+    writeFileSync(join(dir, 'auth'), JSON.stringify({ Locked:{ salt:'original' } }));
+    const store = createProfileStore({ profilesDir:join(dir, 'profiles'), defaultData:defaults });
+    const name = store.registerFile(file);
+    assert.equal(store.hasPassword(name), true);
+    assert.equal(store.getAuth(name).salt, 'original');
+  } finally { rmSync(dir, { recursive:true, force:true }); }
+});
+
 test('a moved profile folder is recovered without touching the moved data', () => {
   const dir = mkdtempSync(join(tmpdir(), 'black-book-moved-'));
   try {

@@ -15,6 +15,8 @@ runtime/
 .superpowers/
 *.log
 Black Book.pid
+last-profile
+.profile-recovery/
 
 # Update artifacts
 dist/

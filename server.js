@@ -40,13 +40,31 @@ const DEFAULT_DATA = {
   }
 };
 
-const store = createProfileStore({ profilesDir: PROFILES_DIR, legacyDataFile: LEGACY_DATA_FILE, defaultData: DEFAULT_DATA });
+const store = createProfileStore({ profilesDir: PROFILES_DIR, legacyDataFile: LEGACY_DATA_FILE, defaultData: DEFAULT_DATA, lastProfileFile: join(APP_DIR, 'last-profile'), recoveryDir: join(APP_DIR, '.profile-recovery') });
+const profileSaveTimers = new Map();
+function flushProfile(profile) {
+  clearTimeout(profileSaveTimers.get(profile));
+  profileSaveTimers.delete(profile);
+  return store.flush(profile);
+}
+function scheduleProfileSave(profile, enabled) {
+  clearTimeout(profileSaveTimers.get(profile));
+  profileSaveTimers.delete(profile);
+  if (!enabled) return;
+  profileSaveTimers.set(profile, setTimeout(() => {
+    try { flushProfile(profile); }
+    catch (error) { logger('[black-book] Profile remains in local recovery:', error.message); }
+  }, 5000));
+}
 const app = express();
 const unlocked = new Map();
 const transactionLoadSessions = new Map();
 const TRANSACTION_LOAD_TTL_MS = 2 * 60 * 60 * 1000;
 const startedAt = Date.now();
 app.get('/api/instance', (req, res) => res.json({ appName: 'Black Book', instanceId: INSTANCE_ID, pid: process.pid, startedAt, runtimeVersion: process.versions.node }));
+app.get('/deployment-mode.js', (req, res) => {
+  res.type('application/javascript').set('Cache-Control', 'no-store').send('window.BlackBookDeployment = Object.freeze({ hosted: false, isHosted() { return false; } });');
+});
 
 app.use(express.json({ limit: '50mb' }));
 app.use((error, req, res, next) => {
@@ -146,6 +164,7 @@ app.get('/api/load', (req, res) => {
     const profile = req.query.profile || '';
     const doc = readProfileForLoad(profile);
     if (!doc) return res.status(401).json({ error: 'locked' });
+    store.rememberLastProfile(profile);
     const firstCount = Math.max(0, Math.min(10_000, Number.parseInt(req.query.initialTransactions, 10) || 0));
     const transactions = Array.isArray(doc.transactions) ? doc.transactions : [];
     if (!firstCount || transactions.length <= firstCount) return res.json(doc);
@@ -225,12 +244,22 @@ app.post('/api/save', (req, res) => {
     if (store.hasPassword(profile)) {
       const session = unlocked.get(profile);
       if (!session) throw new StorageError('Profile is locked', 401);
-      store.write(profile, encryptWithKey(dataToSave, session.key));
+      store.stage(profile, encryptWithKey(dataToSave, session.key, session.kdf));
       session.doc = dataToSave;
     } else {
-      store.write(profile, dataToSave);
+      store.stage(profile, dataToSave);
     }
+    scheduleProfileSave(profile, dataToSave.settings?.autosave !== false);
     if (loadSession) loadSession.lastUsed = Date.now();
+    return res.json({ ok: true });
+  } catch (error) { return sendError(res, error); }
+});
+
+app.post('/api/save-file', (req, res) => {
+  try {
+    const profile = req.body?.profile || '';
+    if (store.hasPassword(profile) && !unlocked.has(profile)) throw new StorageError('Profile is locked', 401);
+    flushProfile(profile);
     return res.json({ ok: true });
   } catch (error) { return sendError(res, error); }
 });
@@ -252,6 +281,44 @@ function runLocalCommand(command, args) {
 function powershellArgs(script) {
   return ['-NoProfile', '-STA', '-WindowStyle', 'Hidden', '-EncodedCommand', Buffer.from(script, 'utf16le').toString('base64')];
 }
+
+async function pickProfileFile() {
+  if (process.platform === 'win32') {
+    const script = "Add-Type -AssemblyName System.Windows.Forms; [Console]::OutputEncoding = New-Object System.Text.UTF8Encoding($false); $owner = New-Object System.Windows.Forms.Form; $owner.TopMost = $true; $owner.ShowInTaskbar = $false; $owner.Opacity = 0; $owner.Width = 1; $owner.Height = 1; $owner.StartPosition = 'CenterScreen'; $dialog = New-Object System.Windows.Forms.OpenFileDialog; $dialog.Title = 'Open Black Book profile'; $dialog.Filter = 'Black Book profiles (*.json)|*.json|All files (*.*)|*.*'; $dialog.Multiselect = $false; try { $owner.Show(); $owner.Activate(); $owner.BringToFront(); if ($dialog.ShowDialog($owner) -eq [System.Windows.Forms.DialogResult]::OK) { [Console]::Write($dialog.FileName) } } finally { $dialog.Dispose(); $owner.Dispose() }";
+    const result = await runLocalCommand('powershell.exe', powershellArgs(script));
+    if (result.code !== 0) throw new StorageError('The profile picker could not open.', 500);
+    return result.stdout;
+  }
+  if (process.platform === 'darwin') {
+    const result = await runLocalCommand('osascript', ['-e', 'POSIX path of (choose file with prompt "Open Black Book profile")']);
+    if (result.code !== 0 && /user canceled|-128/i.test(result.stderr)) return '';
+    if (result.code !== 0) throw new StorageError('The profile picker could not open.', 500);
+    return result.stdout;
+  }
+  try {
+    const result = await runLocalCommand('zenity', ['--file-selection', '--title=Open Black Book profile', '--file-filter=Black Book profiles | *.json']);
+    if (result.code === 1) return '';
+    if (result.code !== 0) throw new StorageError('The profile picker could not open.', 500);
+    return result.stdout;
+  } catch (error) {
+    if (error.code !== 'ENOENT') throw error;
+    const result = await runLocalCommand('kdialog', ['--getopenfilename', '', '*.json|Black Book profiles']);
+    if (result.code === 1) return '';
+    if (result.code !== 0) throw new StorageError('Install zenity or kdialog to choose profile files.', 500);
+    return result.stdout;
+  }
+}
+
+app.post('/api/profile-file/open', async (req, res) => {
+  try {
+    const address = req.socket.remoteAddress || '';
+    if (!['127.0.0.1', '::1', '::ffff:127.0.0.1'].includes(address)) throw new StorageError('Open profile files from the desktop app on this computer.', 403);
+    const file = await pickProfileFile();
+    if (!file) return res.json({ cancelled:true });
+    const name = store.registerFile(realpathSync(file));
+    return res.json({ name, hasPassword:store.hasPassword(name) });
+  } catch (error) { return sendError(res, error); }
+});
 
 async function pickInvoiceFile() {
   if (process.platform === 'win32') {
@@ -344,7 +411,7 @@ app.post('/api/import', (req, res) => {
     const session = store.hasPassword(profile) ? unlocked.get(profile) : null;
     if (store.hasPassword(profile) && !session) throw new StorageError('Profile is locked', 401);
     const backup = store.backup(profile);
-    store.write(profile, session ? encryptWithKey(data, session.key) : data);
+    store.write(profile, session ? encryptWithKey(data, session.key, session.kdf) : data);
     if (session) session.doc = data;
     return res.json({ ok: true, backup });
   } catch (error) { return sendError(res, error); }
@@ -358,7 +425,8 @@ app.post('/api/unlock', (req, res) => {
     if (typeof password !== 'string' || !password) throw new StorageError('Password required', 400);
     const key = deriveKey(password, auth.salt, auth);
     const doc = decryptEnvelope(store.read(name), key);
-    unlocked.set(name, { doc, key });
+    unlocked.set(name, { doc, key, kdf: { name: 'scrypt', salt: auth.salt, N: auth.N, r: auth.r, p: auth.p } });
+    store.rememberLastProfile(name);
     return res.json({ ok: true, doc });
   } catch (error) {
     if (error instanceof StorageError && error.status === 401) return sendError(res, error);
@@ -371,8 +439,9 @@ app.post('/api/unlock', (req, res) => {
 
 app.get('/api/profiles', (req, res) => {
   try {
+    const lastUsedProfile = store.lastUsedProfile();
     const profiles = store.list().map((p) => ({ ...p, hasPassword: store.hasPassword(p.name) }));
-    return res.json({ profiles, defaultHasPassword: store.hasPassword('') });
+    return res.json({ profiles, lastUsedProfile, defaultHasPassword: store.hasPassword('') });
   } catch (error) { return sendError(res, error); }
 });
 
@@ -386,7 +455,7 @@ app.post('/api/profiles', (req, res) => {
         const { envelope, salt, opts } = encryptProfileDoc(doc, password);
         store.write(name, envelope);
         store.setAuth(name, { ...opts, salt });
-        unlocked.set(name, { doc, key: deriveKey(password, salt, opts) });
+        unlocked.set(name, { doc, key: deriveKey(password, salt, opts), kdf: { name: 'scrypt', salt, N: opts.N, r: opts.r, p: opts.p } });
       }
     } else if (action === 'rename') {
       const wasUnlocked = unlocked.has(name);
@@ -419,7 +488,7 @@ function setProfilePassword(name, currentPassword, newPassword) {
   const { envelope, salt, opts } = encryptProfileDoc(doc, newPassword);
   store.write(name, envelope);
   store.setAuth(name, { ...opts, salt });
-  unlocked.set(name, { doc, key: deriveKey(newPassword, salt, opts) });
+  unlocked.set(name, { doc, key: deriveKey(newPassword, salt, opts), kdf: { name: 'scrypt', salt, N: opts.N, r: opts.r, p: opts.p } });
 }
 
 function removeProfilePassword(name, currentPassword) {

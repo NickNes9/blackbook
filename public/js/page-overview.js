@@ -7,7 +7,8 @@ Object.assign(window.BlackBook, {
     this.hideDonutTooltip();
     if (this.overviewPieChart) { this.overviewPieChart.destroy(); this.overviewPieChart = null; }
     if (this.overviewLineChart) { this.overviewLineChart.destroy(); this.overviewLineChart = null; }
-    const hideGraph = !!(this.data.settings && this.data.settings.hideOverviewGraph);
+    const mobileGraphView = window.matchMedia && window.matchMedia('(max-width:500px)').matches;
+    const hideGraph = mobileGraphView ? this._mobileOverviewGraphOn !== true : !!(this.data.settings && this.data.settings.hideOverviewGraph);
     el.innerHTML = this.accountCardsHtml() + '<div class="list-sep overview-accounts-sep"></div>' + this.monthPickerHtml() + this.monthSummaryHtml() + this.categoryBreakdownHtml() +
       this.categoryFilterHtml() + this.selectedTransactionDetailsHtml() + '<div class="tx-list-wrap">' + this.recentTransactionsHtml() + '</div>' +
       (hideGraph
@@ -159,6 +160,14 @@ Object.assign(window.BlackBook, {
   async toggleOverviewGraph() {
     const wrap = document.querySelector('.tx-list-wrap');
     const scrollTop = wrap ? wrap.scrollTop : 0;
+    if (window.matchMedia && window.matchMedia('(max-width:500px)').matches) {
+      this._mobileOverviewGraphOn = this._mobileOverviewGraphOn !== true;
+      this.renderOverview();
+      this.updateGraphFooter();
+      const mobileList = document.querySelector('.tx-list-wrap');
+      if (mobileList) mobileList.scrollTop = scrollTop;
+      return;
+    }
     this.data.settings.hideOverviewGraph = !(this.data.settings && this.data.settings.hideOverviewGraph);
     await this.save();
     this.renderOverview();
@@ -650,7 +659,7 @@ Object.assign(window.BlackBook, {
     this._accountsPanelDismissBound = true;
     document.addEventListener('pointerdown', (e) => {
       if (!this._accountsPanelOpen) return;
-      if (e.target.closest('.account-mgr-square')) return;
+      if (e.target.closest('.mobile-accounts-control, .account-mgr-square, .mobile-action-bar [data-action="accounts"]')) return;
       if (e.target.closest('.accounts-panel')) return;
       this.closeAccountsPanel();
     });
@@ -660,7 +669,11 @@ Object.assign(window.BlackBook, {
   },
 
   syncAccountsPanel() {
-    const container = document.querySelector('.account-chips');
+    const chips = document.querySelector('.account-chips');
+    const mobileToolbar = window.matchMedia && window.matchMedia('(max-width:500px)').matches
+      ? document.querySelector('#page-overview .mobile-overview-toolbar') : null;
+    const container = mobileToolbar || chips;
+    document.querySelectorAll('#page-overview .mobile-accounts-control').forEach(button => button.setAttribute('aria-expanded', String(!!this._accountsPanelOpen)));
     if (!container) return;
     let panel = document.getElementById('accounts-panel');
     if (this._accountsPanelOpen) {
@@ -689,12 +702,13 @@ Object.assign(window.BlackBook, {
         '<div class="ap-name-wrap"><span class="ap-name">' + this.escapeHtml(a.name) + '</span></div>' +
         '<div class="ap-actions">' + eye + '</div></div>';
     }).join('');
-    panel.innerHTML =
-      '<div class="accounts-panel-head"><span>Accounts</span></div>' +
-      rows +
-      '<div class="ap-footer"><button class="btn btn-sm btn-primary" onclick="BlackBook.closeAccountsPanel();BlackBook.openNewAccount()">+ ADD</button>' +
-      '<button class="btn btn-sm btn-secondary" onclick="BlackBook.closeAccountsPanel();BlackBook.navigateTo(\x27settings\x27)">MANAGE IN SETTINGS</button>' +
-      '<button class="btn btn-sm btn-secondary" onclick="BlackBook.closeAccountsPanel();BlackBook.openAccountReconcile()">RECONCILE BALANCE</button></div>';
+    const mobile = window.matchMedia && window.matchMedia('(max-width:500px)').matches;
+    const footer = mobile
+      ? '<div class="ap-footer"><button class="btn btn-sm btn-secondary" onclick="BlackBook.closeAccountsPanel();BlackBook.openAccountReconcile()">RECONCILE BALANCE</button></div>'
+      : '<div class="ap-footer"><button class="btn btn-sm btn-primary" onclick="BlackBook.closeAccountsPanel();BlackBook.openNewAccount()">+ ADD</button>' +
+        '<button class="btn btn-sm btn-secondary" onclick="BlackBook.closeAccountsPanel();BlackBook.navigateTo(\x27settings\x27)">MANAGE IN SETTINGS</button>' +
+        '<button class="btn btn-sm btn-secondary" onclick="BlackBook.closeAccountsPanel();BlackBook.openAccountReconcile()">RECONCILE BALANCE</button></div>';
+    panel.innerHTML = '<div class="accounts-panel-head"><span>Accounts</span></div>' + rows + footer;
     this.bindVerticalReorder(panel, '.ap-row[data-reorder-key]', ids => this.reorderAccounts(ids), { dragAnywhere:true });
   },
 
@@ -1188,8 +1202,8 @@ Object.assign(window.BlackBook, {
       updateReadout(initialIndex);
       chart.draw();
     };
-    const chooseBucket = event => {
-      if (!isInsidePlot(event)) return;
+    const chooseBucket = (event, dragging = false) => {
+      if (!dragging && !isInsidePlot(event)) return;
       const rect = canvas.getBoundingClientRect();
       const x = event.clientX - rect.left;
       const area = chart.chartArea;
@@ -1200,11 +1214,36 @@ Object.assign(window.BlackBook, {
       updateReadout(index);
       chart.draw();
     };
-    canvas.addEventListener('mousemove', event => {
-      if (isInsidePlot(event)) chooseBucket(event);
-      else resetMarkerToCurrentMonth();
+    let activeChartPointer = null;
+    canvas.addEventListener('pointerdown', event => {
+      if (event.isPrimary === false || (event.button != null && event.button !== 0) || !isInsidePlot(event)) return;
+      activeChartPointer = event.pointerId;
+      try { canvas.setPointerCapture(event.pointerId); } catch (_) {}
+      chooseBucket(event, true);
+      if (event.cancelable) event.preventDefault();
     });
-    canvas.addEventListener('mouseleave', resetMarkerToCurrentMonth);
+    canvas.addEventListener('pointermove', event => {
+      if (activeChartPointer === event.pointerId) {
+        chooseBucket(event, true);
+        if (event.cancelable) event.preventDefault();
+        return;
+      }
+      if (event.pointerType === 'mouse') {
+        if (isInsidePlot(event)) chooseBucket(event);
+        else resetMarkerToCurrentMonth();
+      }
+    });
+    const finishChartPointer = event => {
+      if (activeChartPointer == null || (event && event.pointerId !== activeChartPointer)) return;
+      activeChartPointer = null;
+      resetMarkerToCurrentMonth();
+    };
+    canvas.addEventListener('pointerup', finishChartPointer);
+    canvas.addEventListener('pointercancel', finishChartPointer);
+    canvas.addEventListener('lostpointercapture', finishChartPointer);
+    canvas.addEventListener('pointerleave', event => {
+      if (event.pointerType === 'mouse' && activeChartPointer == null) resetMarkerToCurrentMonth();
+    });
   },
   renderOverviewDonut() {
     const canvas = document.getElementById('overview-donut-chart');

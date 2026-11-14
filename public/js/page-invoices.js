@@ -11,6 +11,11 @@ Object.assign(window.BlackBook, {
   _bindInvoiceFilePicker() {
     const btn = document.getElementById('invoice-file-btn');
     if (!btn) return;
+    if (window.BlackBookDeployment && window.BlackBookDeployment.hosted) {
+      btn.disabled = true;
+      btn.title = 'Local path attachments are not available in the hosted version.';
+      return;
+    }
     if (btn._bound) return;
     btn._bound = true;
     btn.addEventListener('click', async () => {

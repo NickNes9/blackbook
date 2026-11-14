@@ -1,6 +1,11 @@
 (function () {
 const cleanDescription = value => window.TransactionTools ? window.TransactionTools.cleanDescription(value) : String(value || '').replace(/\u2063/g, '');
 Object.assign(window.BlackBook, {
+  async toggleAutosave() {
+    this.data.settings.autosave = this.data.settings.autosave === false;
+    await this.save();
+    this.renderSettings();
+  },
   renderSettings() {
     const el = document.getElementById('page-settings');
     if (!el) return;
@@ -1737,6 +1742,7 @@ Object.assign(window.BlackBook, {
       '<div class="form-group"><label>Shorthand Currency</label><div style="display:flex;gap:6px;"><button type="button" class="btn btn-sm ' + ((this.data.settings.currencyDisplay || 'symbol') === 'symbol' ? 'btn-primary' : 'btn-secondary') + '" data-currency-display="symbol">SYMBOLS</button><button type="button" class="btn btn-sm ' + (this.data.settings.currencyDisplay === 'code' ? 'btn-primary' : 'btn-secondary') + '" data-currency-display="code">CODES</button></div></div>' +
       '</div></div>' +
       '<div class="form-group settings-attention-field"><label>Attention Bar</label><button id="settings-attention-toggle" aria-pressed="' + !this.data.settings.attentionBarHidden + '" class="btn btn-sm ' + (this.data.settings.attentionBarHidden ? 'btn-secondary' : 'btn-primary') + '" onclick="BlackBook.toggleAttentionBar()">' + (this.data.settings.attentionBarHidden ? 'HIDE' : 'SHOW') + '</button></div>' +
+      '<div class="form-group"><label>Autosave</label><button type="button" class="btn btn-sm ' + (this.data.settings.autosave !== false ? 'btn-primary' : 'btn-secondary') + '" aria-pressed="' + (this.data.settings.autosave !== false) + '" onclick="BlackBook.toggleAutosave()">' + (this.data.settings.autosave !== false ? 'ON' : 'OFF') + '</button></div>' +
       '<div class="settings-section">' +
       '<div class="settings-section-header"><span class="settings-section-title">PAGES</span></div>' +
       '<div class="settings-list">' + pagesList + '</div></div>' +
@@ -1766,7 +1772,7 @@ Object.assign(window.BlackBook, {
 '<button class="btn btn-secondary" id="settings-import-rules-btn" onclick="BlackBook.openImportRule()">IMPORT RULES</button>' +
       '</div></div>' +
       '<div class="settings-section">' +
-      '<div class="settings-section-header"><span class="settings-section-title">ABOUT &amp; UPDATES</span></div>' +
+      '<div class="settings-section-header"><span class="settings-section-title">' + (window.BlackBookDeployment && window.BlackBookDeployment.hosted ? 'VERSION' : 'ABOUT &amp; UPDATES') + '</span></div>' +
       '<div id="settings-updates"></div></div>' +
       '</div>' +
     '</div>' +

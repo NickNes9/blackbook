@@ -28,6 +28,7 @@ window.BlackBook = {
   _saveQueue: Promise.resolve(),
   _appLoading: true,
   _browserFolderMode: false,
+  _hostedMode: false,
   _localProfileRecord: null,
   _localProfileBase: null,
 
@@ -36,8 +37,8 @@ window.BlackBook = {
     this.setSaveState('loading');
     this.enhancePasswordFields();
     let response = { status: 200 };
-    this._browserFolderMode = localStorage.getItem('bb_profile_storage') === 'folder';
-    this._browserFileMode = localStorage.getItem('bb_profile_storage') === 'file';
+    this._browserFolderMode = !this._hostedMode && localStorage.getItem('bb_profile_storage') === 'folder';
+    this._browserFileMode = !!this._hostedMode || localStorage.getItem('bb_profile_storage') === 'file';
     if (this._browserFileMode) {
       if (!this._browserFileInitialData) { await this.showBrowserFolderStart(); return; }
       this.data = this._browserFileInitialData;
@@ -71,11 +72,16 @@ window.BlackBook = {
         const profilesInfo = await profilesResponse.json();
         if (!profilesResponse.ok) throw new Error(profilesInfo.error || 'Could not list profiles.');
         const profiles = profilesInfo.profiles || [];
+        if ((!this.profile || !profiles.some(p => p.name === this.profile)) && profilesInfo.lastUsedProfile !== null && profilesInfo.lastUsedProfile !== undefined &&
+            (!profilesInfo.lastUsedProfile || profiles.some(p => p.name === profilesInfo.lastUsedProfile))) {
+          this.profile = profilesInfo.lastUsedProfile;
+        }
         if (this.profile && !profiles.some(p => p.name === this.profile)) {
           this.profile = '';
           localStorage.removeItem('mb_profile');
         }
         this._firstRun = !profiles.length;
+        if (!this.profile && profiles.length) this.profile = profiles[0].name;
         response = await fetch('/api/load?initialTransactions=1000' + (this.profile ? '&profile=' + encodeURIComponent(this.profile) : ''));
         if (response.status !== 401) {
           const loaded = await response.json();
@@ -151,7 +157,7 @@ window.BlackBook = {
     this.updateNavVisibility();
 
     const rates = this.getRates();
-    if (['EUR', 'USD', 'XAU'].some(c => !rates[c] || !rates[c].rate)) {
+    if (!this._hostedMode && ['EUR', 'USD', 'XAU'].some(c => !rates[c] || !rates[c].rate)) {
       fetch('/api/exchange-rate').then(r => r.json()).then(result => {
         if (result.rates) {
           Object.assign(this.getRates(), result.rates);
@@ -186,7 +192,7 @@ if (!this._browserFolderMode && !this._browserFileMode) { this.connectWebSocket(
     this.bindTransferForm();
     this.bindSettingsModals();
 
-    document.querySelector('#transaction-modal .modal-backdrop').addEventListener('click', () => { document.getElementById('transaction-form').requestSubmit(); });
+    document.querySelector('#transaction-modal .modal-backdrop').addEventListener('click', () => this.closeModal('transaction-modal'));
     document.querySelector('#bill-modal .modal-backdrop').addEventListener('click', () => this.closeModal('bill-modal'));
     document.querySelector('#savings-modal .modal-backdrop').addEventListener('click', () => this.closeModal('savings-modal'));
     document.querySelector('#savings-entry-modal .modal-backdrop').addEventListener('click', () => this.closeModal('savings-entry-modal'));
@@ -985,7 +991,8 @@ if (!this._browserFolderMode && !this._browserFileMode) { this.connectWebSocket(
       const delta = before && after && this._undoHistory ? this._undoHistory.diff(before, after) : null;
       try {
         if (this._browserFileMode) {
-          // File mode keeps edits in memory until the user exports the profile.
+          if (this._browserFileHandle && this.data.settings.autosave !== false) await this.writeBrowserProfileFile(payload);
+          // Browsers without write access keep edits in memory until a manual save.
         } else if (this._browserFolderMode) {
           const result = await BrowserProfileStore.save(this._localProfileRecord, this._localProfileBase, payload, this._localProfileWriterId);
           if (this.profile === profile) {
@@ -2608,6 +2615,7 @@ if (!this._browserFolderMode && !this._browserFileMode) { this.connectWebSocket(
   },
 
   _invFileStore() {
+    if (this._hostedMode) return Promise.reject(new Error('Invoice file storage is unavailable in the hosted version.'));
     if (this._invFileStorePromise) return this._invFileStorePromise;
     this._invFileStorePromise = new Promise((resolve, reject) => {
       const req = indexedDB.open('blackbook-invoice-files', 1);

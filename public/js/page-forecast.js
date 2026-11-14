@@ -19,7 +19,8 @@
       const eventRows = result.events.length ? result.events.map(event =>
         '<div class="forecast-event"><span>' + this.escapeHtml(this.fmtDateInput(event.date)) + '</span><span class="forecast-kind">' + this.escapeHtml(event.kind.toUpperCase()) + '</span><span>' + this.escapeHtml(event.name) + '</span><span class="' + (event.baseAmount < 0 ? 'amount-negative' : 'amount-positive') + '">' + this.fmtBase(event.baseAmount) + '</span></div>').join('') :
         '<div class="reports-empty">Nothing scheduled in this period.</div>';
-      const hideGraph = !!(this.data.settings && this.data.settings.hideForecastGraph);
+      const mobileGraphView = window.matchMedia && window.matchMedia('(max-width:500px)').matches;
+      const hideGraph = mobileGraphView ? this._mobileForecastGraphOn !== true : !!(this.data.settings && this.data.settings.hideForecastGraph);
       const opening = Object.values(result.openingBalances).reduce((sum, amount) => sum + amount, 0);
       return {
         summary: this.reportsSummaryHtml([
@@ -63,6 +64,13 @@
     },
 
     async toggleForecastGraph() {
+      if (window.matchMedia && window.matchMedia('(max-width:500px)').matches) {
+        this._mobileForecastGraphOn = this._mobileForecastGraphOn !== true;
+        if (this.currentPage === 'reports') this.renderPage('reports');
+        else this.renderForecast();
+        this.updateGraphFooter();
+        return;
+      }
       this.data.settings.hideForecastGraph = !(this.data.settings && this.data.settings.hideForecastGraph);
       await this.save();
       if (this.currentPage === 'reports') this.renderPage('reports');

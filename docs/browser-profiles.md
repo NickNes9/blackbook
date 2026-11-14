@@ -1,27 +1,37 @@
-# Profiles in the website
+# Using Black Book from the website
 
-Black Book supports two browser storage workflows. Neither sends profile contents to a Black Book server.
+The website version is a static copy of Black Book. It does not have a profile server or online account. Your profile is a JSON file on your device or in a folder that your storage provider syncs.
 
-## Folder mode
+## Open a profile
 
-On browsers with a supported read/write directory picker, choose OPEN FOLDER. Black Book writes profile.json and its .blackbook change journals in that directory. The browser remembers a permission handle; it can ask you to reconnect it later. A plain filesystem path cannot grant a website access to a folder.
+Choose **OPEN FILE** and select a Black Book profile. On a device where the browser can safely keep a file permission, Black Book can remember the file handle and save directly to it. The browser remembers only the file permission handle and file name; Black Book keeps the profile contents in memory while the page is open.
 
-## File mode: Firefox and iPhone Safari
+Firefox and iPhone Safari do not provide the same direct overwrite workflow. Open the profile from the device's file picker, make changes, then choose **SAVE FILE**. Save the replacement and put it back in place of the original. On iPhone, choose **Save to Files** in the share sheet.
 
-1. Choose OPEN FILE and select a Black Book profile.json or a JSON export. On iPhone, select it through Files, including iCloud Drive or another available file provider.
-2. Edit normally. Changes remain in the current tab's memory. The browser remembers the workflow and filename, not the profile contents.
-3. Click SAVE FILE at the top, or in Settings under Profiles.
-4. On Firefox, save the downloaded JSON and replace the original profile file. On iPhone, choose Save to Files in the share sheet and replace the original file.
-5. Wait for your storage provider to finish syncing before opening the profile on another device.
+If a password protects the profile, enter it after opening the file. New encrypted profiles include their unlock settings inside the encrypted profile file, so the file can be opened on desktop and in the website version. Older encrypted files that use a separate `auth` file need that file selected once when opening.
 
-NEW PROFILE FILE creates a profile in memory. Use SAVE FILE to put it on your device. The profile edit dialog can change its name, currency and defaults. File profiles use plain JSON; password-encrypted desktop profiles must first be exported as JSON.
+## Create a profile
 
-SAVE FILE means changes have not been exported. EXPORTED means the file was handed to the browser's download or share interface; it does not verify that the original file was replaced. Closing or refreshing with unexported changes triggers the browser's leave warning when supported. Mobile browsers may terminate tabs without that warning, so export regularly.
+Choose **NEW PROFILE**, enter the profile and first account details, then create it. Add a password if you want the profile encrypted. In browsers with a save picker, choose the location for the new file. In other browsers, use **SAVE FILE** to download or share it.
 
-Open the file again after restarting or refreshing the website. File mode cannot remember read/write access to the original location, overwrite it silently, or monitor its cloud updates. Use one device at a time. Do not edit a folder-mode profile concurrently with an exported file-mode copy: the copy does not contain the folder's merge journals.
+## Use a synced folder
 
-## Implementation
+You can keep the profile file inside a folder synced by iCloud Drive, Dropbox, Google Drive, or another provider. Black Book itself does not connect to those services or upload the file. The provider syncs the file like any other document.
 
-The shared editor and save queue operate on the loaded data. File mode bypasses the server save endpoint and websocket connection. browser-file-profile.js implements the file picker, new-profile form, JSON export, iPhone share integration, save indicator and leave warning. Folder mode retains its existing directory store.
+To use the same profile on another device, wait until the provider has finished syncing, then open that same file in Black Book. Do not edit one profile on two devices at the same time. If both devices save while offline or simultaneously, the storage provider may create conflicting copies; the website does not merge those changes.
 
-Logic checks cover JSON export, no server save requests in file mode, download and simulated iPhone sharing/cancellation, save status, and unexported-change warnings. Real Firefox desktop and Safari iPhone interface acceptance still requires a device/browser pass.
+## Save status
+
+The desktop app reopens the last-used profile by its saved file path. Profiles default to the `profiles` folder beside the app and can also live in other directories. The app remembers the last path in `last-profile` beside the app.
+
+**Autosave** in Settings defaults to **ON**. On desktop, each edit is first saved to `.profile-recovery` beside the app (with encryption preserved for password-protected profiles). After five seconds without edits, or when leaving the app, Black Book writes the recovered changes to the main profile file. This reduces repeated writes into synced folders. With autosave off, edits remain in local recovery until you click **SAVE** in the header; reopening the profile restores the recovered changes. Recovery files and the remembered path are excluded from Git.
+
+The hosted website cannot use that desktop recovery folder. With direct file access and autosave enabled it writes the selected file; otherwise edits stay in memory until **SAVE FILE**. No profile contents are persisted in browser storage.
+
+In browsers that can overwrite the selected file, **SAVED** means Black Book wrote to that file. In Firefox and iPhone Safari, **SAVE FILE** means you have edits to export. After you save or share the replacement, Black Book cannot confirm that you replaced the original file.
+
+The profile contents are not stored in localStorage, IndexedDB, Cache Storage, or a service worker, and are not sent to the website host or another service. A supported browser may retain a file permission handle and its display name so it can offer to reopen the same file.
+
+## Differences in the website version
+
+The desktop app keeps its local profile manager and update installer. The website version opens one profile file at a time, has no automatic update check, and cannot open an invoice attachment that is only a path on another computer. Attachments already embedded in a profile continue to work. Exchange rates are taken from the profile and can be edited manually; the website does not fetch rates from an external service.
