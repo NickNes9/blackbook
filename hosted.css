@@ -1,0 +1,13 @@
+.bb-profile-start .app-footer,.bb-profile-start .mobile-action-bar{display:none!important}
+.bb-profile-start .app-sidebar{opacity:.35;pointer-events:none}
+.bb-profile-start .sidebar-nav-item:disabled{cursor:default}
+.bb-profile-start .app-workspace{box-sizing:border-box;display:flex;align-items:center;justify-content:center;width:100%;min-width:0;margin:0;padding:20px 14px;}
+.bb-profile-start #page-overview{box-sizing:border-box;display:flex;align-items:center;justify-content:center;width:100%;min-width:0;min-height:calc(100dvh - 60px);}
+.bb-file-start-card{box-sizing:border-box;width:min(100%,520px);max-width:520px;margin:0 auto;padding:32px;background:var(--bg-panel,#171717);border:1px solid var(--border,#303030);text-align:left}
+.bb-file-start-card .empty-state-title{margin-bottom:12px}
+.bb-file-start-actions{display:flex;flex-wrap:nowrap;gap:8px;margin:22px 0 14px}
+.bb-file-start-actions #bb-create-profile-file,.bb-file-start-actions #bb-open-profile-file{flex:1 1 0;min-width:0}
+.bb-file-start-card .form-hint{max-width:none;line-height:1.6;white-space:nowrap;font-size:clamp(8px,1.65vw,11px)}
+@media(max-width:700px){.bb-profile-start .app-sidebar{display:none}.bb-profile-start .app-workspace{padding:16px 12px}.bb-profile-start #page-overview{min-height:calc(100dvh - 52px)}.bb-file-start-card{width:100%;max-width:440px;margin:0;padding:20px 16px}.bb-file-start-actions{gap:8px;margin:18px 0 12px}.bb-file-start-card .form-hint{font-size:clamp(8px,2.5vw,11px)}}
+
+.bb-file-demo-action{display:flex;align-items:center;gap:12px;margin:0 0 18px}.bb-file-demo-action .btn{flex:0 0 auto}.bb-file-demo-action span{color:var(--text-muted,#888);font-size:12px}@media(max-width:700px){.bb-file-demo-action{justify-content:space-between}}

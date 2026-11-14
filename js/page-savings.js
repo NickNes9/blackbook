@@ -1,0 +1,308 @@
+(function () {
+Object.assign(window.BlackBook, {
+  renderSavings() {
+    const el = document.getElementById('page-savings');
+    if (!el) return;
+    if (!this.data.savingsGoals) this.data.savingsGoals = [];
+    if (!this._expandedGoals) this._expandedGoals = {};
+    if (!Array.isArray(this.data.wishlist)) this.data.wishlist = [];
+    const view = this._savingsView === 'wishlist' ? 'wishlist' : 'goals';
+    const tabs = this.savingsSubpageTabsHtml(view);
+    const action = view === 'wishlist'
+      ? '<button class="btn btn-primary" onclick="BlackBook.openWishlistItem()">+ ADD ITEM</button>'
+      : '<button class="btn btn-primary" onclick="BlackBook.openNewSavingsGoal()">+ NEW GOAL</button>';
+    const content = view === 'wishlist' ? this.wishlistListHtml() : this.savingsGoalsHtml();
+    el.innerHTML = '<div class="month-picker savings-picker">' + tabs + '<span style="flex:1"></span>' + action + '</div>' +
+      (view === 'wishlist' ? this.wishlistSummaryHtml() : this.savingsSummaryHtml()) +
+      '<div class="list-sep"></div><div class="page-scroll-wrap">' + content + '</div>';
+    this.finishFocus('savings');
+  },
+
+  savingsSubpageTabsHtml(view) {
+    return '<nav class="savings-subpage-tabs" role="tablist" aria-label="Savings pages">' +
+      [['goals', 'GOALS'], ['wishlist', 'WISHLIST']].map(([id, label]) => '<button type="button" role="tab" class="btn page-control ' + (view === id ? 'btn-primary' : 'btn-secondary') + '" aria-selected="' + (view === id) + '" onclick="BlackBook.setSavingsSubpage(\'' + id + '\')">' + label + '</button>').join('') +
+      '</nav>';
+  },
+
+  setSavingsSubpage(view) {
+    if (!['goals', 'wishlist'].includes(view)) return;
+    this._savingsView = view;
+    this.renderPage('savings');
+  },
+
+  goalSaved(goal) { return (goal.entries || []).reduce((s, e) => s + e.amount, 0); },
+
+  savingsPaceHtml(goal) {
+    if (!goal.targetDate) return '';
+    const remaining = Math.max(0, (goal.targetAmount || 0) - this.goalSaved(goal));
+    const today = this.today();
+    const due = this.fmtDateInput(goal.targetDate);
+    if (!remaining) return '<div class="bill-meta-line">TARGET REACHED · ' + this.escapeHtml(due) + '</div>';
+    if (goal.targetDate < today) return '<div class="bill-meta-line">TARGET DATE PASSED · ' + this.fmtAmount(remaining, goal.currency || this.baseCurrency()) + ' remaining</div>';
+    const [year, month] = today.split('-').map(Number);
+    const [dueYear, dueMonth] = goal.targetDate.split('-').map(Number);
+    const months = Math.max(1, (dueYear - year) * 12 + dueMonth - month + 1);
+    const monthly = Math.ceil(remaining / months * 100) / 100;
+    return '<div class="bill-meta-line" title="Remaining amount divided across calendar months, including this month and the target month">TARGET ' + this.escapeHtml(due) + ' · ' + this.fmtAmount(monthly, goal.currency || this.baseCurrency()) + ' / MONTH</div>';
+  },
+
+  async openSavingsEntries(goalId) {
+    const goal = this.data.savingsGoals.find(g => g.id === goalId);
+    if (!goal) return;
+    const latest = (goal.entries || []).slice().sort((a, b) => String(b.date || '').localeCompare(String(a.date || '')))
+      .map(entry => this.savingsTransactionForEntry(entry)).find(Boolean);
+    if (latest) this.openLinkedTransaction(latest.id);
+  },
+
+  savingsTransactionForEntry(entry) {
+    return (this.data.transactions || []).find(tx => tx && (tx.linkId === entry.id || tx.id === entry.id)) || null;
+  },
+
+  savingsSummaryHtml() {
+    let totalSaved = 0, totalTarget = 0;
+    for (const g of this.data.savingsGoals) {
+      totalSaved += this.goalSaved(g);
+      totalTarget += (g.targetAmount || 0);
+    }
+    const pct = totalTarget > 0 ? Math.min(Math.round(totalSaved / totalTarget * 100), 100) : 0;
+    return '<div class="savings-summary-row">' +
+      '<div class="savings-total-text"><span class="month-summary-label">SAVED</span><span class="month-summary-value">' + this.fmtBase(totalSaved) + '</span><span class="month-summary-label">OF</span><span class="month-summary-value">' + this.fmtBase(totalTarget) + '</span><span class="month-summary-label">&middot;</span><span class="month-summary-value">' + pct + '%</span></div></div>';
+  },
+
+  wishlistSummaryHtml() {
+    const totals = new Map();
+    for (const item of (this.data.wishlist || [])) {
+      const amount = Number(item.estimatedPrice);
+      if (!Number.isFinite(amount)) continue;
+      const currency = item.currency || this.baseCurrency();
+      totals.set(currency, Math.round(((totals.get(currency) || 0) + amount) * 100) / 100);
+    }
+    const nativeBreakdown = Array.from(totals.entries()).sort(([a], [b]) => a.localeCompare(b))
+      .map(([currency, amount]) => this.fmtAmount(amount, currency)).join(' · ');
+    let total = null;
+    if (totals.size === 1) total = nativeBreakdown;
+    else if (totals.size > 1) {
+      const rates = this.getRates();
+      const rateFor = currency => currency === 'EUR' ? 1 : Number((rates[currency] || {}).rate) || 0;
+      const baseRate = rateFor(this.baseCurrency());
+      const convertible = baseRate > 0 && Array.from(totals.keys()).every(currency => rateFor(currency) > 0);
+      if (convertible) {
+        const baseTotal = Array.from(totals.entries()).reduce((sum, [currency, amount]) => sum + amount * rateFor(currency) / baseRate, 0);
+        total = this.fmtBase(Math.round(baseTotal * 100) / 100);
+      }
+    }
+    if (total == null) total = nativeBreakdown || this.fmtAmount(0, this.baseCurrency());
+    return '<div class="savings-summary-row wishlist-summary-row" title="' + this.escapeHtml(nativeBreakdown || 'No wishlist items') + '">' +
+      '<div class="savings-total-text"><span class="month-summary-label">WISHLIST TOTAL</span><span class="month-summary-value">' + this.escapeHtml(total) + '</span></div></div>';
+  },
+
+  savingsGoalsHtml() {
+    if (!this.data.savingsGoals.length) return '<div class="empty-state"><div class="empty-state-text">No savings goals. Click + NEW GOAL to create one.</div></div>';
+    const ordered = this.data.savingsGoals.map((goal, index) => {
+      const completed = this.savingsGoalIsComplete(goal);
+      const sortDate = completed
+        ? this.savingsGoalCompletionDate(goal) || this.savingsGoalActivityDate(goal, true)
+        : this.savingsGoalActivityDate(goal, false);
+      return { goal, index, completed, sortDate };
+    }).sort((a, b) => Number(a.completed) - Number(b.completed) ||
+      b.sortDate.localeCompare(a.sortDate) || b.index - a.index);
+    const active = ordered.filter(item => !item.completed).map(item => this.savingsGoalCardHtml(item.goal)).join('');
+    const completed = ordered.filter(item => item.completed).map(item => this.savingsGoalCardHtml(item.goal)).join('');
+    return active + completed;
+  },
+
+  savingsGoalIsComplete(goal) {
+    const targetCents = Math.round((Number(goal.targetAmount) || 0) * 100);
+    return targetCents > 0 && Math.round(this.goalSaved(goal) * 100) >= targetCents;
+  },
+
+  savingsGoalCompletionDate(goal) {
+    const targetCents = Math.round((Number(goal.targetAmount) || 0) * 100);
+    if (targetCents <= 0) return '';
+    const entries = (goal.entries || []).map((entry, index) => ({
+      date: String(entry.date || '').slice(0, 10),
+      amount: Math.round((Number(entry.amount) || 0) * 100),
+      index
+    })).sort((a, b) => a.date.localeCompare(b.date) || a.index - b.index);
+    let savedCents = 0;
+    let completionDate = '';
+    for (const entry of entries) {
+      const previousCents = savedCents;
+      savedCents += entry.amount;
+      if (savedCents < targetCents) completionDate = '';
+      else if (previousCents < targetCents) completionDate = entry.date;
+    }
+    return savedCents >= targetCents ? completionDate : '';
+  },
+
+  savingsGoalActivityDate(goal, newest) {
+    const dateKey = value => String(value || '').slice(0, 10);
+    const entries = (goal.entries || []).map(entry => dateKey(entry.date)).filter(Boolean).sort();
+    return dateKey(goal.createdAt) || (newest ? entries[entries.length - 1] : entries[0]) || dateKey(goal.targetDate) || '';
+  },
+
+  savingsGoalCardHtml(goal) {
+    const target = goal.targetAmount || 0;
+    const saved = this.goalSaved(goal);
+    const completed = this.savingsGoalIsComplete(goal);
+    const pct = target > 0 ? Math.min(Math.round(saved / target * 100), 100) : 0;
+    const barClass = pct < 80 ? 'under' : pct <= 100 ? 'warning' : 'over';
+    let html = '<div class="savings-card' + (completed ? ' savings-goal-complete' : '') + this.focusRecordHtml('savings', goal.id) + '" data-mobile-swipe-kind="goal" data-mobile-swipe-id="' + this.escapeHtml(goal.id) + '">' +
+      '<div class="savings-header">' +
+      '<span class="savings-name">' + this.escapeHtml(goal.name) + this.healthMarker('savingsGoals', goal.id) + '</span>' +
+      '<span class="savings-actions">' +
+      ((goal.entries || []).some(entry => this.savingsTransactionForEntry(entry)) ? '<button class="btn btn-sm btn-secondary" onclick="BlackBook.openSavingsEntries(\x27' + goal.id + '\x27)" title="Open the latest linked transaction">LINK</button>' : '') +
+      '<button class="btn btn-sm btn-primary" onclick="BlackBook.openNewSavingsEntry(\x27' + goal.id + '\x27)">+ ADD</button>' +
+      '<button class="btn btn-sm btn-secondary mobile-savings-edit" onclick="BlackBook.openEditSavingsGoal(\x27' + goal.id + '\x27)">EDIT</button>' +
+      '<button class="btn btn-sm btn-danger btn-icon mobile-savings-delete" title="Delete goal" onclick="BlackBook.deleteSavingsGoal(\x27' + goal.id + '\x27)">' + this.xIcon() + '</button></span></div>' +
+      '<div class="savings-progress-text"><span>' + this.fmtBase(saved) + ' of ' + this.fmtBase(target) + '</span><span>' + pct + '%</span></div>' +
+      '<div class="savings-progress-bar"><div class="savings-progress-fill ' + barClass + '" style="width:' + pct + '%;"></div></div>' +
+      this.savingsPaceHtml(goal) + '<details class="item-details"><summary>PAYMENT HISTORY · ' + (goal.entries || []).length + '</summary>' + this.savingsEntriesHtml(goal) + '</details></div>';
+    return html;
+  },
+
+  toggleSavingsGoal(goalId) {
+    if (!this._expandedGoals) this._expandedGoals = {};
+    this._expandedGoals[goalId] = !this._expandedGoals[goalId];
+    this.renderSavings();
+  },
+
+  openNewSavingsGoal() {
+    document.getElementById('savings-goal-id').value = '';
+    document.getElementById('savings-goal-name').value = '';
+    document.getElementById('savings-goal-target').value = '';
+    document.getElementById('savings-goal-date').value = '';
+    document.getElementById('savings-goal-date').setCustomValidity('');
+    document.getElementById('savings-goal-currency').value = this.baseCurrency();
+    document.getElementById('savings-modal-title').textContent = 'New Savings Goal';
+    this.openModal('savings-modal');
+  },
+
+  openEditSavingsGoal(goalId) {
+    const goal = this.data.savingsGoals.find(g => g.id === goalId);
+    if (!goal) return;
+    document.getElementById('savings-goal-id').value = goal.id;
+    document.getElementById('savings-goal-name').value = goal.name;
+    document.getElementById('savings-goal-target').value = goal.targetAmount;
+    document.getElementById('savings-goal-date').value = goal.targetDate ? this.fmtDateInput(goal.targetDate) : '';
+    document.getElementById('savings-goal-date').setCustomValidity('');
+    document.getElementById('savings-goal-currency').value = goal.currency || this.baseCurrency() || 'RSD';
+    document.getElementById('savings-modal-title').textContent = 'Edit Savings Goal';
+    this.openModal('savings-modal');
+  },
+
+  async deleteSavingsGoal(goalId) {
+    if (!(await this.confirmModal({ title: 'Delete Goal', message: 'Delete this savings goal?' , confirmText: 'Delete' }))) return;
+    const goal = this.data.savingsGoals.find(g => g.id === goalId);
+    const entryIds = new Set(((goal && goal.entries) || []).map(e => e.id));
+    this.data.savingsGoals = this.data.savingsGoals.filter(g => g.id !== goalId);
+    this.data.transactions = (this.data.transactions || []).filter(t => !entryIds.has(t.linkId));
+    await this.save({ undoable: true, label: 'Delete savings goal' });
+    this.renderSavings();
+  },
+
+  bindSavingsGoalForm() {
+    document.getElementById('savings-goal-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const id = document.getElementById('savings-goal-id').value;
+      const name = document.getElementById('savings-goal-name').value.trim();
+      const targetAmount = this.evalAmount(document.getElementById('savings-goal-target').value);
+      const currency = document.getElementById('savings-goal-currency').value;
+      const dateInput = document.getElementById('savings-goal-date');
+      const targetDate = dateInput.value.trim() ? this.parseDateInput(dateInput.value) : null;
+      dateInput.setCustomValidity(dateInput.value.trim() && !targetDate ? 'Enter a valid target date.' : '');
+      if (!dateInput.reportValidity()) return;
+      if (!name || isNaN(targetAmount) || targetAmount <= 0) return;
+      if (id) {
+        const goal = this.data.savingsGoals.find(g => g.id === id);
+        if (goal) { goal.name = name; goal.targetAmount = targetAmount; goal.currency = currency; goal.targetDate = targetDate; }
+      } else {
+        this.data.savingsGoals.push({ id: crypto.randomUUID(), name: name, targetAmount: targetAmount, currency: currency, targetDate, createdAt: new Date().toISOString(), entries: [] });
+      }
+      await this.save({ undoable: true, label: id ? 'Edit savings goal' : 'Add savings goal' });
+      this.closeModal('savings-modal');
+      this.renderSavings();
+    });
+  },
+
+  openNewSavingsEntry(goalId) {
+    document.getElementById('savings-entry-goal-id').value = goalId;
+    document.getElementById('savings-entry-date').value = this.fmtDateInput(this.today());
+    document.getElementById('savings-entry-amount').value = '';
+    document.getElementById('savings-entry-note').value = '';
+    this.openModal('savings-entry-modal');
+    setTimeout(() => document.getElementById('savings-entry-amount').focus(), 50);
+  },
+
+  async addSavingsEntry(goalId, amount, date, note) {
+    const goal = this.data.savingsGoals.find(g => g.id === goalId);
+    if (!goal) return;
+    if (!goal.entries) goal.entries = [];
+    const entry = { id: crypto.randomUUID(), date: date, amount: amount, note: note || '' };
+    goal.entries.push(entry);
+    const tCat = this.transferCategory();
+    const sourceAcc = this.data.settings.defaultAccountId || (this.visibleAccounts && this.visibleAccounts()[0] ? this.visibleAccounts()[0].id : null);
+    const tx = {
+      id: crypto.randomUUID(),
+      linkId: entry.id,
+      date: date,
+      type: 'transfer',
+      amount: Math.round(Math.abs(amount) * 100) / 100,
+      amountIn: Math.round(Math.abs(amount) * 100) / 100,
+      currency: this.baseCurrency(),
+      currencyIn: this.baseCurrency(),
+      fromAccountId: sourceAcc,
+      toAccountId: sourceAcc,
+      categoryId: tCat.id,
+      note: 'Savings: ' + goal.name + (note ? ' — ' + note : '')
+    };
+    this.data.transactions.push(tx);
+    await this.save({ undoable: true, label: 'Add savings contribution' });
+  },
+
+  bindSavingsEntryForm() {
+    document.getElementById('savings-entry-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const goalId = document.getElementById('savings-entry-goal-id').value;
+      const date = this.parseDateInput(document.getElementById('savings-entry-date').value);
+      if (!date) { alert('Enter a valid date (' + this.dateFormatPattern() + ').'); return; }
+      const amount = this.evalAmount(document.getElementById('savings-entry-amount').value);
+      const note = document.getElementById('savings-entry-note').value.trim();
+      if (!goalId || isNaN(amount) || amount === 0) return;
+      const goal = this.data.savingsGoals.find(g => g.id === goalId);
+      if (!goal) return;
+      if (amount < 0 && this.goalSaved(goal) + amount < 0) { alert('Withdrawal exceeds saved balance (' + this.fmtBase(this.goalSaved(goal)) + ').'); return; }
+      await this.addSavingsEntry(goalId, amount, date, note);
+      this.closeModal('savings-entry-modal');
+      this.renderSavings();
+    });
+  },
+
+  // ==================== DEBTS ====================
+  savingsEntriesHtml(goal) {
+    if (!goal.entries || !goal.entries.length) return '<div class="savings-entries"><div style="padding:6px 8px;color:var(--text-muted);font-size:13px;">No entries yet.</div></div>';
+    let rows = '';
+    const sorted = goal.entries.slice().sort((a, b) => b.date.localeCompare(a.date));
+    for (const e of sorted) {
+      const neg = e.amount < 0;
+      rows += '<div class="savings-entry-item">' +
+        '<span class="savings-entry-date">' + this.escapeHtml(this.fmtDateInput(e.date)) + '</span>' +
+        '<span class="savings-entry-note">' + this.escapeHtml(e.note || '') + '</span>' +
+        '<span class="savings-entry-amount ' + (neg ? 'savings-withdraw' : '') + '">' + (neg ? '' : '+') + this.fmtBase(e.amount) + '</span>' +
+        this.linkedTransactionButton((this.savingsTransactionForEntry(e) || {}).id) +
+        '<button class="savings-entry-delete" onclick="BlackBook.deleteSavingsEntry(\x27' + goal.id + '\x27, \x27' + e.id + '\x27)">&times;</button></div>';
+    }
+    return '<div class="savings-entries">' + rows + '</div>';
+  },
+
+  async deleteSavingsEntry(goalId, entryId) {
+    const goal = this.data.savingsGoals.find(g => g.id === goalId);
+    if (!goal) return;
+    goal.entries = (goal.entries || []).filter(e => e.id !== entryId);
+    this.data.transactions = (this.data.transactions || []).filter(t => t.linkId !== entryId);
+    await this.save({ undoable: true, label: 'Delete savings contribution' });
+    this.renderSavings();
+  },
+
+});
+})();

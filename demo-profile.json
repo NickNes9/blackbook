@@ -1,0 +1,4980 @@
+{
+  "accounts": [
+    {
+      "id": "demo-bank",
+      "name": "Everyday Bank",
+      "shortName": "BANK",
+      "type": "bank",
+      "currency": "EUR",
+      "color": "#60a5fa",
+      "openingBalance": 500
+    },
+    {
+      "id": "demo-cash",
+      "name": "Cash Wallet",
+      "shortName": "CASH",
+      "currency": "EUR",
+      "color": "#4ade80",
+      "openingBalance": 1000
+    },
+    {
+      "id": "demo-usd",
+      "name": "Dollar Account",
+      "shortName": "USD",
+      "type": "bank",
+      "currency": "USD",
+      "color": "#c084fc",
+      "openingBalance": 600
+    }
+  ],
+  "categories": [
+    {
+      "id": "demo-cat-paycheck",
+      "name": "Paycheck",
+      "color": "#4ade80"
+    },
+    {
+      "id": "demo-cat-groceries",
+      "name": "Groceries",
+      "color": "#86efac"
+    },
+    {
+      "id": "demo-cat-restaurant",
+      "name": "Restaurant",
+      "color": "#fb923c"
+    },
+    {
+      "id": "demo-cat-drinks",
+      "name": "Drinks",
+      "color": "#38bdf8"
+    },
+    {
+      "id": "demo-cat-transport",
+      "name": "Transport",
+      "color": "#60a5fa"
+    },
+    {
+      "id": "demo-cat-home",
+      "name": "Home",
+      "color": "#c084fc"
+    },
+    {
+      "id": "demo-cat-hobbies",
+      "name": "Hobbies",
+      "color": "#f472b6"
+    },
+    {
+      "id": "demo-cat-bills",
+      "name": "Bills",
+      "color": "#facc15"
+    },
+    {
+      "id": "demo-cat-health",
+      "name": "Health",
+      "color": "#2dd4bf"
+    },
+    {
+      "id": "demo-cat-clothes",
+      "name": "Clothes",
+      "color": "#a78bfa"
+    },
+    {
+      "id": "demo-cat-family",
+      "name": "Family",
+      "color": "#fda4af"
+    },
+    {
+      "id": "demo-cat-invoice",
+      "name": "Invoice",
+      "color": "#fa8c3c"
+    },
+    {
+      "id": "demo-cat-transfer",
+      "name": "Transfer",
+      "color": "#71717a"
+    },
+    {
+      "id": "demo-cat-debt",
+      "name": "Debt",
+      "color": "#eab308"
+    },
+    {
+      "id": "demo-cat-uncategorized",
+      "name": "None",
+      "color": "#94a3b8"
+    }
+  ],
+  "transactions": [
+    {
+      "id": "bil-demo-internet-2026-01",
+      "date": "2026-01-03",
+      "type": "expense",
+      "amount": -35,
+      "currency": "EUR",
+      "accountId": "demo-bank",
+      "categoryId": "demo-cat-bills",
+      "note": "Home Internet"
+    },
+    {
+      "id": "bil-demo-electricity-2026-01",
+      "date": "2026-01-13",
+      "type": "expense",
+      "amount": -73.02,
+      "currency": "EUR",
+      "accountId": "demo-bank",
+      "categoryId": "demo-cat-bills",
+      "note": "Electricity"
+    },
+    {
+      "id": "bil-demo-phone-2026-01",
+      "date": "2026-01-25",
+      "type": "expense",
+      "amount": -18,
+      "currency": "EUR",
+      "accountId": "demo-bank",
+      "categoryId": "demo-cat-bills",
+      "note": "Mobile Plan"
+    },
+    {
+      "id": "bil-demo-water-2026-01",
+      "date": "2026-01-17",
+      "type": "expense",
+      "amount": -24.75,
+      "currency": "EUR",
+      "accountId": "demo-bank",
+      "categoryId": "demo-cat-bills",
+      "note": "Water Service"
+    },
+    {
+      "id": "bil-demo-music-2026-01",
+      "date": "2026-01-22",
+      "type": "expense",
+      "amount": -12,
+      "currency": "EUR",
+      "accountId": "demo-bank",
+      "categoryId": "demo-cat-bills",
+      "note": "Music Plan"
+    },
+    {
+      "id": "bil-demo-internet-2026-02",
+      "date": "2026-02-03",
+      "type": "expense",
+      "amount": -35,
+      "currency": "EUR",
+      "accountId": "demo-bank",
+      "categoryId": "demo-cat-bills",
+      "note": "Home Internet"
+    },
+    {
+      "id": "bil-demo-phone-2026-02",
+      "date": "2026-02-25",
+      "type": "expense",
+      "amount": -18,
+      "currency": "EUR",
+      "accountId": "demo-bank",
+      "categoryId": "demo-cat-bills",
+      "note": "Mobile Plan"
+    },
+    {
+      "id": "bil-demo-insurance-2026-02",
+      "date": "2026-02-06",
+      "type": "expense",
+      "amount": -46,
+      "currency": "EUR",
+      "accountId": "demo-bank",
+      "categoryId": "demo-cat-bills",
+      "note": "Home Insurance"
+    },
+    {
+      "id": "bil-demo-music-2026-02",
+      "date": "2026-02-22",
+      "type": "expense",
+      "amount": -12,
+      "currency": "EUR",
+      "accountId": "demo-bank",
+      "categoryId": "demo-cat-bills",
+      "note": "Music Plan"
+    },
+    {
+      "id": "bil-demo-internet-2026-03",
+      "date": "2026-03-03",
+      "type": "expense",
+      "amount": -35,
+      "currency": "EUR",
+      "accountId": "demo-bank",
+      "categoryId": "demo-cat-bills",
+      "note": "Home Internet"
+    },
+    {
+      "id": "bil-demo-phone-2026-03",
+      "date": "2026-03-25",
+      "type": "expense",
+      "amount": -18,
+      "currency": "EUR",
+      "accountId": "demo-bank",
+      "categoryId": "demo-cat-bills",
+      "note": "Mobile Plan"
+    },
+    {
+      "id": "bil-demo-insurance-2026-03",
+      "date": "2026-03-06",
+      "type": "expense",
+      "amount": -46,
+      "currency": "EUR",
+      "accountId": "demo-bank",
+      "categoryId": "demo-cat-bills",
+      "note": "Home Insurance"
+    },
+    {
+      "id": "bil-demo-music-2026-03",
+      "date": "2026-03-22",
+      "type": "expense",
+      "amount": -12,
+      "currency": "EUR",
+      "accountId": "demo-bank",
+      "categoryId": "demo-cat-bills",
+      "note": "Music Plan"
+    },
+    {
+      "id": "bil-demo-internet-2026-04",
+      "date": "2026-04-03",
+      "type": "expense",
+      "amount": -35,
+      "currency": "EUR",
+      "accountId": "demo-bank",
+      "categoryId": "demo-cat-bills",
+      "note": "Home Internet"
+    },
+    {
+      "id": "bil-demo-electricity-2026-04",
+      "date": "2026-04-13",
+      "type": "expense",
+      "amount": -73.65,
+      "currency": "EUR",
+      "accountId": "demo-bank",
+      "categoryId": "demo-cat-bills",
+      "note": "Electricity"
+    },
+    {
+      "id": "bil-demo-music-2026-04",
+      "date": "2026-04-22",
+      "type": "expense",
+      "amount": -12,
+      "currency": "EUR",
+      "accountId": "demo-bank",
+      "categoryId": "demo-cat-bills",
+      "note": "Music Plan"
+    },
+    {
+      "id": "bil-demo-internet-2026-05",
+      "date": "2026-05-03",
+      "type": "expense",
+      "amount": -35,
+      "currency": "EUR",
+      "accountId": "demo-bank",
+      "categoryId": "demo-cat-bills",
+      "note": "Home Internet"
+    },
+    {
+      "id": "bil-demo-phone-2026-05",
+      "date": "2026-05-25",
+      "type": "expense",
+      "amount": -18,
+      "currency": "EUR",
+      "accountId": "demo-bank",
+      "categoryId": "demo-cat-bills",
+      "note": "Mobile Plan"
+    },
+    {
+      "id": "bil-demo-water-2026-05",
+      "date": "2026-05-17",
+      "type": "expense",
+      "amount": -29.71,
+      "currency": "EUR",
+      "accountId": "demo-bank",
+      "categoryId": "demo-cat-bills",
+      "note": "Water Service"
+    },
+    {
+      "id": "bil-demo-insurance-2026-05",
+      "date": "2026-05-06",
+      "type": "expense",
+      "amount": -46,
+      "currency": "EUR",
+      "accountId": "demo-bank",
+      "categoryId": "demo-cat-bills",
+      "note": "Home Insurance"
+    },
+    {
+      "id": "bil-demo-music-2026-05",
+      "date": "2026-05-22",
+      "type": "expense",
+      "amount": -12,
+      "currency": "EUR",
+      "accountId": "demo-bank",
+      "categoryId": "demo-cat-bills",
+      "note": "Music Plan"
+    },
+    {
+      "id": "bil-demo-internet-2026-06",
+      "date": "2026-06-03",
+      "type": "expense",
+      "amount": -35,
+      "currency": "EUR",
+      "accountId": "demo-bank",
+      "categoryId": "demo-cat-bills",
+      "note": "Home Internet"
+    },
+    {
+      "id": "bil-demo-electricity-2026-06",
+      "date": "2026-06-13",
+      "type": "expense",
+      "amount": -76.7,
+      "currency": "EUR",
+      "accountId": "demo-bank",
+      "categoryId": "demo-cat-bills",
+      "note": "Electricity"
+    },
+    {
+      "id": "bil-demo-phone-2026-06",
+      "date": "2026-06-25",
+      "type": "expense",
+      "amount": -18,
+      "currency": "EUR",
+      "accountId": "demo-bank",
+      "categoryId": "demo-cat-bills",
+      "note": "Mobile Plan"
+    },
+    {
+      "id": "bil-demo-insurance-2026-06",
+      "date": "2026-06-06",
+      "type": "expense",
+      "amount": -46,
+      "currency": "EUR",
+      "accountId": "demo-bank",
+      "categoryId": "demo-cat-bills",
+      "note": "Home Insurance"
+    },
+    {
+      "id": "bil-demo-music-2026-06",
+      "date": "2026-06-22",
+      "type": "expense",
+      "amount": -12,
+      "currency": "EUR",
+      "accountId": "demo-bank",
+      "categoryId": "demo-cat-bills",
+      "note": "Music Plan"
+    },
+    {
+      "id": "bil-demo-internet-2026-07",
+      "date": "2026-07-03",
+      "type": "expense",
+      "amount": -35,
+      "currency": "EUR",
+      "accountId": "demo-bank",
+      "categoryId": "demo-cat-bills",
+      "note": "Home Internet"
+    },
+    {
+      "id": "bil-demo-phone-2026-07",
+      "date": "2026-07-25",
+      "type": "expense",
+      "amount": -18,
+      "currency": "EUR",
+      "accountId": "demo-bank",
+      "categoryId": "demo-cat-bills",
+      "note": "Mobile Plan"
+    },
+    {
+      "id": "bil-demo-water-2026-07",
+      "date": "2026-07-17",
+      "type": "expense",
+      "amount": -36.92,
+      "currency": "EUR",
+      "accountId": "demo-bank",
+      "categoryId": "demo-cat-bills",
+      "note": "Water Service"
+    },
+    {
+      "id": "bil-demo-insurance-2026-07",
+      "date": "2026-07-06",
+      "type": "expense",
+      "amount": -46,
+      "currency": "EUR",
+      "accountId": "demo-bank",
+      "categoryId": "demo-cat-bills",
+      "note": "Home Insurance"
+    },
+    {
+      "id": "bil-demo-music-2026-07",
+      "date": "2026-07-22",
+      "type": "expense",
+      "amount": -12,
+      "currency": "EUR",
+      "accountId": "demo-bank",
+      "categoryId": "demo-cat-bills",
+      "note": "Music Plan"
+    },
+    {
+      "id": "bil-demo-internet-2026-08",
+      "date": "2026-08-03",
+      "type": "expense",
+      "amount": -35,
+      "currency": "EUR",
+      "accountId": "demo-bank",
+      "categoryId": "demo-cat-bills",
+      "note": "Home Internet"
+    },
+    {
+      "id": "bil-demo-electricity-2026-08",
+      "date": "2026-08-13",
+      "type": "expense",
+      "amount": -63.21,
+      "currency": "EUR",
+      "accountId": "demo-bank",
+      "categoryId": "demo-cat-bills",
+      "note": "Electricity"
+    },
+    {
+      "id": "bil-demo-phone-2026-08",
+      "date": "2026-08-25",
+      "type": "expense",
+      "amount": -18,
+      "currency": "EUR",
+      "accountId": "demo-bank",
+      "categoryId": "demo-cat-bills",
+      "note": "Mobile Plan"
+    },
+    {
+      "id": "bil-demo-water-2026-08",
+      "date": "2026-08-17",
+      "type": "expense",
+      "amount": -35.75,
+      "currency": "EUR",
+      "accountId": "demo-bank",
+      "categoryId": "demo-cat-bills",
+      "note": "Water Service"
+    },
+    {
+      "id": "bil-demo-insurance-2026-08",
+      "date": "2026-08-06",
+      "type": "expense",
+      "amount": -46,
+      "currency": "EUR",
+      "accountId": "demo-bank",
+      "categoryId": "demo-cat-bills",
+      "note": "Home Insurance"
+    },
+    {
+      "id": "bil-demo-music-2026-08",
+      "date": "2026-08-22",
+      "type": "expense",
+      "amount": -12,
+      "currency": "EUR",
+      "accountId": "demo-bank",
+      "categoryId": "demo-cat-bills",
+      "note": "Music Plan"
+    },
+    {
+      "id": "bil-demo-internet-2026-09",
+      "date": "2026-09-03",
+      "type": "expense",
+      "amount": -35,
+      "currency": "EUR",
+      "accountId": "demo-bank",
+      "categoryId": "demo-cat-bills",
+      "note": "Home Internet"
+    },
+    {
+      "id": "bil-demo-phone-2026-09",
+      "date": "2026-09-25",
+      "type": "expense",
+      "amount": -18,
+      "currency": "EUR",
+      "accountId": "demo-bank",
+      "categoryId": "demo-cat-bills",
+      "note": "Mobile Plan"
+    },
+    {
+      "id": "bil-demo-water-2026-09",
+      "date": "2026-09-17",
+      "type": "expense",
+      "amount": -22.81,
+      "currency": "EUR",
+      "accountId": "demo-bank",
+      "categoryId": "demo-cat-bills",
+      "note": "Water Service"
+    },
+    {
+      "id": "bil-demo-insurance-2026-09",
+      "date": "2026-09-06",
+      "type": "expense",
+      "amount": -46,
+      "currency": "EUR",
+      "accountId": "demo-bank",
+      "categoryId": "demo-cat-bills",
+      "note": "Home Insurance"
+    },
+    {
+      "id": "bil-demo-music-2026-09",
+      "date": "2026-09-22",
+      "type": "expense",
+      "amount": -12,
+      "currency": "EUR",
+      "accountId": "demo-bank",
+      "categoryId": "demo-cat-bills",
+      "note": "Music Plan"
+    },
+    {
+      "id": "bil-demo-electricity-2026-10",
+      "date": "2026-10-13",
+      "type": "expense",
+      "amount": -72.68,
+      "currency": "EUR",
+      "accountId": "demo-bank",
+      "categoryId": "demo-cat-bills",
+      "note": "Electricity"
+    },
+    {
+      "id": "bil-demo-phone-2026-10",
+      "date": "2026-10-25",
+      "type": "expense",
+      "amount": -18,
+      "currency": "EUR",
+      "accountId": "demo-bank",
+      "categoryId": "demo-cat-bills",
+      "note": "Mobile Plan"
+    },
+    {
+      "id": "demo-tx-drinks-jessica-alex",
+      "date": "2026-01-15",
+      "amount": -24,
+      "type": "expense",
+      "currency": "EUR",
+      "accountId": "demo-bank",
+      "categoryId": "demo-cat-drinks",
+      "note": "Jessica and Alex"
+    },
+    {
+      "id": "demo-tx-dinner-with-j",
+      "date": "2026-02-09",
+      "amount": -56,
+      "type": "expense",
+      "currency": "EUR",
+      "accountId": "demo-bank",
+      "categoryId": "demo-cat-restaurant",
+      "note": "Dinner with J."
+    },
+    {
+      "id": "demo-fund-cash",
+      "date": "2026-01-01",
+      "type": "transfer",
+      "amount": 1000,
+      "currency": "EUR",
+      "amountIn": 1000,
+      "currencyIn": "EUR",
+      "fromAccountId": "demo-bank",
+      "toAccountId": "demo-cash",
+      "categoryId": "demo-cat-transfer",
+      "note": "Cash reserve transfer"
+    },
+    {
+      "id": "demo-fund-usd",
+      "date": "2026-01-01",
+      "type": "transfer",
+      "amount": 500,
+      "currency": "EUR",
+      "amountIn": 600,
+      "currencyIn": "USD",
+      "fromAccountId": "demo-bank",
+      "toAccountId": "demo-usd",
+      "categoryId": "demo-cat-transfer",
+      "note": "USD reserve transfer"
+    },
+    {
+      "id": "demo-tx-savings-demo-emergency-entry-1",
+      "date": "2026-01-12",
+      "amount": 200,
+      "type": "transfer",
+      "currency": "EUR",
+      "accountId": null,
+      "categoryId": "demo-cat-transfer",
+      "note": "Savings: Emergency Cushion — First deposit",
+      "amountIn": 200,
+      "currencyIn": "EUR",
+      "fromAccountId": "demo-bank",
+      "toAccountId": "demo-bank",
+      "linkId": "demo-emergency-entry-1"
+    },
+    {
+      "id": "demo-tx-savings-demo-emergency-entry-2",
+      "date": "2026-02-11",
+      "amount": 200,
+      "type": "transfer",
+      "currency": "EUR",
+      "accountId": null,
+      "categoryId": "demo-cat-transfer",
+      "note": "Savings: Emergency Cushion — Monthly deposit",
+      "amountIn": 200,
+      "currencyIn": "EUR",
+      "fromAccountId": "demo-bank",
+      "toAccountId": "demo-bank",
+      "linkId": "demo-emergency-entry-2"
+    },
+    {
+      "id": "demo-tx-savings-demo-emergency-entry-3",
+      "date": "2026-03-12",
+      "amount": 200,
+      "type": "transfer",
+      "currency": "EUR",
+      "accountId": null,
+      "categoryId": "demo-cat-transfer",
+      "note": "Savings: Emergency Cushion — Monthly deposit",
+      "amountIn": 200,
+      "currencyIn": "EUR",
+      "fromAccountId": "demo-bank",
+      "toAccountId": "demo-bank",
+      "linkId": "demo-emergency-entry-3"
+    },
+    {
+      "id": "demo-tx-savings-demo-emergency-entry-4",
+      "date": "2026-04-10",
+      "amount": 200,
+      "type": "transfer",
+      "currency": "EUR",
+      "accountId": null,
+      "categoryId": "demo-cat-transfer",
+      "note": "Savings: Emergency Cushion — Goal completed",
+      "amountIn": 200,
+      "currencyIn": "EUR",
+      "fromAccountId": "demo-bank",
+      "toAccountId": "demo-bank",
+      "linkId": "demo-emergency-entry-4"
+    },
+    {
+      "id": "demo-tx-savings-demo-holiday-entry-1",
+      "date": "2026-02-19",
+      "amount": 180,
+      "type": "transfer",
+      "currency": "EUR",
+      "accountId": null,
+      "categoryId": "demo-cat-transfer",
+      "note": "Savings: Holiday Fund — Trip savings",
+      "amountIn": 180,
+      "currencyIn": "EUR",
+      "fromAccountId": "demo-bank",
+      "toAccountId": "demo-bank",
+      "linkId": "demo-holiday-entry-1"
+    },
+    {
+      "id": "demo-tx-savings-demo-holiday-entry-2",
+      "date": "2026-05-20",
+      "amount": 240,
+      "type": "transfer",
+      "currency": "EUR",
+      "accountId": null,
+      "categoryId": "demo-cat-transfer",
+      "note": "Savings: Holiday Fund — Spring deposit",
+      "amountIn": 240,
+      "currencyIn": "EUR",
+      "fromAccountId": "demo-bank",
+      "toAccountId": "demo-bank",
+      "linkId": "demo-holiday-entry-2"
+    },
+    {
+      "id": "demo-tx-savings-demo-holiday-entry-3",
+      "date": "2026-08-18",
+      "amount": 210,
+      "type": "transfer",
+      "currency": "EUR",
+      "accountId": null,
+      "categoryId": "demo-cat-transfer",
+      "note": "Savings: Holiday Fund — Summer deposit",
+      "amountIn": 210,
+      "currencyIn": "EUR",
+      "fromAccountId": "demo-bank",
+      "toAccountId": "demo-bank",
+      "linkId": "demo-holiday-entry-3"
+    },
+    {
+      "id": "demo-tx-savings-demo-holiday-entry-4",
+      "date": "2026-10-16",
+      "amount": 70,
+      "type": "transfer",
+      "currency": "EUR",
+      "accountId": null,
+      "categoryId": "demo-cat-transfer",
+      "note": "Savings: Holiday Fund — Final top-up",
+      "amountIn": 70,
+      "currencyIn": "EUR",
+      "fromAccountId": "demo-bank",
+      "toAccountId": "demo-bank",
+      "linkId": "demo-holiday-entry-4"
+    },
+    {
+      "id": "demo-tx-savings-demo-laptop-entry-1",
+      "date": "2026-03-22",
+      "amount": 150,
+      "type": "transfer",
+      "currency": "EUR",
+      "accountId": null,
+      "categoryId": "demo-cat-transfer",
+      "note": "Savings: New Laptop — First deposit",
+      "amountIn": 150,
+      "currencyIn": "EUR",
+      "fromAccountId": "demo-bank",
+      "toAccountId": "demo-bank",
+      "linkId": "demo-laptop-entry-1"
+    },
+    {
+      "id": "demo-tx-savings-demo-laptop-entry-2",
+      "date": "2026-07-17",
+      "amount": 190,
+      "type": "transfer",
+      "currency": "EUR",
+      "accountId": null,
+      "categoryId": "demo-cat-transfer",
+      "note": "Savings: New Laptop — Monthly deposit",
+      "amountIn": 190,
+      "currencyIn": "EUR",
+      "fromAccountId": "demo-bank",
+      "toAccountId": "demo-bank",
+      "linkId": "demo-laptop-entry-2"
+    },
+    {
+      "id": "demo-tx-savings-demo-laptop-entry-3",
+      "date": "2026-10-14",
+      "amount": 110,
+      "type": "transfer",
+      "currency": "EUR",
+      "accountId": null,
+      "categoryId": "demo-cat-transfer",
+      "note": "Savings: New Laptop — Monthly deposit",
+      "amountIn": 110,
+      "currencyIn": "EUR",
+      "fromAccountId": "demo-bank",
+      "toAccountId": "demo-bank",
+      "linkId": "demo-laptop-entry-3"
+    },
+    {
+      "id": "demo-tx-debt-payment-alex-1",
+      "date": "2026-01-18",
+      "amount": 100,
+      "type": "income",
+      "currency": "EUR",
+      "accountId": "demo-bank",
+      "categoryId": "demo-cat-debt",
+      "note": "Debt payment: Alex",
+      "debtId": "demo-debt-alex"
+    },
+    {
+      "id": "demo-tx-debt-payment-alex-5",
+      "date": "2026-05-15",
+      "amount": 200,
+      "type": "income",
+      "currency": "EUR",
+      "accountId": "demo-bank",
+      "categoryId": "demo-cat-debt",
+      "note": "Debt payment: Alex",
+      "debtId": "demo-debt-alex"
+    },
+    {
+      "id": "demo-tx-debt-payment-sam-2",
+      "date": "2026-02-18",
+      "amount": -180,
+      "type": "expense",
+      "currency": "EUR",
+      "accountId": "demo-bank",
+      "categoryId": "demo-cat-debt",
+      "note": "Debt payment: Sam",
+      "debtId": "demo-debt-sam"
+    },
+    {
+      "id": "demo-tx-debt-payment-sam-4",
+      "date": "2026-04-18",
+      "amount": -180,
+      "type": "expense",
+      "currency": "EUR",
+      "accountId": "demo-bank",
+      "categoryId": "demo-cat-debt",
+      "note": "Debt payment: Sam",
+      "debtId": "demo-debt-sam"
+    },
+    {
+      "id": "demo-tx-debt-payment-taylor-8",
+      "date": "2026-08-20",
+      "amount": -125,
+      "type": "expense",
+      "currency": "EUR",
+      "accountId": "demo-bank",
+      "categoryId": "demo-cat-debt",
+      "note": "Debt payment: Taylor",
+      "debtId": "demo-debt-taylor"
+    },
+    {
+      "id": "demo-tx-invoice-payment-paid",
+      "date": "2026-04-14",
+      "amount": 450,
+      "type": "income",
+      "currency": "EUR",
+      "accountId": "demo-bank",
+      "categoryId": "demo-cat-invoice",
+      "note": "Invoice 014/2026 — Sample Studio"
+    },
+    {
+      "id": "demo-tx-invoice-payment-partial",
+      "date": "2026-08-06",
+      "amount": 350,
+      "type": "income",
+      "currency": "EUR",
+      "accountId": "demo-bank",
+      "categoryId": "demo-cat-invoice",
+      "note": "Invoice 027/2026 — Brightside Design"
+    },
+    {
+      "id": "demo-tx-purchase-demo-plan-desk",
+      "date": "2026-01-05",
+      "amount": -360,
+      "type": "expense",
+      "currency": "EUR",
+      "accountId": null,
+      "categoryId": "demo-cat-home",
+      "note": "Desk chair",
+      "cardId": "demo-card",
+      "installId": "demo-plan-desk"
+    },
+    {
+      "id": "demo-tx-installment-demo-plan-desk-1",
+      "date": "2026-01-18",
+      "amount": -120,
+      "type": "expense",
+      "currency": "EUR",
+      "accountId": "demo-bank",
+      "categoryId": "demo-cat-transfer",
+      "note": "Installment Desk chair 1/3",
+      "pairId": "inst-demo-plan-desk-s1"
+    },
+    {
+      "id": "demo-tx-installment-demo-plan-desk-2",
+      "date": "2026-02-18",
+      "amount": -120,
+      "type": "expense",
+      "currency": "EUR",
+      "accountId": "demo-bank",
+      "categoryId": "demo-cat-transfer",
+      "note": "Installment Desk chair 2/3",
+      "pairId": "inst-demo-plan-desk-s2"
+    },
+    {
+      "id": "demo-tx-installment-demo-plan-desk-3",
+      "date": "2026-03-18",
+      "amount": -120,
+      "type": "expense",
+      "currency": "EUR",
+      "accountId": "demo-bank",
+      "categoryId": "demo-cat-transfer",
+      "note": "Installment Desk chair 3/3",
+      "pairId": "inst-demo-plan-desk-s3"
+    },
+    {
+      "id": "demo-tx-purchase-demo-plan-tablet",
+      "date": "2026-05-05",
+      "amount": -800,
+      "type": "expense",
+      "currency": "EUR",
+      "accountId": null,
+      "categoryId": "demo-cat-hobbies",
+      "note": "Drawing tablet",
+      "cardId": "demo-card",
+      "installId": "demo-plan-tablet"
+    },
+    {
+      "id": "demo-tx-installment-demo-plan-tablet-1",
+      "date": "2026-05-18",
+      "amount": -200,
+      "type": "expense",
+      "currency": "EUR",
+      "accountId": "demo-bank",
+      "categoryId": "demo-cat-transfer",
+      "note": "Installment Drawing tablet 1/4",
+      "pairId": "inst-demo-plan-tablet-s1"
+    },
+    {
+      "id": "demo-tx-installment-demo-plan-tablet-2",
+      "date": "2026-06-18",
+      "amount": -100,
+      "type": "expense",
+      "currency": "EUR",
+      "accountId": "demo-bank",
+      "categoryId": "demo-cat-transfer",
+      "note": "Installment Drawing tablet 2/4",
+      "pairId": "inst-demo-plan-tablet-s2"
+    },
+    {
+      "id": "demo-tx-purchase-demo-plan-camera",
+      "date": "2026-10-05",
+      "amount": -600,
+      "type": "expense",
+      "currency": "EUR",
+      "accountId": null,
+      "categoryId": "demo-cat-hobbies",
+      "note": "Travel camera",
+      "cardId": "demo-travel-card",
+      "installId": "demo-plan-camera"
+    },
+    {
+      "id": "demo-tx-daily-2026-1-1",
+      "date": "2026-01-13",
+      "amount": 2811.68,
+      "type": "income",
+      "currency": "EUR",
+      "accountId": "demo-bank",
+      "categoryId": "demo-cat-paycheck",
+      "note": "Monthly salary deposit"
+    },
+    {
+      "id": "demo-tx-daily-2026-1-2",
+      "date": "2026-01-14",
+      "amount": -762.54,
+      "type": "expense",
+      "currency": "EUR",
+      "accountId": "demo-bank",
+      "categoryId": "demo-cat-home",
+      "note": "Apartment rent"
+    },
+    {
+      "id": "demo-tx-daily-2026-1-3",
+      "date": "2026-01-18",
+      "amount": -33.06,
+      "type": "expense",
+      "currency": "EUR",
+      "accountId": "demo-bank",
+      "categoryId": "demo-cat-groceries",
+      "note": "Fruit and vegetables — monthly top-up (Jan)"
+    },
+    {
+      "id": "demo-tx-daily-2026-1-4",
+      "date": "2026-01-28",
+      "amount": -36.62,
+      "type": "expense",
+      "currency": "EUR",
+      "accountId": "demo-bank",
+      "categoryId": "demo-cat-transport",
+      "note": "Monthly transit pass — one-time replacement (Jan)"
+    },
+    {
+      "id": "demo-tx-daily-2026-1-5",
+      "date": "2026-01-02",
+      "amount": -8.28,
+      "type": "expense",
+      "currency": "EUR",
+      "accountId": "demo-bank",
+      "categoryId": "demo-cat-clothes",
+      "note": "Running shirt — monthly top-up (Jan)"
+    },
+    {
+      "id": "demo-tx-daily-2026-1-6",
+      "date": "2026-01-21",
+      "amount": -15.31,
+      "type": "expense",
+      "currency": "EUR",
+      "accountId": "demo-bank",
+      "categoryId": "demo-cat-restaurant",
+      "note": "Sunday brunch at Orchard Kitchen — for a family visit (Jan)"
+    },
+    {
+      "id": "demo-tx-daily-2026-1-7",
+      "date": "2026-01-12",
+      "amount": -18.61,
+      "type": "expense",
+      "currency": "EUR",
+      "accountId": "demo-bank",
+      "categoryId": "demo-cat-health",
+      "note": "First-aid supplies — for a small celebration (Jan)"
+    },
+    {
+      "id": "demo-tx-daily-2026-1-8",
+      "date": "2026-01-04",
+      "amount": -39.77,
+      "type": "expense",
+      "currency": "EUR",
+      "accountId": "demo-bank",
+      "categoryId": "demo-cat-hobbies",
+      "note": "Museum entry — for the apartment (Jan)"
+    },
+    {
+      "id": "demo-tx-daily-2026-1-9",
+      "date": "2026-01-05",
+      "amount": -14.99,
+      "type": "expense",
+      "currency": "EUR",
+      "accountId": "demo-bank",
+      "categoryId": "demo-cat-groceries",
+      "note": "Weekend groceries at City Market — for a small celebration (Jan)"
+    },
+    {
+      "id": "demo-tx-daily-2026-1-10",
+      "date": "2026-01-27",
+      "amount": 136.81,
+      "type": "income",
+      "currency": "EUR",
+      "accountId": "demo-bank",
+      "categoryId": "demo-cat-paycheck",
+      "note": "Tutoring session — for a small celebration (Jan)"
+    },
+    {
+      "id": "demo-tx-daily-2026-1-11",
+      "date": "2026-01-08",
+      "amount": -78.62,
+      "type": "expense",
+      "currency": "EUR",
+      "accountId": "demo-bank",
+      "categoryId": "demo-cat-restaurant",
+      "note": "Dinner at Harbor Grill — for the weekend (Jan)"
+    },
+    {
+      "id": "demo-tx-daily-2026-1-12",
+      "date": "2026-01-09",
+      "amount": -144.12,
+      "type": "expense",
+      "currency": "EUR",
+      "accountId": "demo-cash",
+      "categoryId": "demo-cat-transport",
+      "note": "Parking near the park — monthly top-up (Jan)"
+    },
+    {
+      "id": "demo-tx-daily-2026-1-13",
+      "date": "2026-01-10",
+      "amount": -18.97,
+      "type": "expense",
+      "currency": "EUR",
+      "accountId": "demo-bank",
+      "categoryId": "demo-cat-health",
+      "note": "First-aid supplies — for the weekend (Jan)"
+    },
+    {
+      "id": "demo-tx-daily-2026-1-14",
+      "date": "2026-01-20",
+      "amount": -55.19,
+      "type": "expense",
+      "currency": "USD",
+      "accountId": "demo-usd",
+      "categoryId": "demo-cat-clothes",
+      "note": "Running shirt — during a day trip (Jan)"
+    },
+    {
+      "id": "demo-tx-daily-2026-1-15",
+      "date": "2026-01-06",
+      "amount": -93.75,
+      "type": "expense",
+      "currency": "EUR",
+      "accountId": "demo-bank",
+      "categoryId": "demo-cat-transport",
+      "note": "Train tickets for a day trip — before the trip (Jan)"
+    },
+    {
+      "id": "demo-tx-daily-2026-2-16",
+      "date": "2026-02-24",
+      "amount": 3263.49,
+      "type": "income",
+      "currency": "EUR",
+      "accountId": "demo-bank",
+      "categoryId": "demo-cat-paycheck",
+      "note": "Monthly salary deposit"
+    },
+    {
+      "id": "demo-tx-daily-2026-2-17",
+      "date": "2026-02-08",
+      "amount": -927.24,
+      "type": "expense",
+      "currency": "EUR",
+      "accountId": "demo-bank",
+      "categoryId": "demo-cat-home",
+      "note": "Apartment rent"
+    },
+    {
+      "id": "demo-tx-daily-2026-2-18",
+      "date": "2026-02-21",
+      "amount": -46.68,
+      "type": "expense",
+      "currency": "EUR",
+      "accountId": "demo-bank",
+      "categoryId": "demo-cat-bills",
+      "note": "Waste collection fee — on the way home (Feb)"
+    },
+    {
+      "id": "demo-tx-daily-2026-2-19",
+      "date": "2026-02-17",
+      "amount": -121.53,
+      "type": "expense",
+      "currency": "EUR",
+      "accountId": "demo-bank",
+      "categoryId": "demo-cat-bills",
+      "note": "Home heating charge — on the way home (Feb)"
+    },
+    {
+      "id": "demo-tx-daily-2026-2-20",
+      "date": "2026-02-07",
+      "amount": -10.66,
+      "type": "expense",
+      "currency": "EUR",
+      "accountId": "demo-bank",
+      "categoryId": "demo-cat-groceries",
+      "note": "Weekly shop at Corner Market — while running errands (Feb)"
+    },
+    {
+      "id": "demo-tx-daily-2026-2-21",
+      "date": "2026-02-28",
+      "amount": -56.56,
+      "type": "expense",
+      "currency": "EUR",
+      "accountId": "demo-bank",
+      "categoryId": "demo-cat-restaurant",
+      "note": "Family meal at Garden Kitchen — for a rainy day (Feb)"
+    },
+    {
+      "id": "demo-tx-daily-2026-2-22",
+      "date": "2026-02-18",
+      "amount": -130.96,
+      "type": "expense",
+      "currency": "EUR",
+      "accountId": "demo-bank",
+      "categoryId": "demo-cat-groceries",
+      "note": "Household groceries at Fresh Basket — during a day trip (Feb)"
+    },
+    {
+      "id": "demo-tx-daily-2026-2-23",
+      "date": "2026-02-12",
+      "amount": -137.4,
+      "type": "expense",
+      "currency": "EUR",
+      "accountId": "demo-bank",
+      "categoryId": "demo-cat-bills",
+      "note": "Streaming subscription — for a family visit (Feb)"
+    },
+    {
+      "id": "demo-tx-daily-2026-2-24",
+      "date": "2026-02-10",
+      "amount": -34.29,
+      "type": "expense",
+      "currency": "EUR",
+      "accountId": "demo-bank",
+      "categoryId": "demo-cat-transport",
+      "note": "Monthly transit pass — during a day trip (Feb)"
+    },
+    {
+      "id": "demo-tx-daily-2026-2-25",
+      "date": "2026-02-02",
+      "amount": 92.99,
+      "type": "income",
+      "currency": "EUR",
+      "accountId": "demo-bank",
+      "categoryId": "demo-cat-paycheck",
+      "note": "Small freelance illustration — planned seasonal purchase (Feb)"
+    },
+    {
+      "id": "demo-tx-daily-2026-2-26",
+      "date": "2026-02-14",
+      "amount": -16.12,
+      "type": "expense",
+      "currency": "EUR",
+      "accountId": "demo-bank",
+      "categoryId": "demo-cat-groceries",
+      "note": "Weekend groceries at City Market — after work (Feb)"
+    },
+    {
+      "id": "demo-tx-daily-2026-2-27",
+      "date": "2026-02-06",
+      "amount": -28.63,
+      "type": "expense",
+      "currency": "EUR",
+      "accountId": "demo-cash",
+      "categoryId": "demo-cat-bills",
+      "note": "Waste collection fee — after work (Feb)"
+    },
+    {
+      "id": "demo-tx-daily-2026-2-28",
+      "date": "2026-02-22",
+      "amount": -32.55,
+      "type": "expense",
+      "currency": "EUR",
+      "accountId": "demo-bank",
+      "categoryId": "demo-cat-hobbies",
+      "note": "Photography print — local pickup (Feb)"
+    },
+    {
+      "id": "demo-tx-daily-2026-2-29",
+      "date": "2026-02-15",
+      "amount": -55.02,
+      "type": "expense",
+      "currency": "USD",
+      "accountId": "demo-usd",
+      "categoryId": "demo-cat-restaurant",
+      "note": "Sunday brunch at Orchard Kitchen — after work (Feb)"
+    },
+    {
+      "id": "demo-tx-daily-2026-2-30",
+      "date": "2026-02-08",
+      "amount": -121.43,
+      "type": "expense",
+      "currency": "EUR",
+      "accountId": "demo-bank",
+      "categoryId": "demo-cat-drinks",
+      "note": "Sparkling water for a picnic — for the apartment (Feb)"
+    },
+    {
+      "id": "demo-tx-daily-2026-2-31",
+      "date": "2026-02-03",
+      "amount": -123.61,
+      "type": "expense",
+      "currency": "EUR",
+      "accountId": "demo-bank",
+      "categoryId": "demo-cat-groceries",
+      "note": "Bakery and pantry top-up — for the apartment (Feb)"
+    },
+    {
+      "id": "demo-tx-daily-2026-2-32",
+      "date": "2026-02-25",
+      "amount": -115.01,
+      "type": "expense",
+      "currency": "EUR",
+      "accountId": "demo-bank",
+      "categoryId": "demo-cat-restaurant",
+      "note": "Takeaway from Little Oven — while running errands (Feb)"
+    },
+    {
+      "id": "demo-tx-daily-2026-3-33",
+      "date": "2026-03-01",
+      "amount": 2796.99,
+      "type": "income",
+      "currency": "EUR",
+      "accountId": "demo-bank",
+      "categoryId": "demo-cat-paycheck",
+      "note": "Monthly salary deposit"
+    },
+    {
+      "id": "demo-tx-daily-2026-3-34",
+      "date": "2026-03-21",
+      "amount": -873.31,
+      "type": "expense",
+      "currency": "EUR",
+      "accountId": "demo-bank",
+      "categoryId": "demo-cat-home",
+      "note": "Apartment rent"
+    },
+    {
+      "id": "demo-tx-daily-2026-3-35",
+      "date": "2026-03-08",
+      "amount": -126.77,
+      "type": "expense",
+      "currency": "EUR",
+      "accountId": "demo-bank",
+      "categoryId": "demo-cat-bills",
+      "note": "Streaming subscription — for the apartment (Mar)"
+    },
+    {
+      "id": "demo-tx-daily-2026-3-36",
+      "date": "2026-03-19",
+      "amount": -86.98,
+      "type": "expense",
+      "currency": "EUR",
+      "accountId": "demo-bank",
+      "categoryId": "demo-cat-family",
+      "note": "Family outing contribution — planned seasonal purchase (Mar)"
+    },
+    {
+      "id": "demo-tx-daily-2026-3-37",
+      "date": "2026-03-22",
+      "amount": -143.68,
+      "type": "expense",
+      "currency": "EUR",
+      "accountId": "demo-bank",
+      "categoryId": "demo-cat-family",
+      "note": "Shared celebration meal — before the trip (Mar)"
+    },
+    {
+      "id": "demo-tx-daily-2026-3-38",
+      "date": "2026-03-02",
+      "amount": -89.91,
+      "type": "expense",
+      "currency": "EUR",
+      "accountId": "demo-bank",
+      "categoryId": "demo-cat-clothes",
+      "note": "Running shirt — one-time replacement (Mar)"
+    },
+    {
+      "id": "demo-tx-daily-2026-3-39",
+      "date": "2026-03-18",
+      "amount": -101.97,
+      "type": "expense",
+      "currency": "EUR",
+      "accountId": "demo-bank",
+      "categoryId": "demo-cat-drinks",
+      "note": "Drinks at the music venue — for a family visit (Mar)"
+    },
+    {
+      "id": "demo-tx-daily-2026-3-40",
+      "date": "2026-03-13",
+      "amount": -35.25,
+      "type": "expense",
+      "currency": "EUR",
+      "accountId": "demo-bank",
+      "categoryId": "demo-cat-groceries",
+      "note": "Weekly shop at Corner Market — near the station (Mar)"
+    },
+    {
+      "id": "demo-tx-daily-2026-3-41",
+      "date": "2026-03-03",
+      "amount": -68.56,
+      "type": "expense",
+      "currency": "EUR",
+      "accountId": "demo-bank",
+      "categoryId": "demo-cat-transport",
+      "note": "Parking near the park — during a day trip (Mar)"
+    },
+    {
+      "id": "demo-tx-daily-2026-3-42",
+      "date": "2026-03-07",
+      "amount": 309.13,
+      "type": "income",
+      "currency": "EUR",
+      "accountId": "demo-bank",
+      "categoryId": "demo-cat-paycheck",
+      "note": "Project completion bonus — on the way home (Mar)"
+    },
+    {
+      "id": "demo-tx-daily-2026-3-43",
+      "date": "2026-03-20",
+      "amount": -35.51,
+      "type": "expense",
+      "currency": "EUR",
+      "accountId": "demo-bank",
+      "categoryId": "demo-cat-transport",
+      "note": "City bus fare — for a family visit (Mar)"
+    },
+    {
+      "id": "demo-tx-daily-2026-3-44",
+      "date": "2026-03-28",
+      "amount": -62.74,
+      "type": "expense",
+      "currency": "EUR",
+      "accountId": "demo-cash",
+      "categoryId": "demo-cat-bills",
+      "note": "Waste collection fee — for the weekend (Mar)"
+    },
+    {
+      "id": "demo-tx-daily-2026-3-45",
+      "date": "2026-03-10",
+      "amount": -131.86,
+      "type": "expense",
+      "currency": "EUR",
+      "accountId": "demo-bank",
+      "categoryId": "demo-cat-family",
+      "note": "Shared celebration meal — after work (Mar)"
+    },
+    {
+      "id": "demo-tx-daily-2026-3-46",
+      "date": "2026-03-04",
+      "amount": -56.76,
+      "type": "expense",
+      "currency": "USD",
+      "accountId": "demo-usd",
+      "categoryId": "demo-cat-clothes",
+      "note": "Light rain jacket — near the station (Mar)"
+    },
+    {
+      "id": "demo-tx-daily-2026-3-47",
+      "date": "2026-03-26",
+      "amount": -135.56,
+      "type": "expense",
+      "currency": "EUR",
+      "accountId": "demo-bank",
+      "categoryId": "demo-cat-family",
+      "note": "Birthday present — for a family visit (Mar)"
+    },
+    {
+      "id": "demo-tx-daily-2026-3-48",
+      "date": "2026-03-24",
+      "amount": -39.72,
+      "type": "expense",
+      "currency": "EUR",
+      "accountId": "demo-bank",
+      "categoryId": "demo-cat-transport",
+      "note": "Monthly transit pass — during a day trip (Mar)"
+    },
+    {
+      "id": "demo-tx-daily-2026-3-49",
+      "date": "2026-03-23",
+      "amount": -10.11,
+      "type": "expense",
+      "currency": "EUR",
+      "accountId": "demo-bank",
+      "categoryId": "demo-cat-family",
+      "note": "Family outing contribution — during a day trip (Mar)"
+    },
+    {
+      "id": "demo-tx-daily-2026-3-50",
+      "date": "2026-03-15",
+      "amount": -40.28,
+      "type": "expense",
+      "currency": "EUR",
+      "accountId": "demo-bank",
+      "categoryId": "demo-cat-health",
+      "note": "Dental check-up co-pay — while running errands (Mar)"
+    },
+    {
+      "id": "demo-tx-daily-2026-3-51",
+      "date": "2026-03-09",
+      "amount": 385.67,
+      "type": "income",
+      "currency": "EUR",
+      "accountId": "demo-bank",
+      "categoryId": "demo-cat-paycheck",
+      "note": "Project completion bonus — for a family visit (Mar)"
+    },
+    {
+      "id": "demo-tx-daily-2026-3-52",
+      "date": "2026-03-05",
+      "amount": -70.69,
+      "type": "expense",
+      "currency": "EUR",
+      "accountId": "demo-bank",
+      "categoryId": "demo-cat-restaurant",
+      "note": "Dinner at Harbor Grill — one-time replacement (Mar)"
+    },
+    {
+      "id": "demo-tx-daily-2026-4-53",
+      "date": "2026-04-06",
+      "amount": 2637.01,
+      "type": "income",
+      "currency": "EUR",
+      "accountId": "demo-bank",
+      "categoryId": "demo-cat-paycheck",
+      "note": "Monthly salary deposit"
+    },
+    {
+      "id": "demo-tx-daily-2026-4-54",
+      "date": "2026-04-11",
+      "amount": -773.19,
+      "type": "expense",
+      "currency": "EUR",
+      "accountId": "demo-bank",
+      "categoryId": "demo-cat-home",
+      "note": "Apartment rent"
+    },
+    {
+      "id": "demo-tx-daily-2026-4-55",
+      "date": "2026-04-01",
+      "amount": -38.48,
+      "type": "expense",
+      "currency": "EUR",
+      "accountId": "demo-bank",
+      "categoryId": "demo-cat-groceries",
+      "note": "Pantry staples from Maxi — for a small celebration (Apr)"
+    },
+    {
+      "id": "demo-tx-daily-2026-4-56",
+      "date": "2026-04-22",
+      "amount": -87.67,
+      "type": "expense",
+      "currency": "EUR",
+      "accountId": "demo-bank",
+      "categoryId": "demo-cat-family",
+      "note": "Birthday present — after work (Apr)"
+    },
+    {
+      "id": "demo-tx-daily-2026-4-57",
+      "date": "2026-04-07",
+      "amount": -88.7,
+      "type": "expense",
+      "currency": "EUR",
+      "accountId": "demo-bank",
+      "categoryId": "demo-cat-hobbies",
+      "note": "Photography print — monthly top-up (Apr)"
+    },
+    {
+      "id": "demo-tx-daily-2026-4-58",
+      "date": "2026-04-23",
+      "amount": -50.36,
+      "type": "expense",
+      "currency": "EUR",
+      "accountId": "demo-bank",
+      "categoryId": "demo-cat-restaurant",
+      "note": "Takeaway from Little Oven — local pickup (Apr)"
+    },
+    {
+      "id": "demo-tx-daily-2026-4-59",
+      "date": "2026-04-20",
+      "amount": -61.3,
+      "type": "expense",
+      "currency": "EUR",
+      "accountId": "demo-bank",
+      "categoryId": "demo-cat-groceries",
+      "note": "Weekend groceries at City Market — on the way home (Apr)"
+    },
+    {
+      "id": "demo-tx-daily-2026-4-60",
+      "date": "2026-04-13",
+      "amount": -80.56,
+      "type": "expense",
+      "currency": "EUR",
+      "accountId": "demo-bank",
+      "categoryId": "demo-cat-groceries",
+      "note": "Market basket at Lidl — before the trip (Apr)"
+    },
+    {
+      "id": "demo-tx-daily-2026-4-61",
+      "date": "2026-04-19",
+      "amount": -136.66,
+      "type": "expense",
+      "currency": "EUR",
+      "accountId": "demo-bank",
+      "categoryId": "demo-cat-transport",
+      "note": "Train tickets for a day trip — for a small celebration (Apr)"
+    },
+    {
+      "id": "demo-tx-daily-2026-4-62",
+      "date": "2026-04-04",
+      "amount": 250.46,
+      "type": "income",
+      "currency": "EUR",
+      "accountId": "demo-bank",
+      "categoryId": "demo-cat-paycheck",
+      "note": "Small freelance illustration — special occasion (Apr)"
+    },
+    {
+      "id": "demo-tx-daily-2026-4-63",
+      "date": "2026-04-15",
+      "amount": -90.71,
+      "type": "expense",
+      "currency": "EUR",
+      "accountId": "demo-bank",
+      "categoryId": "demo-cat-family",
+      "note": "Flowers for a relative — local pickup (Apr)"
+    },
+    {
+      "id": "demo-tx-daily-2026-4-64",
+      "date": "2026-04-10",
+      "amount": -101.96,
+      "type": "expense",
+      "currency": "EUR",
+      "accountId": "demo-cash",
+      "categoryId": "demo-cat-health",
+      "note": "Sports recovery supplies — one-time replacement (Apr)"
+    },
+    {
+      "id": "demo-tx-daily-2026-4-65",
+      "date": "2026-04-25",
+      "amount": -64.73,
+      "type": "expense",
+      "currency": "EUR",
+      "accountId": "demo-bank",
+      "categoryId": "demo-cat-groceries",
+      "note": "Pantry staples from Maxi — for the weekend (Apr)"
+    },
+    {
+      "id": "demo-tx-daily-2026-4-66",
+      "date": "2026-04-12",
+      "amount": -57.36,
+      "type": "expense",
+      "currency": "USD",
+      "accountId": "demo-usd",
+      "categoryId": "demo-cat-restaurant",
+      "note": "Takeaway from Little Oven — during a day trip (Apr)"
+    },
+    {
+      "id": "demo-tx-daily-2026-4-67",
+      "date": "2026-04-24",
+      "amount": -100.89,
+      "type": "expense",
+      "currency": "EUR",
+      "accountId": "demo-bank",
+      "categoryId": "demo-cat-bills",
+      "note": "Water service bill — for a rainy day (Apr)"
+    },
+    {
+      "id": "demo-tx-daily-2026-4-68",
+      "date": "2026-04-09",
+      "amount": -71.8,
+      "type": "expense",
+      "currency": "EUR",
+      "accountId": "demo-bank",
+      "categoryId": "demo-cat-groceries",
+      "note": "Fruit and vegetables — during a day trip (Apr)"
+    },
+    {
+      "id": "demo-tx-daily-2026-4-69",
+      "date": "2026-04-14",
+      "amount": -36.29,
+      "type": "expense",
+      "currency": "EUR",
+      "accountId": "demo-bank",
+      "categoryId": "demo-cat-drinks",
+      "note": "Sparkling water for a picnic — monthly top-up (Apr)"
+    },
+    {
+      "id": "demo-tx-daily-2026-5-70",
+      "date": "2026-05-10",
+      "amount": 2461.94,
+      "type": "income",
+      "currency": "EUR",
+      "accountId": "demo-bank",
+      "categoryId": "demo-cat-paycheck",
+      "note": "Monthly salary deposit"
+    },
+    {
+      "id": "demo-tx-daily-2026-5-71",
+      "date": "2026-05-15",
+      "amount": -866.2,
+      "type": "expense",
+      "currency": "EUR",
+      "accountId": "demo-bank",
+      "categoryId": "demo-cat-home",
+      "note": "Apartment rent"
+    },
+    {
+      "id": "demo-tx-daily-2026-5-72",
+      "date": "2026-05-12",
+      "amount": -69.2,
+      "type": "expense",
+      "currency": "EUR",
+      "accountId": "demo-bank",
+      "categoryId": "demo-cat-clothes",
+      "note": "Weekend shoes — one-time replacement (May)"
+    },
+    {
+      "id": "demo-tx-daily-2026-5-73",
+      "date": "2026-05-22",
+      "amount": -58.34,
+      "type": "expense",
+      "currency": "EUR",
+      "accountId": "demo-bank",
+      "categoryId": "demo-cat-hobbies",
+      "note": "Photography print — after work (May)"
+    },
+    {
+      "id": "demo-tx-daily-2026-5-74",
+      "date": "2026-05-24",
+      "amount": -114.5,
+      "type": "expense",
+      "currency": "EUR",
+      "accountId": "demo-bank",
+      "categoryId": "demo-cat-restaurant",
+      "note": "Dinner at Harbor Grill — during a day trip (May)"
+    },
+    {
+      "id": "demo-tx-daily-2026-5-75",
+      "date": "2026-05-13",
+      "amount": -74.68,
+      "type": "expense",
+      "currency": "EUR",
+      "accountId": "demo-bank",
+      "categoryId": "demo-cat-drinks",
+      "note": "Drinks at the music venue — for a rainy day (May)"
+    },
+    {
+      "id": "demo-tx-daily-2026-5-76",
+      "date": "2026-05-02",
+      "amount": -111.75,
+      "type": "expense",
+      "currency": "EUR",
+      "accountId": "demo-bank",
+      "categoryId": "demo-cat-bills",
+      "note": "Water service bill — for a family visit (May)"
+    },
+    {
+      "id": "demo-tx-daily-2026-5-77",
+      "date": "2026-05-27",
+      "amount": -97.49,
+      "type": "expense",
+      "currency": "EUR",
+      "accountId": "demo-bank",
+      "categoryId": "demo-cat-restaurant",
+      "note": "Pasta night at Piazza — one-time replacement (May)"
+    },
+    {
+      "id": "demo-tx-daily-2026-5-78",
+      "date": "2026-05-07",
+      "amount": -107.1,
+      "type": "expense",
+      "currency": "EUR",
+      "accountId": "demo-bank",
+      "categoryId": "demo-cat-transport",
+      "note": "Fuel for the family car — for a rainy day (May)"
+    },
+    {
+      "id": "demo-tx-daily-2026-5-79",
+      "date": "2026-05-03",
+      "amount": 314.77,
+      "type": "income",
+      "currency": "EUR",
+      "accountId": "demo-bank",
+      "categoryId": "demo-cat-paycheck",
+      "note": "Marketplace sale — local pickup (May)"
+    },
+    {
+      "id": "demo-tx-daily-2026-5-80",
+      "date": "2026-05-18",
+      "amount": -27.08,
+      "type": "expense",
+      "currency": "EUR",
+      "accountId": "demo-bank",
+      "categoryId": "demo-cat-bills",
+      "note": "Water service bill — while running errands (May)"
+    },
+    {
+      "id": "demo-tx-daily-2026-5-81",
+      "date": "2026-05-26",
+      "amount": -10.19,
+      "type": "expense",
+      "currency": "EUR",
+      "accountId": "demo-cash",
+      "categoryId": "demo-cat-groceries",
+      "note": "Market basket at Lidl — for a small celebration (May)"
+    },
+    {
+      "id": "demo-tx-daily-2026-5-82",
+      "date": "2026-05-17",
+      "amount": -63.14,
+      "type": "expense",
+      "currency": "EUR",
+      "accountId": "demo-bank",
+      "categoryId": "demo-cat-groceries",
+      "note": "Produce from Riverside Market — for a rainy day (May)"
+    },
+    {
+      "id": "demo-tx-daily-2026-5-83",
+      "date": "2026-05-16",
+      "amount": -22.45,
+      "type": "expense",
+      "currency": "USD",
+      "accountId": "demo-usd",
+      "categoryId": "demo-cat-clothes",
+      "note": "Light rain jacket — while running errands (May)"
+    },
+    {
+      "id": "demo-tx-daily-2026-5-84",
+      "date": "2026-05-01",
+      "amount": -100.26,
+      "type": "expense",
+      "currency": "EUR",
+      "accountId": "demo-bank",
+      "categoryId": "demo-cat-transport",
+      "note": "Bike service and parts — on the way home (May)"
+    },
+    {
+      "id": "demo-tx-daily-2026-5-85",
+      "date": "2026-05-09",
+      "amount": -8.69,
+      "type": "expense",
+      "currency": "EUR",
+      "accountId": "demo-bank",
+      "categoryId": "demo-cat-drinks",
+      "note": "Refreshments at the waterfront — for the weekend (May)"
+    },
+    {
+      "id": "demo-tx-daily-2026-6-86",
+      "date": "2026-06-12",
+      "amount": 2698.16,
+      "type": "income",
+      "currency": "EUR",
+      "accountId": "demo-bank",
+      "categoryId": "demo-cat-paycheck",
+      "note": "Monthly salary deposit"
+    },
+    {
+      "id": "demo-tx-daily-2026-6-87",
+      "date": "2026-06-19",
+      "amount": -934.92,
+      "type": "expense",
+      "currency": "EUR",
+      "accountId": "demo-bank",
+      "categoryId": "demo-cat-home",
+      "note": "Apartment rent"
+    },
+    {
+      "id": "demo-tx-daily-2026-6-88",
+      "date": "2026-06-08",
+      "amount": -14.96,
+      "type": "expense",
+      "currency": "EUR",
+      "accountId": "demo-bank",
+      "categoryId": "demo-cat-transport",
+      "note": "Monthly transit pass — planned seasonal purchase (Jun)"
+    },
+    {
+      "id": "demo-tx-daily-2026-6-89",
+      "date": "2026-06-21",
+      "amount": -103.83,
+      "type": "expense",
+      "currency": "EUR",
+      "accountId": "demo-bank",
+      "categoryId": "demo-cat-home",
+      "note": "Hardware for a shelf repair — monthly top-up (Jun)"
+    },
+    {
+      "id": "demo-tx-daily-2026-6-90",
+      "date": "2026-06-04",
+      "amount": -94.06,
+      "type": "expense",
+      "currency": "EUR",
+      "accountId": "demo-bank",
+      "categoryId": "demo-cat-family",
+      "note": "Flowers for a relative — on the way home (Jun)"
+    },
+    {
+      "id": "demo-tx-daily-2026-6-91",
+      "date": "2026-06-26",
+      "amount": -106.69,
+      "type": "expense",
+      "currency": "EUR",
+      "accountId": "demo-bank",
+      "categoryId": "demo-cat-groceries",
+      "note": "Household groceries at Fresh Basket — monthly top-up (Jun)"
+    },
+    {
+      "id": "demo-tx-daily-2026-6-92",
+      "date": "2026-06-09",
+      "amount": -79.15,
+      "type": "expense",
+      "currency": "EUR",
+      "accountId": "demo-bank",
+      "categoryId": "demo-cat-home",
+      "note": "New kitchen towels — before the trip (Jun)"
+    },
+    {
+      "id": "demo-tx-daily-2026-6-93",
+      "date": "2026-06-10",
+      "amount": -126.81,
+      "type": "expense",
+      "currency": "EUR",
+      "accountId": "demo-bank",
+      "categoryId": "demo-cat-restaurant",
+      "note": "Dinner at Harbor Grill — after work (Jun)"
+    },
+    {
+      "id": "demo-tx-daily-2026-6-94",
+      "date": "2026-06-03",
+      "amount": -71.29,
+      "type": "expense",
+      "currency": "EUR",
+      "accountId": "demo-bank",
+      "categoryId": "demo-cat-hobbies",
+      "note": "Weekend pottery class — before the trip (Jun)"
+    },
+    {
+      "id": "demo-tx-daily-2026-6-95",
+      "date": "2026-06-05",
+      "amount": 230.29,
+      "type": "income",
+      "currency": "EUR",
+      "accountId": "demo-bank",
+      "categoryId": "demo-cat-paycheck",
+      "note": "Project completion bonus — on the way home (Jun)"
+    },
+    {
+      "id": "demo-tx-daily-2026-6-96",
+      "date": "2026-06-01",
+      "amount": -122.73,
+      "type": "expense",
+      "currency": "EUR",
+      "accountId": "demo-bank",
+      "categoryId": "demo-cat-health",
+      "note": "Dental check-up co-pay — for a rainy day (Jun)"
+    },
+    {
+      "id": "demo-tx-daily-2026-6-97",
+      "date": "2026-06-14",
+      "amount": -117.37,
+      "type": "expense",
+      "currency": "EUR",
+      "accountId": "demo-cash",
+      "categoryId": "demo-cat-drinks",
+      "note": "Tea and lemonade at Garden House — for a small celebration (Jun)"
+    },
+    {
+      "id": "demo-tx-daily-2026-6-98",
+      "date": "2026-06-23",
+      "amount": -9.61,
+      "type": "expense",
+      "currency": "EUR",
+      "accountId": "demo-bank",
+      "categoryId": "demo-cat-family",
+      "note": "Shared celebration meal — during a day trip (Jun)"
+    },
+    {
+      "id": "demo-tx-daily-2026-6-99",
+      "date": "2026-06-27",
+      "amount": -39.15,
+      "type": "expense",
+      "currency": "USD",
+      "accountId": "demo-usd",
+      "categoryId": "demo-cat-transport",
+      "note": "Monthly transit pass — special occasion (Jun)"
+    },
+    {
+      "id": "demo-tx-daily-2026-6-100",
+      "date": "2026-06-06",
+      "amount": -89.03,
+      "type": "expense",
+      "currency": "EUR",
+      "accountId": "demo-bank",
+      "categoryId": "demo-cat-restaurant",
+      "note": "Noodle House meal — after work (Jun)"
+    },
+    {
+      "id": "demo-tx-daily-2026-6-101",
+      "date": "2026-06-13",
+      "amount": -93.19,
+      "type": "expense",
+      "currency": "EUR",
+      "accountId": "demo-bank",
+      "categoryId": "demo-cat-bills",
+      "note": "Water service bill — while running errands (Jun)"
+    },
+    {
+      "id": "demo-tx-daily-2026-6-102",
+      "date": "2026-06-16",
+      "amount": -125.72,
+      "type": "expense",
+      "currency": "EUR",
+      "accountId": "demo-bank",
+      "categoryId": "demo-cat-restaurant",
+      "note": "Sunday brunch at Orchard Kitchen — while running errands (Jun)"
+    },
+    {
+      "id": "demo-tx-daily-2026-6-103",
+      "date": "2026-06-11",
+      "amount": -48.34,
+      "type": "expense",
+      "currency": "EUR",
+      "accountId": "demo-bank",
+      "categoryId": "demo-cat-hobbies",
+      "note": "Digital puzzle pack — for a rainy day (Jun)"
+    },
+    {
+      "id": "demo-tx-daily-2026-6-104",
+      "date": "2026-06-18",
+      "amount": 240.99,
+      "type": "income",
+      "currency": "EUR",
+      "accountId": "demo-bank",
+      "categoryId": "demo-cat-paycheck",
+      "note": "Project completion bonus — monthly top-up (Jun)"
+    },
+    {
+      "id": "demo-tx-daily-2026-6-105",
+      "date": "2026-06-20",
+      "amount": -56.96,
+      "type": "expense",
+      "currency": "EUR",
+      "accountId": "demo-bank",
+      "categoryId": "demo-cat-groceries",
+      "note": "Weekend groceries at City Market — for a family visit (Jun)"
+    },
+    {
+      "id": "demo-tx-daily-2026-7-106",
+      "date": "2026-07-08",
+      "amount": 2620.35,
+      "type": "income",
+      "currency": "EUR",
+      "accountId": "demo-bank",
+      "categoryId": "demo-cat-paycheck",
+      "note": "Monthly salary deposit"
+    },
+    {
+      "id": "demo-tx-daily-2026-7-107",
+      "date": "2026-07-21",
+      "amount": -940.29,
+      "type": "expense",
+      "currency": "EUR",
+      "accountId": "demo-bank",
+      "categoryId": "demo-cat-home",
+      "note": "Apartment rent"
+    },
+    {
+      "id": "demo-tx-daily-2026-7-108",
+      "date": "2026-07-09",
+      "amount": -136.45,
+      "type": "expense",
+      "currency": "EUR",
+      "accountId": "demo-bank",
+      "categoryId": "demo-cat-groceries",
+      "note": "Bakery and pantry top-up — monthly top-up (Jul)"
+    },
+    {
+      "id": "demo-tx-daily-2026-7-109",
+      "date": "2026-07-02",
+      "amount": -45.97,
+      "type": "expense",
+      "currency": "EUR",
+      "accountId": "demo-bank",
+      "categoryId": "demo-cat-groceries",
+      "note": "Market basket at Lidl — monthly top-up (Jul)"
+    },
+    {
+      "id": "demo-tx-daily-2026-7-110",
+      "date": "2026-07-17",
+      "amount": -116.16,
+      "type": "expense",
+      "currency": "EUR",
+      "accountId": "demo-bank",
+      "categoryId": "demo-cat-groceries",
+      "note": "Weekend groceries at City Market — after work (Jul)"
+    },
+    {
+      "id": "demo-tx-daily-2026-7-111",
+      "date": "2026-07-05",
+      "amount": -64.12,
+      "type": "expense",
+      "currency": "EUR",
+      "accountId": "demo-bank",
+      "categoryId": "demo-cat-groceries",
+      "note": "Weekend groceries at City Market — for a rainy day (Jul)"
+    },
+    {
+      "id": "demo-tx-daily-2026-7-112",
+      "date": "2026-07-07",
+      "amount": -77.6,
+      "type": "expense",
+      "currency": "EUR",
+      "accountId": "demo-bank",
+      "categoryId": "demo-cat-groceries",
+      "note": "Produce from Riverside Market — monthly top-up (Jul)"
+    },
+    {
+      "id": "demo-tx-daily-2026-7-113",
+      "date": "2026-07-26",
+      "amount": -50.65,
+      "type": "expense",
+      "currency": "EUR",
+      "accountId": "demo-bank",
+      "categoryId": "demo-cat-bills",
+      "note": "Household mobile top-up — while running errands (Jul)"
+    },
+    {
+      "id": "demo-tx-daily-2026-7-114",
+      "date": "2026-07-14",
+      "amount": -125.13,
+      "type": "expense",
+      "currency": "EUR",
+      "accountId": "demo-bank",
+      "categoryId": "demo-cat-health",
+      "note": "Pharmacy essentials — during a day trip (Jul)"
+    },
+    {
+      "id": "demo-tx-daily-2026-7-115",
+      "date": "2026-07-25",
+      "amount": 70.41,
+      "type": "income",
+      "currency": "EUR",
+      "accountId": "demo-bank",
+      "categoryId": "demo-cat-paycheck",
+      "note": "Small freelance illustration — special occasion (Jul)"
+    },
+    {
+      "id": "demo-tx-daily-2026-7-116",
+      "date": "2026-07-24",
+      "amount": -131.68,
+      "type": "expense",
+      "currency": "EUR",
+      "accountId": "demo-bank",
+      "categoryId": "demo-cat-clothes",
+      "note": "Running shirt — after work (Jul)"
+    },
+    {
+      "id": "demo-tx-daily-2026-7-117",
+      "date": "2026-07-16",
+      "amount": -83.41,
+      "type": "expense",
+      "currency": "EUR",
+      "accountId": "demo-cash",
+      "categoryId": "demo-cat-clothes",
+      "note": "Winter gloves — before the trip (Jul)"
+    },
+    {
+      "id": "demo-tx-daily-2026-7-118",
+      "date": "2026-07-19",
+      "amount": -106.69,
+      "type": "expense",
+      "currency": "EUR",
+      "accountId": "demo-bank",
+      "categoryId": "demo-cat-home",
+      "note": "New kitchen towels — for a rainy day (Jul)"
+    },
+    {
+      "id": "demo-tx-daily-2026-7-119",
+      "date": "2026-07-20",
+      "amount": -40.05,
+      "type": "expense",
+      "currency": "USD",
+      "accountId": "demo-usd",
+      "categoryId": "demo-cat-drinks",
+      "note": "Smoothies after a walk — after work (Jul)"
+    },
+    {
+      "id": "demo-tx-daily-2026-7-120",
+      "date": "2026-07-28",
+      "amount": -117.01,
+      "type": "expense",
+      "currency": "EUR",
+      "accountId": "demo-bank",
+      "categoryId": "demo-cat-family",
+      "note": "Book for a family member — for a rainy day (Jul)"
+    },
+    {
+      "id": "demo-tx-daily-2026-7-121",
+      "date": "2026-07-23",
+      "amount": -134.98,
+      "type": "expense",
+      "currency": "EUR",
+      "accountId": "demo-bank",
+      "categoryId": "demo-cat-groceries",
+      "note": "Pantry staples from Maxi — for a family visit (Jul)"
+    },
+    {
+      "id": "demo-tx-daily-2026-8-122",
+      "date": "2026-08-02",
+      "amount": 3135.55,
+      "type": "income",
+      "currency": "EUR",
+      "accountId": "demo-bank",
+      "categoryId": "demo-cat-paycheck",
+      "note": "Monthly salary deposit"
+    },
+    {
+      "id": "demo-tx-daily-2026-8-123",
+      "date": "2026-08-18",
+      "amount": -911.65,
+      "type": "expense",
+      "currency": "EUR",
+      "accountId": "demo-bank",
+      "categoryId": "demo-cat-home",
+      "note": "Apartment rent"
+    },
+    {
+      "id": "demo-tx-daily-2026-8-124",
+      "date": "2026-08-12",
+      "amount": -12.05,
+      "type": "expense",
+      "currency": "EUR",
+      "accountId": "demo-bank",
+      "categoryId": "demo-cat-transport",
+      "note": "Monthly transit pass — after work (Aug)"
+    },
+    {
+      "id": "demo-tx-daily-2026-8-125",
+      "date": "2026-08-28",
+      "amount": -124.15,
+      "type": "expense",
+      "currency": "EUR",
+      "accountId": "demo-bank",
+      "categoryId": "demo-cat-groceries",
+      "note": "Pantry staples from Maxi — for a rainy day (Aug)"
+    },
+    {
+      "id": "demo-tx-daily-2026-8-126",
+      "date": "2026-08-10",
+      "amount": -38.76,
+      "type": "expense",
+      "currency": "EUR",
+      "accountId": "demo-bank",
+      "categoryId": "demo-cat-clothes",
+      "note": "Weekend shoes — near the station (Aug)"
+    },
+    {
+      "id": "demo-tx-daily-2026-8-127",
+      "date": "2026-08-09",
+      "amount": -121.47,
+      "type": "expense",
+      "currency": "EUR",
+      "accountId": "demo-bank",
+      "categoryId": "demo-cat-home",
+      "note": "Fresh bedsheets — during a day trip (Aug)"
+    },
+    {
+      "id": "demo-tx-daily-2026-8-128",
+      "date": "2026-08-06",
+      "amount": -10.36,
+      "type": "expense",
+      "currency": "EUR",
+      "accountId": "demo-bank",
+      "categoryId": "demo-cat-home",
+      "note": "Hardware for a shelf repair — for the apartment (Aug)"
+    },
+    {
+      "id": "demo-tx-daily-2026-8-129",
+      "date": "2026-08-13",
+      "amount": -26.37,
+      "type": "expense",
+      "currency": "EUR",
+      "accountId": "demo-bank",
+      "categoryId": "demo-cat-transport",
+      "note": "Fuel for the family car — after work (Aug)"
+    },
+    {
+      "id": "demo-tx-daily-2026-8-130",
+      "date": "2026-08-23",
+      "amount": -36.34,
+      "type": "expense",
+      "currency": "EUR",
+      "accountId": "demo-bank",
+      "categoryId": "demo-cat-home",
+      "note": "Small home repair supplies — for a family visit (Aug)"
+    },
+    {
+      "id": "demo-tx-daily-2026-8-131",
+      "date": "2026-08-21",
+      "amount": 260.89,
+      "type": "income",
+      "currency": "EUR",
+      "accountId": "demo-bank",
+      "categoryId": "demo-cat-paycheck",
+      "note": "Weekend event shift — monthly top-up (Aug)"
+    },
+    {
+      "id": "demo-tx-daily-2026-8-132",
+      "date": "2026-08-11",
+      "amount": -122.14,
+      "type": "expense",
+      "currency": "EUR",
+      "accountId": "demo-bank",
+      "categoryId": "demo-cat-health",
+      "note": "Sports recovery supplies — for a family visit (Aug)"
+    },
+    {
+      "id": "demo-tx-daily-2026-8-133",
+      "date": "2026-08-25",
+      "amount": -7.5,
+      "type": "expense",
+      "currency": "EUR",
+      "accountId": "demo-cash",
+      "categoryId": "demo-cat-groceries",
+      "note": "Market basket at Lidl — monthly top-up (Aug)"
+    },
+    {
+      "id": "demo-tx-daily-2026-8-134",
+      "date": "2026-08-17",
+      "amount": -16.74,
+      "type": "expense",
+      "currency": "EUR",
+      "accountId": "demo-bank",
+      "categoryId": "demo-cat-hobbies",
+      "note": "Weekend pottery class — on the way home (Aug)"
+    },
+    {
+      "id": "demo-tx-daily-2026-8-135",
+      "date": "2026-08-07",
+      "amount": -40.76,
+      "type": "expense",
+      "currency": "USD",
+      "accountId": "demo-usd",
+      "categoryId": "demo-cat-restaurant",
+      "note": "Lunch with friends at Green Plate — after work (Aug)"
+    },
+    {
+      "id": "demo-tx-daily-2026-8-136",
+      "date": "2026-08-03",
+      "amount": -125.93,
+      "type": "expense",
+      "currency": "EUR",
+      "accountId": "demo-bank",
+      "categoryId": "demo-cat-transport",
+      "note": "Train tickets for a day trip — on the way home (Aug)"
+    },
+    {
+      "id": "demo-tx-daily-2026-8-137",
+      "date": "2026-08-05",
+      "amount": -76.31,
+      "type": "expense",
+      "currency": "EUR",
+      "accountId": "demo-bank",
+      "categoryId": "demo-cat-bills",
+      "note": "Streaming subscription — before the trip (Aug)"
+    },
+    {
+      "id": "demo-tx-daily-2026-8-138",
+      "date": "2026-08-08",
+      "amount": -90.74,
+      "type": "expense",
+      "currency": "EUR",
+      "accountId": "demo-bank",
+      "categoryId": "demo-cat-groceries",
+      "note": "Fruit and vegetables — for the apartment (Aug)"
+    },
+    {
+      "id": "demo-tx-daily-2026-9-139",
+      "date": "2026-09-22",
+      "amount": 2661.59,
+      "type": "income",
+      "currency": "EUR",
+      "accountId": "demo-bank",
+      "categoryId": "demo-cat-paycheck",
+      "note": "Monthly salary deposit"
+    },
+    {
+      "id": "demo-tx-daily-2026-9-140",
+      "date": "2026-09-28",
+      "amount": -868.75,
+      "type": "expense",
+      "currency": "EUR",
+      "accountId": "demo-bank",
+      "categoryId": "demo-cat-home",
+      "note": "Apartment rent"
+    },
+    {
+      "id": "demo-tx-daily-2026-9-141",
+      "date": "2026-09-09",
+      "amount": -119.7,
+      "type": "expense",
+      "currency": "EUR",
+      "accountId": "demo-bank",
+      "categoryId": "demo-cat-bills",
+      "note": "Streaming subscription — near the station (Sep)"
+    },
+    {
+      "id": "demo-tx-daily-2026-9-142",
+      "date": "2026-09-12",
+      "amount": -55.99,
+      "type": "expense",
+      "currency": "EUR",
+      "accountId": "demo-bank",
+      "categoryId": "demo-cat-groceries",
+      "note": "Kitchen staples at Northside Grocer — before the trip (Sep)"
+    },
+    {
+      "id": "demo-tx-daily-2026-9-143",
+      "date": "2026-09-24",
+      "amount": -40.34,
+      "type": "expense",
+      "currency": "EUR",
+      "accountId": "demo-bank",
+      "categoryId": "demo-cat-health",
+      "note": "Sports recovery supplies — before the trip (Sep)"
+    },
+    {
+      "id": "demo-tx-daily-2026-9-144",
+      "date": "2026-09-20",
+      "amount": -52.52,
+      "type": "expense",
+      "currency": "EUR",
+      "accountId": "demo-bank",
+      "categoryId": "demo-cat-drinks",
+      "note": "Refreshments at the waterfront — near the station (Sep)"
+    },
+    {
+      "id": "demo-tx-daily-2026-9-145",
+      "date": "2026-09-17",
+      "amount": -111.39,
+      "type": "expense",
+      "currency": "EUR",
+      "accountId": "demo-bank",
+      "categoryId": "demo-cat-transport",
+      "note": "Parking near the park — for a family visit (Sep)"
+    },
+    {
+      "id": "demo-tx-daily-2026-9-146",
+      "date": "2026-09-11",
+      "amount": -127.54,
+      "type": "expense",
+      "currency": "EUR",
+      "accountId": "demo-bank",
+      "categoryId": "demo-cat-bills",
+      "note": "Water service bill — monthly top-up (Sep)"
+    },
+    {
+      "id": "demo-tx-daily-2026-9-147",
+      "date": "2026-09-15",
+      "amount": -144.54,
+      "type": "expense",
+      "currency": "EUR",
+      "accountId": "demo-bank",
+      "categoryId": "demo-cat-home",
+      "note": "Plant pots for the balcony — for the apartment (Sep)"
+    },
+    {
+      "id": "demo-tx-daily-2026-9-148",
+      "date": "2026-09-08",
+      "amount": 118.91,
+      "type": "income",
+      "currency": "EUR",
+      "accountId": "demo-bank",
+      "categoryId": "demo-cat-paycheck",
+      "note": "Weekend event shift — for the apartment (Sep)"
+    },
+    {
+      "id": "demo-tx-daily-2026-9-149",
+      "date": "2026-09-06",
+      "amount": -130.1,
+      "type": "expense",
+      "currency": "EUR",
+      "accountId": "demo-bank",
+      "categoryId": "demo-cat-groceries",
+      "note": "Market basket at Lidl — on the way home (Sep)"
+    },
+    {
+      "id": "demo-tx-daily-2026-9-150",
+      "date": "2026-09-03",
+      "amount": -77.86,
+      "type": "expense",
+      "currency": "EUR",
+      "accountId": "demo-cash",
+      "categoryId": "demo-cat-transport",
+      "note": "Regional train fare — local pickup (Sep)"
+    },
+    {
+      "id": "demo-tx-daily-2026-9-151",
+      "date": "2026-09-02",
+      "amount": -115.6,
+      "type": "expense",
+      "currency": "EUR",
+      "accountId": "demo-bank",
+      "categoryId": "demo-cat-bills",
+      "note": "Streaming subscription — local pickup (Sep)"
+    },
+    {
+      "id": "demo-tx-daily-2026-9-152",
+      "date": "2026-09-16",
+      "amount": -57.19,
+      "type": "expense",
+      "currency": "USD",
+      "accountId": "demo-usd",
+      "categoryId": "demo-cat-groceries",
+      "note": "Market basket at Lidl — for a family visit (Sep)"
+    },
+    {
+      "id": "demo-tx-daily-2026-9-153",
+      "date": "2026-09-19",
+      "amount": -133.31,
+      "type": "expense",
+      "currency": "EUR",
+      "accountId": "demo-bank",
+      "categoryId": "demo-cat-restaurant",
+      "note": "Noodle House meal — planned seasonal purchase (Sep)"
+    },
+    {
+      "id": "demo-tx-daily-2026-9-154",
+      "date": "2026-09-25",
+      "amount": -80.43,
+      "type": "expense",
+      "currency": "EUR",
+      "accountId": "demo-bank",
+      "categoryId": "demo-cat-bills",
+      "note": "Streaming subscription — for the weekend (Sep)"
+    },
+    {
+      "id": "demo-tx-daily-2026-9-155",
+      "date": "2026-09-21",
+      "amount": -107.29,
+      "type": "expense",
+      "currency": "EUR",
+      "accountId": "demo-bank",
+      "categoryId": "demo-cat-groceries",
+      "note": "Kitchen staples at Northside Grocer — during a day trip (Sep)"
+    },
+    {
+      "id": "demo-tx-daily-2026-9-156",
+      "date": "2026-09-01",
+      "amount": -121.36,
+      "type": "expense",
+      "currency": "EUR",
+      "accountId": "demo-bank",
+      "categoryId": "demo-cat-transport",
+      "note": "Monthly transit pass — for a small celebration (Sep)"
+    },
+    {
+      "id": "demo-tx-daily-2026-9-157",
+      "date": "2026-09-14",
+      "amount": 396.03,
+      "type": "income",
+      "currency": "EUR",
+      "accountId": "demo-bank",
+      "categoryId": "demo-cat-paycheck",
+      "note": "Marketplace sale — planned seasonal purchase (Sep)"
+    },
+    {
+      "id": "demo-tx-daily-2026-9-158",
+      "date": "2026-09-18",
+      "amount": -52.95,
+      "type": "expense",
+      "currency": "EUR",
+      "accountId": "demo-bank",
+      "categoryId": "demo-cat-transport",
+      "note": "Parking near the park — after work (Sep)"
+    },
+    {
+      "id": "demo-tx-daily-2026-9-159",
+      "date": "2026-09-04",
+      "amount": -45.13,
+      "type": "expense",
+      "currency": "EUR",
+      "accountId": "demo-bank",
+      "categoryId": "demo-cat-groceries",
+      "note": "Bakery and pantry top-up — for a family visit (Sep)"
+    },
+    {
+      "id": "demo-tx-daily-2026-9-160",
+      "date": "2026-09-27",
+      "amount": -98.46,
+      "type": "expense",
+      "currency": "EUR",
+      "accountId": "demo-bank",
+      "categoryId": "demo-cat-groceries",
+      "note": "Bakery and pantry top-up — for a rainy day (Sep)"
+    },
+    {
+      "id": "demo-tx-daily-2026-10-161",
+      "date": "2026-10-12",
+      "amount": 2868.86,
+      "type": "income",
+      "currency": "EUR",
+      "accountId": "demo-bank",
+      "categoryId": "demo-cat-paycheck",
+      "note": "Monthly salary deposit"
+    },
+    {
+      "id": "demo-tx-daily-2026-10-162",
+      "date": "2026-10-18",
+      "amount": -926.13,
+      "type": "expense",
+      "currency": "EUR",
+      "accountId": "demo-bank",
+      "categoryId": "demo-cat-home",
+      "note": "Apartment rent"
+    },
+    {
+      "id": "demo-tx-daily-2026-10-163",
+      "date": "2026-10-05",
+      "amount": -31.37,
+      "type": "expense",
+      "currency": "EUR",
+      "accountId": "demo-bank",
+      "categoryId": "demo-cat-transport",
+      "note": "Taxi home after an event — on the way home (Oct)"
+    },
+    {
+      "id": "demo-tx-daily-2026-10-164",
+      "date": "2026-10-11",
+      "amount": -78.93,
+      "type": "expense",
+      "currency": "EUR",
+      "accountId": "demo-bank",
+      "categoryId": "demo-cat-transport",
+      "note": "Monthly transit pass — before the trip (Oct)"
+    },
+    {
+      "id": "demo-tx-daily-2026-10-165",
+      "date": "2026-10-10",
+      "amount": -86.33,
+      "type": "expense",
+      "currency": "EUR",
+      "accountId": "demo-bank",
+      "categoryId": "demo-cat-health",
+      "note": "First-aid supplies — one-time replacement (Oct)"
+    },
+    {
+      "id": "demo-tx-daily-2026-10-166",
+      "date": "2026-10-16",
+      "amount": -49.03,
+      "type": "expense",
+      "currency": "EUR",
+      "accountId": "demo-bank",
+      "categoryId": "demo-cat-health",
+      "note": "Vitamins and supplements — while running errands (Oct)"
+    },
+    {
+      "id": "demo-tx-daily-2026-10-167",
+      "date": "2026-10-06",
+      "amount": -74.26,
+      "type": "expense",
+      "currency": "EUR",
+      "accountId": "demo-bank",
+      "categoryId": "demo-cat-health",
+      "note": "Prescription refill — on the way home (Oct)"
+    },
+    {
+      "id": "demo-tx-daily-2026-10-168",
+      "date": "2026-10-26",
+      "amount": -133.91,
+      "type": "expense",
+      "currency": "EUR",
+      "accountId": "demo-bank",
+      "categoryId": "demo-cat-hobbies",
+      "note": "Trail map and guidebook — monthly top-up (Oct)"
+    },
+    {
+      "id": "demo-tx-daily-2026-10-169",
+      "date": "2026-10-22",
+      "amount": -27.36,
+      "type": "expense",
+      "currency": "EUR",
+      "accountId": "demo-bank",
+      "categoryId": "demo-cat-groceries",
+      "note": "Kitchen staples at Northside Grocer — for a family visit (Oct)"
+    },
+    {
+      "id": "demo-tx-daily-2026-10-170",
+      "date": "2026-10-25",
+      "amount": 146.91,
+      "type": "income",
+      "currency": "EUR",
+      "accountId": "demo-bank",
+      "categoryId": "demo-cat-paycheck",
+      "note": "Small freelance illustration — near the station (Oct)"
+    },
+    {
+      "id": "demo-tx-daily-2026-10-171",
+      "date": "2026-10-19",
+      "amount": -20.61,
+      "type": "expense",
+      "currency": "EUR",
+      "accountId": "demo-bank",
+      "categoryId": "demo-cat-transport",
+      "note": "Taxi home after an event — while running errands (Oct)"
+    },
+    {
+      "id": "demo-tx-daily-2026-10-172",
+      "date": "2026-10-09",
+      "amount": -62.5,
+      "type": "expense",
+      "currency": "EUR",
+      "accountId": "demo-cash",
+      "categoryId": "demo-cat-health",
+      "note": "First-aid supplies — for a family visit (Oct)"
+    },
+    {
+      "id": "demo-tx-daily-2026-10-173",
+      "date": "2026-10-03",
+      "amount": -55.41,
+      "type": "expense",
+      "currency": "EUR",
+      "accountId": "demo-bank",
+      "categoryId": "demo-cat-transport",
+      "note": "Fuel for the family car — local pickup (Oct)"
+    },
+    {
+      "id": "demo-tx-daily-2026-10-174",
+      "date": "2026-10-07",
+      "amount": -48.09,
+      "type": "expense",
+      "currency": "USD",
+      "accountId": "demo-usd",
+      "categoryId": "demo-cat-bills",
+      "note": "Household mobile top-up — local pickup (Oct)"
+    },
+    {
+      "id": "demo-tx-daily-2026-10-175",
+      "date": "2026-10-02",
+      "amount": -8.83,
+      "type": "expense",
+      "currency": "EUR",
+      "accountId": "demo-bank",
+      "categoryId": "demo-cat-restaurant",
+      "note": "Lunch at Riverside Kitchen — for the weekend (Oct)"
+    },
+    {
+      "id": "demo-tx-daily-2026-10-176",
+      "date": "2026-10-24",
+      "amount": -121.88,
+      "type": "expense",
+      "currency": "EUR",
+      "accountId": "demo-bank",
+      "categoryId": "demo-cat-hobbies",
+      "note": "Art supplies from Paper House — for a family visit (Oct)"
+    },
+    {
+      "id": "demo-tx-daily-2026-10-177",
+      "date": "2026-10-28",
+      "amount": -45.1,
+      "type": "expense",
+      "currency": "EUR",
+      "accountId": "demo-bank",
+      "categoryId": "demo-cat-bills",
+      "note": "Streaming subscription — on the way home (Oct)"
+    },
+    {
+      "id": "demo-tx-daily-2026-10-178",
+      "date": "2026-10-27",
+      "amount": -66.3,
+      "type": "expense",
+      "currency": "EUR",
+      "accountId": "demo-bank",
+      "categoryId": "demo-cat-health",
+      "note": "First-aid supplies — one-time replacement (Oct)"
+    },
+    {
+      "date": "2026-10-28",
+      "type": "expense",
+      "amount": -500,
+      "currency": "EUR",
+      "accountId": "demo-cash",
+      "categoryId": "demo-cat-clothes",
+      "note": "",
+      "personIds": [],
+      "cardId": null,
+      "id": "ad6b8e5b-1b6f-4a3c-a241-552d99f2f1e7"
+    },
+    {
+      "id": "demo-tx-history-2018-income",
+      "date": "2018-02-15",
+      "type": "income",
+      "amount": 1850,
+      "currency": "EUR",
+      "accountId": "demo-bank",
+      "categoryId": "demo-cat-paycheck",
+      "note": "Studio salary · 2018 sample"
+    },
+    {
+      "id": "demo-tx-history-2018-expense",
+      "date": "2018-03-04",
+      "type": "expense",
+      "amount": -742.35,
+      "currency": "EUR",
+      "accountId": "demo-bank",
+      "categoryId": "demo-cat-home",
+      "note": "Home and living · 2018 sample"
+    },
+    {
+      "id": "demo-tx-history-2022-income",
+      "date": "2022-04-01",
+      "type": "income",
+      "amount": 2180,
+      "currency": "EUR",
+      "accountId": "demo-bank",
+      "categoryId": "demo-cat-paycheck",
+      "note": "Studio salary · 2022 sample"
+    },
+    {
+      "id": "demo-tx-history-2022-expense",
+      "date": "2022-04-14",
+      "type": "expense",
+      "amount": -1196.4,
+      "currency": "EUR",
+      "accountId": "demo-bank",
+      "categoryId": "demo-cat-groceries",
+      "note": "Monthly household costs · 2022 sample"
+    },
+    {
+      "id": "demo-tx-history-2024-income",
+      "date": "2024-05-02",
+      "type": "income",
+      "amount": 2540,
+      "currency": "EUR",
+      "accountId": "demo-bank",
+      "categoryId": "demo-cat-paycheck",
+      "note": "Studio salary · 2024 sample"
+    },
+    {
+      "id": "demo-tx-history-2024-expense",
+      "date": "2024-05-11",
+      "type": "expense",
+      "amount": -1468.75,
+      "currency": "EUR",
+      "accountId": "demo-bank",
+      "categoryId": "demo-cat-home",
+      "note": "Home and living · 2024 sample"
+    },
+    {
+      "id": "demo-tx-history-2025-income",
+      "date": "2025-06-03",
+      "type": "income",
+      "amount": 2760,
+      "currency": "EUR",
+      "accountId": "demo-bank",
+      "categoryId": "demo-cat-paycheck",
+      "note": "Studio salary · 2025 sample"
+    },
+    {
+      "id": "demo-tx-history-2025-expense",
+      "date": "2025-06-17",
+      "type": "expense",
+      "amount": -1594.2,
+      "currency": "EUR",
+      "accountId": "demo-bank",
+      "categoryId": "demo-cat-groceries",
+      "note": "Monthly household costs · 2025 sample"
+    },
+    {
+      "id": "demo-tx-fuel-2022",
+      "date": "2022-06-10",
+      "type": "expense",
+      "amount": -41.61,
+      "currency": "EUR",
+      "accountId": "demo-bank",
+      "categoryId": "demo-cat-transport",
+      "note": "BMB 95 $Fuel",
+      "itemQuantities": {
+        "fuel": 28.7
+      }
+    },
+    {
+      "id": "demo-tx-fuel-2024",
+      "date": "2024-06-10",
+      "type": "expense",
+      "amount": -50.54,
+      "currency": "EUR",
+      "accountId": "demo-bank",
+      "categoryId": "demo-cat-transport",
+      "note": "BMB 95 $Fuel",
+      "itemQuantities": {
+        "fuel": 31.2
+      }
+    },
+    {
+      "id": "demo-tx-fuel-2025",
+      "date": "2025-06-10",
+      "type": "expense",
+      "amount": -57.25,
+      "currency": "EUR",
+      "accountId": "demo-bank",
+      "categoryId": "demo-cat-transport",
+      "note": "BMB 95 $Fuel",
+      "itemQuantities": {
+        "fuel": 32.9
+      }
+    },
+    {
+      "id": "demo-tx-fuel-2026-06",
+      "date": "2026-06-10",
+      "type": "expense",
+      "amount": -62.06,
+      "currency": "EUR",
+      "accountId": "demo-bank",
+      "categoryId": "demo-cat-transport",
+      "note": "BMB 95 $Fuel",
+      "itemQuantities": {
+        "fuel": 34.1
+      }
+    },
+    {
+      "id": "demo-tx-fuel-2026-09",
+      "date": "2026-09-10",
+      "type": "expense",
+      "amount": -63.64,
+      "currency": "EUR",
+      "accountId": "demo-bank",
+      "categoryId": "demo-cat-transport",
+      "note": "BMB 95 $Fuel",
+      "itemQuantities": {
+        "fuel": 34.4
+      }
+    },
+    {
+      "id": "demo-tx-fuel-2026-10",
+      "date": "2026-10-10",
+      "type": "expense",
+      "amount": -65.8,
+      "currency": "EUR",
+      "accountId": "demo-bank",
+      "categoryId": "demo-cat-transport",
+      "note": "BMB 95 $Fuel",
+      "itemQuantities": {
+        "fuel": 35
+      }
+    },
+    {
+      "id": "demo-tx-fuel-2026-11",
+      "date": "2026-11-10",
+      "type": "expense",
+      "amount": -66.5,
+      "currency": "EUR",
+      "accountId": "demo-bank",
+      "categoryId": "demo-cat-transport",
+      "note": "BMB 95 $Fuel",
+      "itemQuantities": {
+        "fuel": 35
+      }
+    },
+    {
+      "id": "demo-tx-fuel-unknown-quantity",
+      "date": "2026-11-11",
+      "type": "expense",
+      "amount": -22.8,
+      "currency": "EUR",
+      "accountId": "demo-bank",
+      "categoryId": "demo-cat-transport",
+      "note": "BMB 95 $Fuel"
+    },
+    {
+      "id": "demo-tx-pizza-oct",
+      "date": "2026-10-28",
+      "type": "expense",
+      "amount": -15.8,
+      "currency": "EUR",
+      "accountId": "demo-bank",
+      "categoryId": "demo-cat-restaurant",
+      "note": "Pizza night $Pizza"
+    },
+    {
+      "id": "demo-tx-pizza-nov",
+      "date": "2026-11-09",
+      "type": "expense",
+      "amount": -17.2,
+      "currency": "EUR",
+      "accountId": "demo-bank",
+      "categoryId": "demo-cat-restaurant",
+      "note": "Pizza night $Pizza"
+    },
+    {
+      "id": "demo-tx-coffee-beans",
+      "date": "2026-10-16",
+      "type": "expense",
+      "amount": -13.5,
+      "currency": "EUR",
+      "accountId": "demo-bank",
+      "categoryId": "demo-cat-groceries",
+      "note": "Coffee beans $Coffee Beans",
+      "itemQuantities": {
+        "coffee beans": 1
+      }
+    },
+    {
+      "id": "demo-tx-dinner-alex",
+      "date": "2026-10-29",
+      "type": "expense",
+      "amount": -38.5,
+      "currency": "EUR",
+      "accountId": "demo-bank",
+      "categoryId": "demo-cat-restaurant",
+      "note": "Dinner together",
+      "personIds": [
+        "demo-person-alex"
+      ]
+    },
+    {
+      "id": "demo-tx-concert-friends",
+      "date": "2026-11-08",
+      "type": "expense",
+      "amount": -92,
+      "currency": "EUR",
+      "accountId": "demo-bank",
+      "categoryId": "demo-cat-hobbies",
+      "note": "Concert tickets",
+      "personIds": [
+        "demo-person-jess",
+        "demo-person-morgan"
+      ]
+    },
+    {
+      "id": "demo-tx-split-market",
+      "date": "2026-11-12",
+      "type": "expense",
+      "amount": -98.5,
+      "currency": "EUR",
+      "accountId": "demo-bank",
+      "categoryId": "demo-cat-groceries",
+      "note": "",
+      "parts": [
+        {
+          "id": "demo-tx-split-coffee",
+          "description": "Coffee beans for the week $Coffee Beans",
+          "categoryId": "demo-cat-groceries",
+          "amount": 24,
+          "quantity": 2,
+          "quantitySpecified": true,
+          "unitAmount": 12,
+          "amountMode": "unit",
+          "personIds": []
+        },
+        {
+          "id": "demo-tx-split-flowers",
+          "description": "Flowers for Jess $Flowers",
+          "categoryId": "demo-cat-family",
+          "amount": 18,
+          "quantity": 2,
+          "quantitySpecified": true,
+          "unitAmount": 9,
+          "amountMode": "unit",
+          "personIds": [
+            "demo-person-jess"
+          ]
+        },
+        {
+          "id": "demo-tx-split-lamp",
+          "description": "Ceramic table lamp",
+          "categoryId": "demo-cat-home",
+          "amount": 56.5,
+          "quantity": 1,
+          "quantitySpecified": false,
+          "unitAmount": 56.5,
+          "amountMode": "total",
+          "personIds": []
+        }
+      ]
+    },
+    {
+      "id": "demo-tx-no-category",
+      "date": "2026-11-06",
+      "type": "expense",
+      "amount": -8.4,
+      "currency": "EUR",
+      "accountId": "demo-bank",
+      "categoryId": null,
+      "note": "Cash adjustment with no category"
+    },
+    {
+      "id": "demo-tx-reconciliation-nov",
+      "date": "2026-11-12",
+      "type": "income",
+      "amount": 2.5,
+      "currency": "EUR",
+      "accountId": "demo-bank",
+      "categoryId": null,
+      "note": "Balance reconciliation · 12/11/2026",
+      "balanceCorrection": {
+        "kind": "reconciliation",
+        "reconciliationId": "demo-reconciliation-nov",
+        "statementBalance": 13128.01,
+        "bookBalance": 13125.51
+      }
+    }
+  ],
+  "bills": [
+    {
+      "id": "demo-internet",
+      "name": "Home Internet",
+      "amount": 35,
+      "currency": "EUR",
+      "dueDay": 3,
+      "categoryId": "demo-cat-bills",
+      "payAccountId": "demo-bank",
+      "active": true,
+      "autopay": false,
+      "color": "#60a5fa"
+    },
+    {
+      "id": "demo-electricity",
+      "name": "Electricity",
+      "amount": 64,
+      "currency": "EUR",
+      "dueDay": 13,
+      "categoryId": "demo-cat-bills",
+      "payAccountId": "demo-bank",
+      "active": false,
+      "autopay": true,
+      "color": "#facc15"
+    },
+    {
+      "id": "demo-phone",
+      "name": "Mobile Plan",
+      "amount": 18,
+      "currency": "EUR",
+      "dueDay": 25,
+      "categoryId": "demo-cat-bills",
+      "payAccountId": "demo-bank",
+      "active": true,
+      "autopay": false,
+      "color": "#c084fc"
+    },
+    {
+      "id": "demo-water",
+      "name": "Water Service",
+      "amount": 29,
+      "currency": "EUR",
+      "dueDay": 17,
+      "categoryId": "demo-cat-bills",
+      "payAccountId": "demo-bank",
+      "active": false,
+      "autopay": false,
+      "color": "#2dd4bf"
+    },
+    {
+      "id": "demo-insurance",
+      "name": "Home Insurance",
+      "amount": 46,
+      "currency": "EUR",
+      "dueDay": 6,
+      "categoryId": "demo-cat-bills",
+      "payAccountId": "demo-bank",
+      "active": false,
+      "autopay": true,
+      "color": "#fb7185"
+    },
+    {
+      "id": "demo-music",
+      "name": "Music Plan",
+      "amount": 12,
+      "currency": "EUR",
+      "dueDay": 22,
+      "categoryId": "demo-cat-bills",
+      "payAccountId": "demo-bank",
+      "active": true,
+      "autopay": false,
+      "color": "#f472b6"
+    }
+  ],
+  "billPayments": [
+    {
+      "billId": "demo-internet",
+      "month": "2026-01",
+      "paid": true,
+      "amount": 35,
+      "txId": "bil-demo-internet-2026-01"
+    },
+    {
+      "billId": "demo-electricity",
+      "month": "2026-01",
+      "paid": true,
+      "amount": 73.02,
+      "txId": "bil-demo-electricity-2026-01"
+    },
+    {
+      "billId": "demo-phone",
+      "month": "2026-01",
+      "paid": true,
+      "amount": 18,
+      "txId": "bil-demo-phone-2026-01"
+    },
+    {
+      "billId": "demo-water",
+      "month": "2026-01",
+      "paid": true,
+      "amount": 24.75,
+      "txId": "bil-demo-water-2026-01"
+    },
+    {
+      "billId": "demo-insurance",
+      "month": "2026-01",
+      "paid": false,
+      "amount": 46
+    },
+    {
+      "billId": "demo-music",
+      "month": "2026-01",
+      "paid": true,
+      "amount": 12,
+      "txId": "bil-demo-music-2026-01"
+    },
+    {
+      "billId": "demo-internet",
+      "month": "2026-02",
+      "paid": true,
+      "amount": 35,
+      "txId": "bil-demo-internet-2026-02"
+    },
+    {
+      "billId": "demo-electricity",
+      "month": "2026-02",
+      "paid": false,
+      "amount": 56.18
+    },
+    {
+      "billId": "demo-phone",
+      "month": "2026-02",
+      "paid": true,
+      "amount": 18,
+      "txId": "bil-demo-phone-2026-02"
+    },
+    {
+      "billId": "demo-water",
+      "month": "2026-02",
+      "paid": false,
+      "amount": 31.12
+    },
+    {
+      "billId": "demo-insurance",
+      "month": "2026-02",
+      "paid": true,
+      "amount": 46,
+      "txId": "bil-demo-insurance-2026-02"
+    },
+    {
+      "billId": "demo-music",
+      "month": "2026-02",
+      "paid": true,
+      "amount": 12,
+      "txId": "bil-demo-music-2026-02"
+    },
+    {
+      "billId": "demo-internet",
+      "month": "2026-03",
+      "paid": true,
+      "amount": 35,
+      "txId": "bil-demo-internet-2026-03"
+    },
+    {
+      "billId": "demo-electricity",
+      "month": "2026-03",
+      "paid": false,
+      "amount": 75.1
+    },
+    {
+      "billId": "demo-phone",
+      "month": "2026-03",
+      "paid": true,
+      "amount": 18,
+      "txId": "bil-demo-phone-2026-03"
+    },
+    {
+      "billId": "demo-water",
+      "month": "2026-03",
+      "paid": false,
+      "amount": 25.47
+    },
+    {
+      "billId": "demo-insurance",
+      "month": "2026-03",
+      "paid": true,
+      "amount": 46,
+      "txId": "bil-demo-insurance-2026-03"
+    },
+    {
+      "billId": "demo-music",
+      "month": "2026-03",
+      "paid": true,
+      "amount": 12,
+      "txId": "bil-demo-music-2026-03"
+    },
+    {
+      "billId": "demo-internet",
+      "month": "2026-04",
+      "paid": true,
+      "amount": 35,
+      "txId": "bil-demo-internet-2026-04"
+    },
+    {
+      "billId": "demo-electricity",
+      "month": "2026-04",
+      "paid": true,
+      "amount": 73.65,
+      "txId": "bil-demo-electricity-2026-04"
+    },
+    {
+      "billId": "demo-phone",
+      "month": "2026-04",
+      "paid": false,
+      "amount": 18
+    },
+    {
+      "billId": "demo-water",
+      "month": "2026-04",
+      "paid": false,
+      "amount": 33.19
+    },
+    {
+      "billId": "demo-insurance",
+      "month": "2026-04",
+      "paid": false,
+      "amount": 46
+    },
+    {
+      "billId": "demo-music",
+      "month": "2026-04",
+      "paid": true,
+      "amount": 12,
+      "txId": "bil-demo-music-2026-04"
+    },
+    {
+      "billId": "demo-internet",
+      "month": "2026-05",
+      "paid": true,
+      "amount": 35,
+      "txId": "bil-demo-internet-2026-05"
+    },
+    {
+      "billId": "demo-electricity",
+      "month": "2026-05",
+      "paid": false,
+      "amount": 75.34
+    },
+    {
+      "billId": "demo-phone",
+      "month": "2026-05",
+      "paid": true,
+      "amount": 18,
+      "txId": "bil-demo-phone-2026-05"
+    },
+    {
+      "billId": "demo-water",
+      "month": "2026-05",
+      "paid": true,
+      "amount": 29.71,
+      "txId": "bil-demo-water-2026-05"
+    },
+    {
+      "billId": "demo-insurance",
+      "month": "2026-05",
+      "paid": true,
+      "amount": 46,
+      "txId": "bil-demo-insurance-2026-05"
+    },
+    {
+      "billId": "demo-music",
+      "month": "2026-05",
+      "paid": true,
+      "amount": 12,
+      "txId": "bil-demo-music-2026-05"
+    },
+    {
+      "billId": "demo-internet",
+      "month": "2026-06",
+      "paid": true,
+      "amount": 35,
+      "txId": "bil-demo-internet-2026-06"
+    },
+    {
+      "billId": "demo-electricity",
+      "month": "2026-06",
+      "paid": true,
+      "amount": 76.7,
+      "txId": "bil-demo-electricity-2026-06"
+    },
+    {
+      "billId": "demo-phone",
+      "month": "2026-06",
+      "paid": true,
+      "amount": 18,
+      "txId": "bil-demo-phone-2026-06"
+    },
+    {
+      "billId": "demo-water",
+      "month": "2026-06",
+      "paid": false,
+      "amount": 34.8
+    },
+    {
+      "billId": "demo-insurance",
+      "month": "2026-06",
+      "paid": true,
+      "amount": 46,
+      "txId": "bil-demo-insurance-2026-06"
+    },
+    {
+      "billId": "demo-music",
+      "month": "2026-06",
+      "paid": true,
+      "amount": 12,
+      "txId": "bil-demo-music-2026-06"
+    },
+    {
+      "billId": "demo-internet",
+      "month": "2026-07",
+      "paid": true,
+      "amount": 35,
+      "txId": "bil-demo-internet-2026-07"
+    },
+    {
+      "billId": "demo-electricity",
+      "month": "2026-07",
+      "paid": false,
+      "amount": 78.52
+    },
+    {
+      "billId": "demo-phone",
+      "month": "2026-07",
+      "paid": true,
+      "amount": 18,
+      "txId": "bil-demo-phone-2026-07"
+    },
+    {
+      "billId": "demo-water",
+      "month": "2026-07",
+      "paid": true,
+      "amount": 36.92,
+      "txId": "bil-demo-water-2026-07"
+    },
+    {
+      "billId": "demo-insurance",
+      "month": "2026-07",
+      "paid": true,
+      "amount": 46,
+      "txId": "bil-demo-insurance-2026-07"
+    },
+    {
+      "billId": "demo-music",
+      "month": "2026-07",
+      "paid": true,
+      "amount": 12,
+      "txId": "bil-demo-music-2026-07"
+    },
+    {
+      "billId": "demo-internet",
+      "month": "2026-08",
+      "paid": true,
+      "amount": 35,
+      "txId": "bil-demo-internet-2026-08"
+    },
+    {
+      "billId": "demo-electricity",
+      "month": "2026-08",
+      "paid": true,
+      "amount": 63.21,
+      "txId": "bil-demo-electricity-2026-08"
+    },
+    {
+      "billId": "demo-phone",
+      "month": "2026-08",
+      "paid": true,
+      "amount": 18,
+      "txId": "bil-demo-phone-2026-08"
+    },
+    {
+      "billId": "demo-water",
+      "month": "2026-08",
+      "paid": true,
+      "amount": 35.75,
+      "txId": "bil-demo-water-2026-08"
+    },
+    {
+      "billId": "demo-insurance",
+      "month": "2026-08",
+      "paid": true,
+      "amount": 46,
+      "txId": "bil-demo-insurance-2026-08"
+    },
+    {
+      "billId": "demo-music",
+      "month": "2026-08",
+      "paid": true,
+      "amount": 12,
+      "txId": "bil-demo-music-2026-08"
+    },
+    {
+      "billId": "demo-internet",
+      "month": "2026-09",
+      "paid": true,
+      "amount": 35,
+      "txId": "bil-demo-internet-2026-09"
+    },
+    {
+      "billId": "demo-electricity",
+      "month": "2026-09",
+      "paid": false,
+      "amount": 78.08
+    },
+    {
+      "billId": "demo-phone",
+      "month": "2026-09",
+      "paid": true,
+      "amount": 18,
+      "txId": "bil-demo-phone-2026-09"
+    },
+    {
+      "billId": "demo-water",
+      "month": "2026-09",
+      "paid": true,
+      "amount": 22.81,
+      "txId": "bil-demo-water-2026-09"
+    },
+    {
+      "billId": "demo-insurance",
+      "month": "2026-09",
+      "paid": true,
+      "amount": 46,
+      "txId": "bil-demo-insurance-2026-09"
+    },
+    {
+      "billId": "demo-music",
+      "month": "2026-09",
+      "paid": true,
+      "amount": 12,
+      "txId": "bil-demo-music-2026-09"
+    },
+    {
+      "billId": "demo-internet",
+      "month": "2026-10",
+      "paid": false,
+      "amount": 35
+    },
+    {
+      "billId": "demo-electricity",
+      "month": "2026-10",
+      "paid": true,
+      "amount": 72.68,
+      "txId": "bil-demo-electricity-2026-10"
+    },
+    {
+      "billId": "demo-phone",
+      "month": "2026-10",
+      "paid": true,
+      "amount": 18,
+      "txId": "bil-demo-phone-2026-10"
+    },
+    {
+      "billId": "demo-water",
+      "month": "2026-10",
+      "paid": false,
+      "amount": 26.18
+    },
+    {
+      "billId": "demo-insurance",
+      "month": "2026-10",
+      "paid": false,
+      "amount": 46
+    }
+  ],
+  "budgets": [
+    {
+      "categoryId": "demo-cat-groceries",
+      "amount": 420
+    },
+    {
+      "categoryId": "demo-cat-restaurant",
+      "amount": 190
+    },
+    {
+      "categoryId": "demo-cat-transport",
+      "amount": 160
+    },
+    {
+      "categoryId": "demo-cat-hobbies",
+      "amount": 220
+    },
+    {
+      "categoryId": "demo-cat-home",
+      "amount": 300
+    },
+    {
+      "categoryId": "demo-cat-drinks",
+      "amount": 95
+    }
+  ],
+  "budgetAllocations": [
+    {
+      "month": "2026-01",
+      "amount": 3067.24,
+      "accountId": "demo-bank",
+      "currency": "EUR",
+      "percents": {
+        "demo-cat-transport": 12,
+        "demo-cat-family": 17,
+        "demo-cat-groceries": 13,
+        "demo-cat-bills": 16,
+        "demo-cat-restaurant": 8,
+        "demo-cat-health": 9
+      }
+    },
+    {
+      "month": "2026-02",
+      "amount": 3188.29,
+      "accountId": "demo-bank",
+      "currency": "EUR",
+      "percents": {
+        "demo-cat-hobbies": 12,
+        "demo-cat-transport": 17,
+        "demo-cat-bills": 8,
+        "demo-cat-restaurant": 15,
+        "demo-cat-groceries": 16
+      }
+    },
+    {
+      "month": "2026-03",
+      "amount": 2642.98,
+      "accountId": "demo-bank",
+      "currency": "EUR",
+      "percents": {
+        "demo-cat-health": 14,
+        "demo-cat-transport": 14,
+        "demo-cat-bills": 20,
+        "demo-cat-restaurant": 13,
+        "demo-cat-home": 13
+      }
+    },
+    {
+      "month": "2026-04",
+      "amount": 3217.96,
+      "accountId": "demo-bank",
+      "currency": "EUR",
+      "percents": {
+        "demo-cat-restaurant": 9,
+        "demo-cat-health": 24,
+        "demo-cat-transport": 12,
+        "demo-cat-groceries": 14,
+        "demo-cat-bills": 21
+      }
+    },
+    {
+      "month": "2026-05",
+      "amount": 2645.48,
+      "accountId": "demo-bank",
+      "currency": "EUR",
+      "percents": {
+        "demo-cat-health": 23,
+        "demo-cat-restaurant": 14,
+        "demo-cat-bills": 20,
+        "demo-cat-transport": 17
+      }
+    },
+    {
+      "month": "2026-06",
+      "amount": 3157.44,
+      "accountId": "demo-bank",
+      "currency": "EUR",
+      "percents": {
+        "demo-cat-bills": 23,
+        "demo-cat-health": 23,
+        "demo-cat-restaurant": 9,
+        "demo-cat-transport": 12,
+        "demo-cat-home": 14
+      }
+    },
+    {
+      "month": "2026-07",
+      "amount": 3131.07,
+      "accountId": "demo-bank",
+      "currency": "EUR",
+      "percents": {
+        "demo-cat-transport": 24,
+        "demo-cat-groceries": 8,
+        "demo-cat-bills": 13,
+        "demo-cat-health": 21,
+        "demo-cat-home": 10,
+        "demo-cat-family": 8
+      }
+    },
+    {
+      "month": "2026-08",
+      "amount": 2679.96,
+      "accountId": "demo-bank",
+      "currency": "EUR",
+      "percents": {
+        "demo-cat-health": 16,
+        "demo-cat-transport": 10,
+        "demo-cat-bills": 19,
+        "demo-cat-home": 24,
+        "demo-cat-groceries": 8
+      }
+    },
+    {
+      "month": "2026-09",
+      "amount": 3240.23,
+      "accountId": "demo-bank",
+      "currency": "EUR",
+      "percents": {
+        "demo-cat-restaurant": 16,
+        "demo-cat-family": 10,
+        "demo-cat-hobbies": 14,
+        "demo-cat-groceries": 24,
+        "demo-cat-home": 15,
+        "demo-cat-transport": 9
+      }
+    },
+    {
+      "month": "2026-10",
+      "amount": 3030.79,
+      "accountId": "demo-bank",
+      "currency": "EUR",
+      "percents": {
+        "demo-cat-transport": 12,
+        "demo-cat-hobbies": 14,
+        "demo-cat-home": 12,
+        "demo-cat-groceries": 8,
+        "demo-cat-bills": 21,
+        "demo-cat-health": 18
+      }
+    }
+  ],
+  "creditCards": [
+    {
+      "id": "demo-card",
+      "name": "Everyday Credit",
+      "shortName": "CREDIT",
+      "currency": "EUR",
+      "limit": 2400,
+      "ratePct": 0,
+      "dueDay": 18,
+      "color": "#fb923c",
+      "payAccountId": "demo-bank"
+    },
+    {
+      "id": "demo-travel-card",
+      "name": "Travel Card",
+      "shortName": "TRAVEL",
+      "currency": "EUR",
+      "limit": 1600,
+      "ratePct": 2,
+      "dueDay": 24,
+      "color": "#a78bfa",
+      "payAccountId": "demo-bank"
+    }
+  ],
+  "installments": [
+    {
+      "id": "demo-plan-desk",
+      "cardId": "demo-card",
+      "name": "Desk chair",
+      "total": 360,
+      "months": 3,
+      "startMonth": "2026-01",
+      "ratePct": 0,
+      "dueDay": 18,
+      "paid": []
+    },
+    {
+      "id": "demo-plan-tablet",
+      "cardId": "demo-card",
+      "name": "Drawing tablet",
+      "total": 800,
+      "months": 4,
+      "startMonth": "2026-05",
+      "ratePct": 0,
+      "dueDay": 18,
+      "paid": []
+    },
+    {
+      "id": "demo-plan-camera",
+      "cardId": "demo-travel-card",
+      "name": "Travel camera",
+      "total": 600,
+      "months": 3,
+      "startMonth": "2026-10",
+      "ratePct": 0,
+      "dueDay": 18,
+      "paid": []
+    }
+  ],
+  "savingsGoals": [
+    {
+      "id": "demo-emergency",
+      "name": "Emergency Cushion",
+      "targetAmount": 800,
+      "currency": "EUR",
+      "entries": [
+        {
+          "id": "demo-emergency-entry-1",
+          "date": "2026-01-12",
+          "amount": 200,
+          "note": "First deposit"
+        },
+        {
+          "id": "demo-emergency-entry-2",
+          "date": "2026-02-11",
+          "amount": 200,
+          "note": "Monthly deposit"
+        },
+        {
+          "id": "demo-emergency-entry-3",
+          "date": "2026-03-12",
+          "amount": 200,
+          "note": "Monthly deposit"
+        },
+        {
+          "id": "demo-emergency-entry-4",
+          "date": "2026-04-10",
+          "amount": 200,
+          "note": "Goal completed"
+        }
+      ]
+    },
+    {
+      "id": "demo-holiday",
+      "name": "Holiday Fund",
+      "targetAmount": 1400,
+      "currency": "EUR",
+      "entries": [
+        {
+          "id": "demo-holiday-entry-1",
+          "date": "2026-02-19",
+          "amount": 180,
+          "note": "Trip savings"
+        },
+        {
+          "id": "demo-holiday-entry-2",
+          "date": "2026-05-20",
+          "amount": 240,
+          "note": "Spring deposit"
+        },
+        {
+          "id": "demo-holiday-entry-3",
+          "date": "2026-08-18",
+          "amount": 210,
+          "note": "Summer deposit"
+        },
+        {
+          "id": "demo-holiday-entry-4",
+          "date": "2026-10-16",
+          "amount": 70,
+          "note": "Final top-up"
+        }
+      ]
+    },
+    {
+      "id": "demo-laptop",
+      "name": "New Laptop",
+      "targetAmount": 1800,
+      "currency": "EUR",
+      "entries": [
+        {
+          "id": "demo-laptop-entry-1",
+          "date": "2026-03-22",
+          "amount": 150,
+          "note": "First deposit"
+        },
+        {
+          "id": "demo-laptop-entry-2",
+          "date": "2026-07-17",
+          "amount": 190,
+          "note": "Monthly deposit"
+        },
+        {
+          "id": "demo-laptop-entry-3",
+          "date": "2026-10-14",
+          "amount": 110,
+          "note": "Monthly deposit"
+        }
+      ]
+    }
+  ],
+  "debts": [
+    {
+      "id": "demo-debt-alex",
+      "person": "Alex",
+      "type": "in",
+      "amount": 400,
+      "currency": "EUR",
+      "date": "2026-01-05",
+      "categoryId": "demo-cat-debt",
+      "note": "Shared trip costs",
+      "payments": [
+        {
+          "txId": "demo-tx-debt-payment-alex-1",
+          "amount": 100,
+          "date": "2026-01-18",
+          "type": "income"
+        },
+        {
+          "txId": "demo-tx-debt-payment-alex-5",
+          "amount": 200,
+          "date": "2026-05-15",
+          "type": "income"
+        }
+      ],
+      "amountPaid": 300,
+      "personId": "demo-person-alex"
+    },
+    {
+      "id": "demo-debt-sam",
+      "person": "Sam",
+      "type": "out",
+      "amount": 360,
+      "currency": "EUR",
+      "date": "2026-02-03",
+      "categoryId": "demo-cat-debt",
+      "note": "Borrowed for a home repair",
+      "payments": [
+        {
+          "txId": "demo-tx-debt-payment-sam-2",
+          "amount": 180,
+          "date": "2026-02-18",
+          "type": "expense"
+        },
+        {
+          "txId": "demo-tx-debt-payment-sam-4",
+          "amount": 180,
+          "date": "2026-04-18",
+          "type": "expense"
+        }
+      ],
+      "amountPaid": 360,
+      "personId": "demo-person-sam"
+    },
+    {
+      "id": "demo-debt-taylor",
+      "person": "Taylor",
+      "type": "out",
+      "amount": 250,
+      "currency": "EUR",
+      "date": "2026-06-09",
+      "categoryId": "demo-cat-debt",
+      "note": "Shared equipment purchase",
+      "payments": [
+        {
+          "txId": "demo-tx-debt-payment-taylor-8",
+          "amount": 125,
+          "date": "2026-08-20",
+          "type": "expense"
+        }
+      ],
+      "amountPaid": 125,
+      "personId": "demo-person-taylor"
+    },
+    {
+      "id": "demo-debt-morgan",
+      "person": "Morgan",
+      "type": "in",
+      "amount": 180,
+      "currency": "EUR",
+      "date": "2026-09-04",
+      "categoryId": "demo-cat-debt",
+      "note": "Recently lent for travel",
+      "payments": [],
+      "amountPaid": 0,
+      "personId": "demo-person-morgan"
+    }
+  ],
+  "invoices": [
+    {
+      "id": "demo-invoice-paid",
+      "number": "014/2026",
+      "party": "Sample Studio",
+      "dir": "out",
+      "currency": "EUR",
+      "date": "2026-04-03",
+      "paidDate": "2026-04-14",
+      "categoryId": "demo-cat-invoice",
+      "lines": [
+        {
+          "desc": "Brand illustration",
+          "qty": 3,
+          "price": 150
+        }
+      ],
+      "amountPaid": 450,
+      "payments": [
+        {
+          "txId": "demo-tx-invoice-payment-paid",
+          "date": "2026-04-14",
+          "amount": 450,
+          "accountId": "demo-bank",
+          "categoryId": "demo-cat-invoice",
+          "seq": 1
+        }
+      ]
+    },
+    {
+      "id": "demo-invoice-partial",
+      "number": "027/2026",
+      "party": "Brightside Design",
+      "dir": "out",
+      "currency": "EUR",
+      "date": "2026-07-08",
+      "paidDate": "",
+      "categoryId": "demo-cat-invoice",
+      "lines": [
+        {
+          "desc": "Website design",
+          "qty": 4,
+          "price": 175
+        }
+      ],
+      "amountPaid": 350,
+      "payments": [
+        {
+          "txId": "demo-tx-invoice-payment-partial",
+          "date": "2026-08-06",
+          "amount": 350,
+          "accountId": "demo-bank",
+          "categoryId": "demo-cat-invoice",
+          "seq": 1
+        }
+      ]
+    },
+    {
+      "id": "demo-invoice-unpaid",
+      "number": "039/2026",
+      "party": "Northwind Community",
+      "dir": "out",
+      "currency": "EUR",
+      "date": "2026-10-05",
+      "paidDate": "",
+      "categoryId": "demo-cat-invoice",
+      "lines": [
+        {
+          "desc": "Event poster set",
+          "qty": 4,
+          "price": 120
+        }
+      ],
+      "amountPaid": 0,
+      "payments": []
+    }
+  ],
+  "invoiceTemplates": [
+    {
+      "id": "demo-template",
+      "name": "Design services",
+      "party": "Sample Studio",
+      "dir": "out",
+      "currency": "EUR",
+      "categoryId": "demo-cat-invoice",
+      "lines": [
+        {
+          "desc": "Design services",
+          "qty": 1,
+          "price": 150
+        }
+      ]
+    }
+  ],
+  "recurringTemplates": [
+    {
+      "id": "demo-recurring",
+      "name": "Salary",
+      "type": "income",
+      "amount": 2800,
+      "currency": "EUR",
+      "accountId": "demo-bank",
+      "categoryId": "demo-cat-paycheck",
+      "interval": "monthly",
+      "startDate": "2026-01-01"
+    },
+    {
+      "id": "demo-recurring-rent",
+      "name": "Apartment Rent",
+      "type": "expense",
+      "amount": 780,
+      "currency": "EUR",
+      "accountId": "demo-bank",
+      "categoryId": "demo-cat-home",
+      "interval": "monthly",
+      "startDate": "2026-01-05"
+    }
+  ],
+  "importRules": [
+    {
+      "id": "demo-rule",
+      "match": "supermarket",
+      "categoryId": "demo-cat-groceries"
+    }
+  ],
+  "settings": {
+    "baseCurrency": "EUR",
+    "enabledCurrencies": [
+      "EUR",
+      "USD"
+    ],
+    "rates": {
+      "EUR": {
+        "rate": 1,
+        "source": "open.er-api.com",
+        "updated": "2026-10-01T07:59:44.034Z"
+      },
+      "USD": {
+        "rate": 0.8818,
+        "source": "open.er-api.com",
+        "updated": "2026-10-01T07:59:44.034Z"
+      },
+      "XAU": {
+        "rate": 118.09,
+        "source": "gold-api.com",
+        "updated": "2026-10-01T07:59:44.034Z"
+      },
+      "AED": {
+        "rate": 0.2401,
+        "source": "open.er-api.com",
+        "updated": "2026-10-01T07:59:44.034Z"
+      },
+      "AFN": {
+        "rate": 0.0136,
+        "source": "open.er-api.com",
+        "updated": "2026-10-01T07:59:44.034Z"
+      },
+      "ALL": {
+        "rate": 0.0109,
+        "source": "open.er-api.com",
+        "updated": "2026-10-01T07:59:44.034Z"
+      },
+      "AMD": {
+        "rate": 0.0024,
+        "source": "open.er-api.com",
+        "updated": "2026-10-01T07:59:44.034Z"
+      },
+      "ANG": {
+        "rate": 0.4926,
+        "source": "open.er-api.com",
+        "updated": "2026-10-01T07:59:44.034Z"
+      },
+      "AOA": {
+        "rate": 0.0009,
+        "source": "open.er-api.com",
+        "updated": "2026-10-01T07:59:44.034Z"
+      },
+      "ARS": {
+        "rate": 0.0006,
+        "source": "open.er-api.com",
+        "updated": "2026-10-01T07:59:44.034Z"
+      },
+      "AUD": {
+        "rate": 0.6135,
+        "source": "open.er-api.com",
+        "updated": "2026-10-01T07:59:44.034Z"
+      },
+      "AWG": {
+        "rate": 0.4926,
+        "source": "open.er-api.com",
+        "updated": "2026-10-01T07:59:44.034Z"
+      },
+      "AZN": {
+        "rate": 0.5182,
+        "source": "open.er-api.com",
+        "updated": "2026-10-01T07:59:44.034Z"
+      },
+      "BAM": {
+        "rate": 0.5113,
+        "source": "open.er-api.com",
+        "updated": "2026-10-01T07:59:44.034Z"
+      },
+      "BBD": {
+        "rate": 0.4408,
+        "source": "open.er-api.com",
+        "updated": "2026-10-01T07:59:44.034Z"
+      },
+      "BDT": {
+        "rate": 0.0072,
+        "source": "open.er-api.com",
+        "updated": "2026-10-01T07:59:44.034Z"
+      },
+      "BGN": {
+        "rate": 0.5113,
+        "source": "open.er-api.com",
+        "updated": "2026-10-01T07:59:44.034Z"
+      },
+      "BHD": {
+        "rate": 2.3449,
+        "source": "open.er-api.com",
+        "updated": "2026-10-01T07:59:44.034Z"
+      },
+      "BIF": {
+        "rate": 0.0003,
+        "source": "open.er-api.com",
+        "updated": "2026-10-01T07:59:44.034Z"
+      },
+      "BMD": {
+        "rate": 0.8817,
+        "source": "open.er-api.com",
+        "updated": "2026-10-01T07:59:44.034Z"
+      },
+      "BND": {
+        "rate": 0.6903,
+        "source": "open.er-api.com",
+        "updated": "2026-10-01T07:59:44.034Z"
+      },
+      "BOB": {
+        "rate": 0.0732,
+        "source": "open.er-api.com",
+        "updated": "2026-10-01T07:59:44.034Z"
+      },
+      "BRL": {
+        "rate": 0.1694,
+        "source": "open.er-api.com",
+        "updated": "2026-10-01T07:59:44.034Z"
+      },
+      "BSD": {
+        "rate": 0.8817,
+        "source": "open.er-api.com",
+        "updated": "2026-10-01T07:59:44.034Z"
+      },
+      "BTN": {
+        "rate": 0.0092,
+        "source": "open.er-api.com",
+        "updated": "2026-10-01T07:59:44.034Z"
+      },
+      "BWP": {
+        "rate": 0.0624,
+        "source": "open.er-api.com",
+        "updated": "2026-10-01T07:59:44.034Z"
+      },
+      "BYN": {
+        "rate": 0.2924,
+        "source": "open.er-api.com",
+        "updated": "2026-10-01T07:59:44.034Z"
+      },
+      "BZD": {
+        "rate": 0.4408,
+        "source": "open.er-api.com",
+        "updated": "2026-10-01T07:59:44.034Z"
+      },
+      "CAD": {
+        "rate": 0.6205,
+        "source": "open.er-api.com",
+        "updated": "2026-10-01T07:59:44.034Z"
+      },
+      "CDF": {
+        "rate": 0.0004,
+        "source": "open.er-api.com",
+        "updated": "2026-10-01T07:59:44.034Z"
+      },
+      "CHF": {
+        "rate": 1.056,
+        "source": "open.er-api.com",
+        "updated": "2026-10-01T07:59:44.034Z"
+      },
+      "CLF": {
+        "rate": 35.7692,
+        "source": "open.er-api.com",
+        "updated": "2026-10-01T07:59:44.034Z"
+      },
+      "CLP": {
+        "rate": 0.0009,
+        "source": "open.er-api.com",
+        "updated": "2026-10-01T07:59:44.034Z"
+      },
+      "CNH": {
+        "rate": 0.1315,
+        "source": "open.er-api.com",
+        "updated": "2026-10-01T07:59:44.034Z"
+      },
+      "CNY": {
+        "rate": 0.1314,
+        "source": "open.er-api.com",
+        "updated": "2026-10-01T07:59:44.034Z"
+      },
+      "COP": {
+        "rate": 0.0003,
+        "source": "open.er-api.com",
+        "updated": "2026-10-01T07:59:44.034Z"
+      },
+      "CRC": {
+        "rate": 0.0019,
+        "source": "open.er-api.com",
+        "updated": "2026-10-01T07:59:44.034Z"
+      },
+      "CUP": {
+        "rate": 0.0367,
+        "source": "open.er-api.com",
+        "updated": "2026-10-01T07:59:44.034Z"
+      },
+      "CVE": {
+        "rate": 0.0091,
+        "source": "open.er-api.com",
+        "updated": "2026-10-01T07:59:44.034Z"
+      },
+      "CZK": {
+        "rate": 0.0409,
+        "source": "open.er-api.com",
+        "updated": "2026-10-01T07:59:44.034Z"
+      },
+      "DJF": {
+        "rate": 0.005,
+        "source": "open.er-api.com",
+        "updated": "2026-10-01T07:59:44.034Z"
+      },
+      "DKK": {
+        "rate": 0.1338,
+        "source": "open.er-api.com",
+        "updated": "2026-10-01T07:59:44.034Z"
+      },
+      "DOP": {
+        "rate": 0.0148,
+        "source": "open.er-api.com",
+        "updated": "2026-10-01T07:59:44.034Z"
+      },
+      "DZD": {
+        "rate": 0.0066,
+        "source": "open.er-api.com",
+        "updated": "2026-10-01T07:59:44.034Z"
+      },
+      "EGP": {
+        "rate": 0.0169,
+        "source": "open.er-api.com",
+        "updated": "2026-10-01T07:59:44.034Z"
+      },
+      "ERN": {
+        "rate": 0.0588,
+        "source": "open.er-api.com",
+        "updated": "2026-10-01T07:59:44.034Z"
+      },
+      "ETB": {
+        "rate": 0.0053,
+        "source": "open.er-api.com",
+        "updated": "2026-10-01T07:59:44.034Z"
+      },
+      "FJD": {
+        "rate": 0.393,
+        "source": "open.er-api.com",
+        "updated": "2026-10-01T07:59:44.034Z"
+      },
+      "FKP": {
+        "rate": 1.1699,
+        "source": "open.er-api.com",
+        "updated": "2026-10-01T07:59:44.034Z"
+      },
+      "FOK": {
+        "rate": 0.1338,
+        "source": "open.er-api.com",
+        "updated": "2026-10-01T07:59:44.034Z"
+      },
+      "GBP": {
+        "rate": 1.17,
+        "source": "open.er-api.com",
+        "updated": "2026-10-01T07:59:44.034Z"
+      },
+      "GEL": {
+        "rate": 0.3383,
+        "source": "open.er-api.com",
+        "updated": "2026-10-01T07:59:44.034Z"
+      },
+      "GGP": {
+        "rate": 1.1699,
+        "source": "open.er-api.com",
+        "updated": "2026-10-01T07:59:44.034Z"
+      },
+      "GHS": {
+        "rate": 0.0752,
+        "source": "open.er-api.com",
+        "updated": "2026-10-01T07:59:44.034Z"
+      },
+      "GIP": {
+        "rate": 1.1699,
+        "source": "open.er-api.com",
+        "updated": "2026-10-01T07:59:44.034Z"
+      },
+      "GMD": {
+        "rate": 0.0118,
+        "source": "open.er-api.com",
+        "updated": "2026-10-01T07:59:44.034Z"
+      },
+      "GNF": {
+        "rate": 0.0001,
+        "source": "open.er-api.com",
+        "updated": "2026-10-01T07:59:44.034Z"
+      },
+      "GTQ": {
+        "rate": 0.1154,
+        "source": "open.er-api.com",
+        "updated": "2026-10-01T07:59:44.034Z"
+      },
+      "GYD": {
+        "rate": 0.0042,
+        "source": "open.er-api.com",
+        "updated": "2026-10-01T07:59:44.034Z"
+      },
+      "HKD": {
+        "rate": 0.1124,
+        "source": "open.er-api.com",
+        "updated": "2026-10-01T07:59:44.034Z"
+      },
+      "HNL": {
+        "rate": 0.0328,
+        "source": "open.er-api.com",
+        "updated": "2026-10-01T07:59:44.034Z"
+      },
+      "HRK": {
+        "rate": 0.1327,
+        "source": "open.er-api.com",
+        "updated": "2026-10-01T07:59:44.034Z"
+      },
+      "HTG": {
+        "rate": 0.0067,
+        "source": "open.er-api.com",
+        "updated": "2026-10-01T07:59:44.034Z"
+      },
+      "HUF": {
+        "rate": 0.0027,
+        "source": "open.er-api.com",
+        "updated": "2026-10-01T07:59:44.034Z"
+      },
+      "IDR": {
+        "rate": 0,
+        "source": "open.er-api.com",
+        "updated": "2026-10-01T07:59:44.034Z"
+      },
+      "ILS": {
+        "rate": 0.2874,
+        "source": "open.er-api.com",
+        "updated": "2026-10-01T07:59:44.034Z"
+      },
+      "IMP": {
+        "rate": 1.1699,
+        "source": "open.er-api.com",
+        "updated": "2026-10-01T07:59:44.034Z"
+      },
+      "INR": {
+        "rate": 0.0092,
+        "source": "open.er-api.com",
+        "updated": "2026-10-01T07:59:44.034Z"
+      },
+      "IQD": {
+        "rate": 0.0007,
+        "source": "open.er-api.com",
+        "updated": "2026-10-01T07:59:44.034Z"
+      },
+      "IRR": {
+        "rate": 0,
+        "source": "open.er-api.com",
+        "updated": "2026-10-01T07:59:44.034Z"
+      },
+      "ISK": {
+        "rate": 0.0073,
+        "source": "open.er-api.com",
+        "updated": "2026-10-01T07:59:44.034Z"
+      },
+      "JEP": {
+        "rate": 1.1699,
+        "source": "open.er-api.com",
+        "updated": "2026-10-01T07:59:44.034Z"
+      },
+      "JMD": {
+        "rate": 0.0056,
+        "source": "open.er-api.com",
+        "updated": "2026-10-01T07:59:44.034Z"
+      },
+      "JOD": {
+        "rate": 1.2435,
+        "source": "open.er-api.com",
+        "updated": "2026-10-01T07:59:44.034Z"
+      },
+      "JPY": {
+        "rate": 0.0056,
+        "source": "open.er-api.com",
+        "updated": "2026-10-01T07:59:44.034Z"
+      },
+      "KES": {
+        "rate": 0.0068,
+        "source": "open.er-api.com",
+        "updated": "2026-10-01T07:59:44.034Z"
+      },
+      "KGS": {
+        "rate": 0.0101,
+        "source": "open.er-api.com",
+        "updated": "2026-10-01T07:59:44.034Z"
+      },
+      "KHR": {
+        "rate": 0.0002,
+        "source": "open.er-api.com",
+        "updated": "2026-10-01T07:59:44.034Z"
+      },
+      "KID": {
+        "rate": 0.6136,
+        "source": "open.er-api.com",
+        "updated": "2026-10-01T07:59:44.034Z"
+      },
+      "KMF": {
+        "rate": 0.002,
+        "source": "open.er-api.com",
+        "updated": "2026-10-01T07:59:44.034Z"
+      },
+      "KRW": {
+        "rate": 0.0007,
+        "source": "open.er-api.com",
+        "updated": "2026-10-01T07:59:44.034Z"
+      },
+      "KWD": {
+        "rate": 2.8589,
+        "source": "open.er-api.com",
+        "updated": "2026-10-01T07:59:44.034Z"
+      },
+      "KYD": {
+        "rate": 1.058,
+        "source": "open.er-api.com",
+        "updated": "2026-10-01T07:59:44.034Z"
+      },
+      "KZT": {
+        "rate": 0.002,
+        "source": "open.er-api.com",
+        "updated": "2026-10-01T07:59:44.034Z"
+      },
+      "LAK": {
+        "rate": 0,
+        "source": "open.er-api.com",
+        "updated": "2026-10-01T07:59:44.034Z"
+      },
+      "LBP": {
+        "rate": 0,
+        "source": "open.er-api.com",
+        "updated": "2026-10-01T07:59:44.034Z"
+      },
+      "LKR": {
+        "rate": 0.0027,
+        "source": "open.er-api.com",
+        "updated": "2026-10-01T07:59:44.034Z"
+      },
+      "LRD": {
+        "rate": 0.0051,
+        "source": "open.er-api.com",
+        "updated": "2026-10-01T07:59:44.034Z"
+      },
+      "LSL": {
+        "rate": 0.0537,
+        "source": "open.er-api.com",
+        "updated": "2026-10-01T07:59:44.034Z"
+      },
+      "LYD": {
+        "rate": 0.138,
+        "source": "open.er-api.com",
+        "updated": "2026-10-01T07:59:44.034Z"
+      },
+      "MAD": {
+        "rate": 0.0909,
+        "source": "open.er-api.com",
+        "updated": "2026-10-01T07:59:44.034Z"
+      },
+      "MDL": {
+        "rate": 0.0497,
+        "source": "open.er-api.com",
+        "updated": "2026-10-01T07:59:44.034Z"
+      },
+      "MGA": {
+        "rate": 0.0002,
+        "source": "open.er-api.com",
+        "updated": "2026-10-01T07:59:44.034Z"
+      },
+      "MKD": {
+        "rate": 0.0163,
+        "source": "open.er-api.com",
+        "updated": "2026-10-01T07:59:44.034Z"
+      },
+      "MMK": {
+        "rate": 0.0004,
+        "source": "open.er-api.com",
+        "updated": "2026-10-01T07:59:44.034Z"
+      },
+      "MNT": {
+        "rate": 0.0002,
+        "source": "open.er-api.com",
+        "updated": "2026-10-01T07:59:44.034Z"
+      },
+      "MOP": {
+        "rate": 0.1091,
+        "source": "open.er-api.com",
+        "updated": "2026-10-01T07:59:44.034Z"
+      },
+      "MRU": {
+        "rate": 0.0221,
+        "source": "open.er-api.com",
+        "updated": "2026-10-01T07:59:44.034Z"
+      },
+      "MUR": {
+        "rate": 0.0184,
+        "source": "open.er-api.com",
+        "updated": "2026-10-01T07:59:44.034Z"
+      },
+      "MVR": {
+        "rate": 0.057,
+        "source": "open.er-api.com",
+        "updated": "2026-10-01T07:59:44.034Z"
+      },
+      "MWK": {
+        "rate": 0.0005,
+        "source": "open.er-api.com",
+        "updated": "2026-10-01T07:59:44.034Z"
+      },
+      "MXN": {
+        "rate": 0.0488,
+        "source": "open.er-api.com",
+        "updated": "2026-10-01T07:59:44.034Z"
+      },
+      "MYR": {
+        "rate": 0.2162,
+        "source": "open.er-api.com",
+        "updated": "2026-10-01T07:59:44.034Z"
+      },
+      "MZN": {
+        "rate": 0.0138,
+        "source": "open.er-api.com",
+        "updated": "2026-10-01T07:59:44.034Z"
+      },
+      "NAD": {
+        "rate": 0.0537,
+        "source": "open.er-api.com",
+        "updated": "2026-10-01T07:59:44.034Z"
+      },
+      "NGN": {
+        "rate": 0.0007,
+        "source": "open.er-api.com",
+        "updated": "2026-10-01T07:59:44.034Z"
+      },
+      "NIO": {
+        "rate": 0.024,
+        "source": "open.er-api.com",
+        "updated": "2026-10-01T07:59:44.034Z"
+      },
+      "NOK": {
+        "rate": 0.0917,
+        "source": "open.er-api.com",
+        "updated": "2026-10-01T07:59:44.034Z"
+      },
+      "NPR": {
+        "rate": 0.0057,
+        "source": "open.er-api.com",
+        "updated": "2026-10-01T07:59:44.034Z"
+      },
+      "NZD": {
+        "rate": 0.4972,
+        "source": "open.er-api.com",
+        "updated": "2026-10-01T07:59:44.034Z"
+      },
+      "OMR": {
+        "rate": 2.2931,
+        "source": "open.er-api.com",
+        "updated": "2026-10-01T07:59:44.034Z"
+      },
+      "PAB": {
+        "rate": 0.8817,
+        "source": "open.er-api.com",
+        "updated": "2026-10-01T07:59:44.034Z"
+      },
+      "PEN": {
+        "rate": 0.2561,
+        "source": "open.er-api.com",
+        "updated": "2026-10-01T07:59:44.034Z"
+      },
+      "PGK": {
+        "rate": 0.1965,
+        "source": "open.er-api.com",
+        "updated": "2026-10-01T07:59:44.034Z"
+      },
+      "PHP": {
+        "rate": 0.0141,
+        "source": "open.er-api.com",
+        "updated": "2026-10-01T07:59:44.034Z"
+      },
+      "PKR": {
+        "rate": 0.0032,
+        "source": "open.er-api.com",
+        "updated": "2026-10-01T07:59:44.034Z"
+      },
+      "PLN": {
+        "rate": 0.229,
+        "source": "open.er-api.com",
+        "updated": "2026-10-01T07:59:44.034Z"
+      },
+      "PYG": {
+        "rate": 0.0002,
+        "source": "open.er-api.com",
+        "updated": "2026-10-01T07:59:44.034Z"
+      },
+      "QAR": {
+        "rate": 0.2422,
+        "source": "open.er-api.com",
+        "updated": "2026-10-01T07:59:44.034Z"
+      },
+      "RON": {
+        "rate": 0.1894,
+        "source": "open.er-api.com",
+        "updated": "2026-10-01T07:59:44.034Z"
+      },
+      "RSD": {
+        "rate": 0.0085,
+        "source": "open.er-api.com",
+        "updated": "2026-10-01T07:59:44.034Z"
+      },
+      "RUB": {
+        "rate": 0.0105,
+        "source": "open.er-api.com",
+        "updated": "2026-10-01T07:59:44.034Z"
+      },
+      "RWF": {
+        "rate": 0.0006,
+        "source": "open.er-api.com",
+        "updated": "2026-10-01T07:59:44.034Z"
+      },
+      "SAR": {
+        "rate": 0.2351,
+        "source": "open.er-api.com",
+        "updated": "2026-10-01T07:59:44.034Z"
+      },
+      "SBD": {
+        "rate": 0.111,
+        "source": "open.er-api.com",
+        "updated": "2026-10-01T07:59:44.034Z"
+      },
+      "SCR": {
+        "rate": 0.06,
+        "source": "open.er-api.com",
+        "updated": "2026-10-01T07:59:44.034Z"
+      },
+      "SDG": {
+        "rate": 0.002,
+        "source": "open.er-api.com",
+        "updated": "2026-10-01T07:59:44.034Z"
+      },
+      "SEK": {
+        "rate": 0.0882,
+        "source": "open.er-api.com",
+        "updated": "2026-10-01T07:59:44.034Z"
+      },
+      "SGD": {
+        "rate": 0.6902,
+        "source": "open.er-api.com",
+        "updated": "2026-10-01T07:59:44.034Z"
+      },
+      "SHP": {
+        "rate": 1.1699,
+        "source": "open.er-api.com",
+        "updated": "2026-10-01T07:59:44.034Z"
+      },
+      "SLE": {
+        "rate": 0.0358,
+        "source": "open.er-api.com",
+        "updated": "2026-10-01T07:59:44.034Z"
+      },
+      "SLL": {
+        "rate": 0,
+        "source": "open.er-api.com",
+        "updated": "2026-10-01T07:59:44.034Z"
+      },
+      "SOS": {
+        "rate": 0.0015,
+        "source": "open.er-api.com",
+        "updated": "2026-10-01T07:59:44.034Z"
+      },
+      "SRD": {
+        "rate": 0.0234,
+        "source": "open.er-api.com",
+        "updated": "2026-10-01T07:59:44.034Z"
+      },
+      "SSP": {
+        "rate": 0.0001,
+        "source": "open.er-api.com",
+        "updated": "2026-10-01T07:59:44.034Z"
+      },
+      "STN": {
+        "rate": 0.0408,
+        "source": "open.er-api.com",
+        "updated": "2026-10-01T07:59:44.034Z"
+      },
+      "SYP": {
+        "rate": 0.0072,
+        "source": "open.er-api.com",
+        "updated": "2026-10-01T07:59:44.034Z"
+      },
+      "SZL": {
+        "rate": 0.0537,
+        "source": "open.er-api.com",
+        "updated": "2026-10-01T07:59:44.034Z"
+      },
+      "THB": {
+        "rate": 0.0263,
+        "source": "open.er-api.com",
+        "updated": "2026-10-01T07:59:44.034Z"
+      },
+      "TJS": {
+        "rate": 0.0954,
+        "source": "open.er-api.com",
+        "updated": "2026-10-01T07:59:44.034Z"
+      },
+      "TMT": {
+        "rate": 0.2516,
+        "source": "open.er-api.com",
+        "updated": "2026-10-01T07:59:44.034Z"
+      },
+      "TND": {
+        "rate": 0.2962,
+        "source": "open.er-api.com",
+        "updated": "2026-10-01T07:59:44.034Z"
+      },
+      "TOP": {
+        "rate": 0.3691,
+        "source": "open.er-api.com",
+        "updated": "2026-10-01T07:59:44.034Z"
+      },
+      "TRY": {
+        "rate": 0.018,
+        "source": "open.er-api.com",
+        "updated": "2026-10-01T07:59:44.034Z"
+      },
+      "TTD": {
+        "rate": 0.1247,
+        "source": "open.er-api.com",
+        "updated": "2026-10-01T07:59:44.034Z"
+      },
+      "TVD": {
+        "rate": 0.6136,
+        "source": "open.er-api.com",
+        "updated": "2026-10-01T07:59:44.034Z"
+      },
+      "TWD": {
+        "rate": 0.0277,
+        "source": "open.er-api.com",
+        "updated": "2026-10-01T07:59:44.034Z"
+      },
+      "TZS": {
+        "rate": 0.0003,
+        "source": "open.er-api.com",
+        "updated": "2026-10-01T07:59:44.034Z"
+      },
+      "UAH": {
+        "rate": 0.0197,
+        "source": "open.er-api.com",
+        "updated": "2026-10-01T07:59:44.034Z"
+      },
+      "UGX": {
+        "rate": 0.0002,
+        "source": "open.er-api.com",
+        "updated": "2026-10-01T07:59:44.034Z"
+      },
+      "UYU": {
+        "rate": 0.0219,
+        "source": "open.er-api.com",
+        "updated": "2026-10-01T07:59:44.034Z"
+      },
+      "UZS": {
+        "rate": 0.0001,
+        "source": "open.er-api.com",
+        "updated": "2026-10-01T07:59:44.034Z"
+      },
+      "VES": {
+        "rate": 0.001,
+        "source": "open.er-api.com",
+        "updated": "2026-10-01T07:59:44.034Z"
+      },
+      "VND": {
+        "rate": 0,
+        "source": "open.er-api.com",
+        "updated": "2026-10-01T07:59:44.034Z"
+      },
+      "VUV": {
+        "rate": 0.0074,
+        "source": "open.er-api.com",
+        "updated": "2026-10-01T07:59:44.034Z"
+      },
+      "WST": {
+        "rate": 0.3224,
+        "source": "open.er-api.com",
+        "updated": "2026-10-01T07:59:44.034Z"
+      },
+      "XAF": {
+        "rate": 0.0015,
+        "source": "open.er-api.com",
+        "updated": "2026-10-01T07:59:44.034Z"
+      },
+      "XCD": {
+        "rate": 0.3265,
+        "source": "open.er-api.com",
+        "updated": "2026-10-01T07:59:44.034Z"
+      },
+      "XCG": {
+        "rate": 0.4926,
+        "source": "open.er-api.com",
+        "updated": "2026-10-01T07:59:44.034Z"
+      },
+      "XDR": {
+        "rate": 1.1965,
+        "source": "open.er-api.com",
+        "updated": "2026-10-01T07:59:44.034Z"
+      },
+      "XOF": {
+        "rate": 0.0015,
+        "source": "open.er-api.com",
+        "updated": "2026-10-01T07:59:44.034Z"
+      },
+      "XPF": {
+        "rate": 0.0084,
+        "source": "open.er-api.com",
+        "updated": "2026-10-01T07:59:44.034Z"
+      },
+      "YER": {
+        "rate": 0.0037,
+        "source": "open.er-api.com",
+        "updated": "2026-10-01T07:59:44.034Z"
+      },
+      "ZAR": {
+        "rate": 0.0537,
+        "source": "open.er-api.com",
+        "updated": "2026-10-01T07:59:44.034Z"
+      },
+      "ZMW": {
+        "rate": 0.0448,
+        "source": "open.er-api.com",
+        "updated": "2026-10-01T07:59:44.034Z"
+      },
+      "ZWG": {
+        "rate": 0.0329,
+        "source": "open.er-api.com",
+        "updated": "2026-10-01T07:59:44.034Z"
+      },
+      "ZWL": {
+        "rate": 0.0329,
+        "source": "open.er-api.com",
+        "updated": "2026-10-01T07:59:44.034Z"
+      }
+    },
+    "defaultAccountId": "demo-bank",
+    "defaultCategoryId": "demo-cat-groceries",
+    "dateFormat": "DD/MM/YYYY",
+    "dateSeparator": "/",
+    "hideBillsGraph": false,
+    "autosave": true,
+    "itemTracking": {
+      "fuel": {
+        "mode": "unit"
+      }
+    }
+  },
+  "demo": {
+    "fictional": true,
+    "revision": 11
+  },
+  "reconciliations": [
+    {
+      "id": "demo-reconciliation-oct",
+      "accountId": "demo-bank",
+      "date": "2026-10-31",
+      "statementBalance": 13430.91,
+      "bookBalance": 13430.91,
+      "difference": 0,
+      "adjustmentTransactionId": null
+    },
+    {
+      "id": "demo-reconciliation-nov",
+      "accountId": "demo-bank",
+      "date": "2026-11-12",
+      "statementBalance": 13128.01,
+      "bookBalance": 13125.51,
+      "difference": 2.5,
+      "adjustmentTransactionId": "demo-tx-reconciliation-nov"
+    }
+  ],
+  "recurringRules": [
+    {
+      "id": "demo-recurring-rule-pharmacy",
+      "action": "category",
+      "match": "pharmacy",
+      "source": "account:demo-bank",
+      "categoryId": "demo-cat-health",
+      "active": true
+    },
+    {
+      "id": "demo-recurring-rule-notification",
+      "action": "ignore",
+      "match": "balance notification",
+      "source": "account:demo-bank",
+      "active": true
+    }
+  ],
+  "people": [
+    {
+      "id": "demo-person-alex",
+      "name": "Alex"
+    },
+    {
+      "id": "demo-person-jess",
+      "name": "Casey"
+    },
+    {
+      "id": "demo-person-morgan",
+      "name": "Morgan"
+    },
+    {
+      "id": "demo-person-sam",
+      "name": "Sam"
+    },
+    {
+      "id": "demo-person-taylor",
+      "name": "Taylor"
+    }
+  ],
+  "wishlist": [
+    {
+      "id": "demo-wish-coffee-grinder",
+      "name": "Coffee grinder",
+      "estimatedPrice": 89,
+      "currency": "EUR",
+      "categoryId": "demo-cat-home",
+      "note": "Compact model with a steel burr set",
+      "wantBy": "2026-12-20",
+      "createdAt": "2026-10-18T10:00:00Z"
+    },
+    {
+      "id": "demo-wish-weekend-trip",
+      "name": "Weekend train trip",
+      "estimatedPrice": 145,
+      "currency": "EUR",
+      "categoryId": "demo-cat-transport",
+      "note": "Save the route link here",
+      "wantBy": "2027-03-01",
+      "createdAt": "2026-10-21T10:00:00Z"
+    },
+    {
+      "id": "demo-wish-record-player",
+      "name": "Record player",
+      "estimatedPrice": 230,
+      "currency": "EUR",
+      "categoryId": "demo-cat-hobbies",
+      "note": "A longer-term treat",
+      "wantBy": "",
+      "createdAt": "2026-11-02T10:00:00Z"
+    }
+  ]
+}
